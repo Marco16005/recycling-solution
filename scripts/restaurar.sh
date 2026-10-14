@@ -22,9 +22,22 @@ compose() {
   docker compose ${COMPOSE_ARGS:-} "$@"
 }
 
-echo "== Deteniendo lo que escribe en la base"
-compose stop web app bootstrap >/dev/null 2>&1 || true
+echo "== Deteniendo todo lo que no es la base"
+EN_MARCHA=$(compose ps --services --status running | grep -vx db || true)
+if [ -n "$EN_MARCHA" ]; then
+  # Si la parada falla, set -e termina aquí y no se restaura nada.
+  # shellcheck disable=SC2086
+  compose stop $EN_MARCHA
+fi
 compose up -d --wait db
+
+# Nadie más debe estar conectado como la aplicación o el migrador (por ejemplo, un `compose run` olvidado).
+CONEXIONES=$(compose exec -T db psql -U rs_super -d postgres -tA -c \
+  "SELECT count(*) FROM pg_stat_activity WHERE usename IN ('rs_app', 'rs_migrador')")
+if [ "$CONEXIONES" != "0" ]; then
+  echo "Hay $CONEXIONES conexiones abiertas de la aplicación o del migrador; ciérralas antes de restaurar." >&2
+  exit 1
+fi
 
 echo "== Restaurando $NOMBRE en una sola transacción"
 compose --profile respaldo run --rm --entrypoint pg_restore respaldo \

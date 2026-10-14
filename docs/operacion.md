@@ -58,11 +58,11 @@ scripts/restaurar.sh respaldos/respaldo.dump
 
 El script:
 
-1. Detiene la aplicación y los trabajos que escriben en la base.
+1. Detiene todos los servicios en marcha salvo la base (en producción y en desarrollo) y se niega a seguir si queda alguna conexión abierta de la aplicación o del migrador, por ejemplo un `docker compose run` olvidado.
 2. Restaura con `pg_restore --single-transaction --exit-on-error`: o queda todo el respaldo o la base sigue como estaba.
 3. Solo si la restauración salió bien, corre `migrate` (verifica que las migraciones del respaldo coinciden con las del repositorio, aplica las que falten y vuelve a dar a `rs_app` sus permisos mínimos) y arranca la aplicación.
 
-Si falla, la aplicación queda detenida y la base sin cambios: revisar el mensaje, conseguir un respaldo bueno y repetir. En una máquina nueva, antes de restaurar, hacer los pasos de §1 con las mismas contraseñas de base de datos. `scripts/verificar-todo.sh` prueba una restauración correcta y una con un respaldo dañado.
+Si falla, la aplicación queda detenida y la base sin cambios: revisar el mensaje, conseguir un respaldo bueno y repetir. En una máquina nueva, antes de restaurar, hacer los pasos de §1 con las mismas contraseñas de base de datos. `scripts/verificar-todo.sh` prueba una restauración con la aplicación encendida, otra con una conexión abierta (no restaura) y otra con un respaldo dañado (no cambia nada).
 
 ## 5. HTTPS en producción
 

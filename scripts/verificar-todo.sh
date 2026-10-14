@@ -30,7 +30,7 @@ compose integracion run --rm --build integration
 echo "== 3/5 Punta a punta contra la imagen de producción"
 compose e2e run --rm --build e2e
 
-echo "== 4/5 Respaldo y restauración (correcta y con respaldo dañado)"
+echo "== 4/5 Respaldo y restauración (con la aplicación encendida, con conexión abierta y con respaldo dañado)"
 scripts/probar-restauracion.sh
 
 echo "== 5/5 Búsqueda de secretos en el historial (gitleaks; no detecta datos personales)"

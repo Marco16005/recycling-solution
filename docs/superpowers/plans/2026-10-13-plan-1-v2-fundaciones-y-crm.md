@@ -408,6 +408,7 @@ Lo que cambió respecto de lo escrito arriba, con su motivo:
   3. Migrador: valida el historial antes de aplicar; prueba con historial alterado y migración pendiente.
   4. Restauración atómica con `scripts/restaurar.sh` y su prueba (`scripts/probar-restauracion.sh`, etapa 4 de la verificación).
   5. Mudanza con HTTPS local: traslado de la autoridad de Caddy o reinstalación en los teléfonos (`docs/operacion.md`).
+- Segunda revisión de Codex: `restaurar.sh` pedía detener `web app bootstrap`, pero cada archivo de Compose tiene solo uno de `web` o `app`; la parada fallaba en silencio y la restauración seguía con la aplicación encendida. Ahora detiene los servicios en marcha salvo `db`, sin ocultar errores, y aborta si quedan conexiones de `rs_app` o `rs_migrador`; la prueba arranca la aplicación antes de restaurar y prueba una conexión abierta.
 
 ## 5. Orden y paralelismo
 
