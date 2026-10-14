@@ -1,35 +1,48 @@
+import { estadoEfectivo } from "../clientes/documentos";
 import type { DocumentoRegistrado, MotivoNoDisponible, Operador, TipoDocumento, Unidad } from "./tipos";
 
-/**
- * Por qué la unidad no puede salir en la fecha ("AAAA-MM-DD"). Vacía = disponible.
- * Un documento obligatorio (por la entidad o, sin renglón, por omisión del catálogo) faltante o no vigente la bloquea.
- * Orden: el de CodigoNoDisponible; dentro de cada código, por nombre del documento.
- */
+function motivosDocumentos(documentos: DocumentoRegistrado[], catalogo: TipoDocumento[], aplicaA: "unidad" | "operador", fecha: string): MotivoNoDisponible[] {
+  const faltantes: MotivoNoDisponible[] = [];
+  const noVigentes: MotivoNoDisponible[] = [];
+  for (const tipo of catalogo.filter((t) => t.aplicaA === aplicaA)) {
+    const documento = documentos.find((d) => d.tipoDocumentoId === tipo.id);
+    if (!documento) {
+      if (tipo.obligatorioPorOmision) faltantes.push({ codigo: "documento_faltante", detalle: tipo.nombre });
+    } else if (documento.obligatorio && estadoEfectivo({ ...documento, nombre: tipo.nombre }, fecha) !== "vigente") {
+      noVigentes.push({ codigo: "documento_no_vigente", detalle: tipo.nombre });
+    }
+  }
+  const porNombre = (a: MotivoNoDisponible, b: MotivoNoDisponible) => (a.detalle ?? "").localeCompare(b.detalle ?? "", "es");
+  return [...faltantes.sort(porNombre), ...noVigentes.sort(porNombre)];
+}
+
+/** Orden: inactivo, documentos faltantes, documentos no vigentes; documentos por nombre. */
 export function motivosNoDisponibleUnidad(u: Unidad, catalogo: TipoDocumento[], fecha: string): MotivoNoDisponible[] {
-  void u;
-  void catalogo;
-  void fecha;
-  throw new Error("pendiente: Plan 2 T2 (Codex)");
+  return [
+    ...(u.activo ? [] : [{ codigo: "inactivo" as const, detalle: null }]),
+    ...motivosDocumentos(u.documentos, catalogo, "unidad", fecha),
+  ];
 }
 
-/** Igual que la unidad, más aviso_no_entregado si el operador no tiene registrada la entrega del aviso. */
+/** La entrega del aviso se comprueba por su versión registrada. */
 export function motivosNoDisponibleOperador(o: Operador, catalogo: TipoDocumento[], fecha: string): MotivoNoDisponible[] {
-  void o;
-  void catalogo;
-  void fecha;
-  throw new Error("pendiente: Plan 2 T2 (Codex)");
+  return [
+    ...(o.activo ? [] : [{ codigo: "inactivo" as const, detalle: null }]),
+    ...motivosDocumentos(o.documentos, catalogo, "operador", fecha),
+    ...(o.avisoVersion === null ? [{ codigo: "aviso_no_entregado" as const, detalle: null }] : []),
+  ];
 }
 
-/** Documentos con vencimiento entre fecha y fecha + dias, ambos incluidos. */
+/** Intervalo inclusivo de fechas; independiente del estado capturado y de obligatoriedad. */
 export function documentosPorVencer(docs: DocumentoRegistrado[], fecha: string, dias: number): DocumentoRegistrado[] {
-  void docs;
-  void fecha;
-  void dias;
-  throw new Error("pendiente: Plan 2 T2 (Codex)");
+  if (!Number.isInteger(dias) || dias < 0) throw new Error("Los días deben ser un entero no negativo");
+  const limite = new Date(`${fecha}T00:00:00Z`);
+  limite.setUTCDate(limite.getUTCDate() + dias);
+  const hasta = limite.toISOString().slice(0, 10);
+  return docs.filter((d) => d.venceEl !== null && d.venceEl >= fecha && d.venceEl <= hasta);
 }
 
 /** Mayúsculas, sin espacios ni guiones. */
 export function normalizarPlaca(placa: string): string {
-  void placa;
-  throw new Error("pendiente: Plan 2 T2 (Codex)");
+  return placa.toUpperCase().replace(/[\s-]/g, "");
 }

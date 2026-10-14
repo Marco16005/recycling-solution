@@ -1,7 +1,11 @@
 import { z } from "zod";
-import type { SolicitudEntrada } from "./tipos";
+import { CANALES, type SolicitudEntrada } from "./tipos";
 
-/** Pendiente: Plan 2 T2 (Codex). clienteId uuid, fecha real, canal del catálogo, carga 1–60000 o null, notas ≤ 500. */
-export const solicitudSchema: z.ZodType<SolicitudEntrada> = z.custom<SolicitudEntrada>(() => {
-  throw new Error("pendiente: Plan 2 T2 (Codex)");
+export const solicitudSchema: z.ZodType<SolicitudEntrada> = z.object({
+  clienteId: z.uuid("Selecciona un cliente válido"),
+  fechaSolicitada: z.iso.date("Usa una fecha real con formato AAAA-MM-DD"),
+  canal: z.enum(CANALES),
+  cargaEstimadaKg: z.number().min(1).max(60000).nullable(),
+  notas: z.string().trim().max(500).nullable(),
+  capturaInicioEn: z.date().nullable(),
 });
