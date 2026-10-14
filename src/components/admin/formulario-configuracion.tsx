@@ -1,0 +1,159 @@
+"use client";
+
+import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
+import { useState, useTransition, type FormEvent } from "react";
+import { guardarConfiguracionAccion } from "@/acciones/configuracion";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import type { ConfiguracionVista } from "@/consultas/configuracion";
+import { DIAS_SEMANA } from "@/dominio/clientes/etiquetas";
+
+const SelectorUbicacion = dynamic(() => import("@/components/clientes/selector-ubicacion").then((m) => m.SelectorUbicacion), {
+  ssr: false,
+  loading: () => <p className="flex h-72 items-center justify-center rounded-lg border text-sm text-muted-foreground">Cargando mapa…</p>,
+});
+
+type Valores = Omit<ConfiguracionVista, "version" | "versionAvisoPrivacidad" | "estiloMapaUrl">;
+
+const CAMPOS_NUMERICOS: { campo: keyof Valores; titulo: string; paso: string }[] = [
+  { campo: "velocidadKmh", titulo: "Velocidad promedio (km/h)", paso: "1" },
+  { campo: "factorCircuidad", titulo: "Factor de circuidad (calles contra línea recta)", paso: "0.05" },
+  { campo: "descargaMin", titulo: "Descarga en el patio (min por viaje)", paso: "1" },
+  { campo: "cargaPorOmisionKg", titulo: "Carga por omisión si no hay estimación (kg)", paso: "50" },
+  { campo: "diasParaAtrasada", titulo: "Días de operación para marcar una solicitud atrasada", paso: "1" },
+];
+
+export function FormularioConfiguracion({ configuracion }: { configuracion: ConfiguracionVista }) {
+  const router = useRouter();
+  const [pendiente, iniciar] = useTransition();
+  const [errores, setErrores] = useState<Record<string, string[]>>({});
+  const [mensaje, setMensaje] = useState("");
+  const { version, versionAvisoPrivacidad, estiloMapaUrl, ...inicial } = configuracion;
+  const [valores, setValores] = useState<Valores>(inicial);
+
+  const cambiar = <K extends keyof Valores>(campo: K, valor: Valores[K]) => {
+    setValores((v) => ({ ...v, [campo]: valor }));
+    setMensaje("");
+  };
+
+  function guardar(evento: FormEvent) {
+    evento.preventDefault();
+    setErrores({});
+    iniciar(async () => {
+      const r = await guardarConfiguracionAccion(version, valores);
+      if (r.ok) {
+        setMensaje("Configuración guardada.");
+        router.refresh();
+        return;
+      }
+      if (r.error === "no_autenticado") router.replace("/entrar");
+      else if (r.error === "invalido") setErrores(r.campos);
+      else if (r.error === "conflicto") setErrores({ _: ["Alguien más cambió la configuración. Recarga la página."] });
+      else setErrores({ _: ["Tu cuenta no puede cambiar la configuración."] });
+    });
+  }
+
+  const error = (campo: string) =>
+    errores[campo]?.length ? <p id={`error-${campo}`} className="text-sm text-destructive">{errores[campo].join(" ")}</p> : null;
+
+  return (
+    <form onSubmit={guardar} className="space-y-6" aria-label="Configuración de operación">
+      {Object.keys(errores).length > 0 && (
+        <div role="alert" className="rounded-lg border border-destructive/40 bg-background p-4 text-sm">
+          <ul className="list-inside list-disc">{Object.values(errores).flat().map((m) => <li key={m}>{m}</li>)}</ul>
+        </div>
+      )}
+      {mensaje && <p role="status" className="rounded-lg border bg-background p-4 text-sm">{mensaje}</p>}
+
+      <section className="space-y-4 rounded-xl border bg-background p-5">
+        <h2 className="text-lg font-semibold">Patio</h2>
+        <p className="text-sm text-muted-foreground">Punto de salida y regreso de las unidades. Haz clic en el mapa o captura las coordenadas.</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {(["patioLat", "patioLng"] as const).map((campo) => (
+            <div key={campo} className="space-y-2">
+              <Label htmlFor={campo}>{campo === "patioLat" ? "Latitud" : "Longitud"}</Label>
+              <Input
+                id={campo}
+                type="number"
+                step="any"
+                value={valores[campo] ?? ""}
+                aria-invalid={Boolean(errores[campo])}
+                aria-describedby={errores[campo] ? `error-${campo}` : undefined}
+                onChange={(e) => cambiar(campo, e.target.value === "" ? null : Number(e.target.value))}
+              />
+              {error(campo)}
+            </div>
+          ))}
+        </div>
+        <SelectorUbicacion
+          lat={valores.patioLat}
+          lng={valores.patioLng}
+          estiloMapaUrl={estiloMapaUrl}
+          soloLectura={pendiente}
+          alCambiar={(lat, lng) => setValores((v) => ({ ...v, patioLat: lat, patioLng: lng }))}
+        />
+      </section>
+
+      <section className="grid gap-4 rounded-xl border bg-background p-5 sm:grid-cols-2">
+        <h2 className="text-lg font-semibold sm:col-span-2">Turno y tiempos</h2>
+        {(["turnoInicio", "turnoFin"] as const).map((campo) => (
+          <div key={campo} className="space-y-2">
+            <Label htmlFor={campo}>{campo === "turnoInicio" ? "Inicio del turno" : "Fin del turno (incluye regreso y descarga)"}</Label>
+            <Input
+              id={campo}
+              type="time"
+              value={valores[campo]}
+              aria-invalid={Boolean(errores[campo])}
+              aria-describedby={errores[campo] ? `error-${campo}` : undefined}
+              onChange={(e) => cambiar(campo, e.target.value)}
+            />
+            {error(campo)}
+          </div>
+        ))}
+        {CAMPOS_NUMERICOS.map(({ campo, titulo, paso }) => (
+          <div key={campo} className="space-y-2">
+            <Label htmlFor={campo}>{titulo}</Label>
+            <Input
+              id={campo}
+              type="number"
+              step={paso}
+              value={String(valores[campo])}
+              aria-invalid={Boolean(errores[campo])}
+              aria-describedby={errores[campo] ? `error-${campo}` : undefined}
+              onChange={(e) => cambiar(campo, Number(e.target.value))}
+            />
+            {error(campo)}
+          </div>
+        ))}
+      </section>
+
+      <fieldset className="space-y-3 rounded-xl border bg-background p-5">
+        <legend className="px-1 text-lg font-semibold">Días de operación</legend>
+        <div className="flex flex-wrap gap-4">
+          {DIAS_SEMANA.map((dia, n) => (
+            <label key={dia} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="size-4 accent-primary"
+                checked={valores.diasOperacion.includes(n)}
+                onChange={(e) =>
+                  cambiar("diasOperacion", e.target.checked ? [...valores.diasOperacion, n] : valores.diasOperacion.filter((d) => d !== n))
+                }
+              />
+              {dia}
+            </label>
+          ))}
+        </div>
+        {error("diasOperacion")}
+      </fieldset>
+
+      <p className="text-sm text-muted-foreground">
+        Versión vigente del aviso de privacidad: <strong>{versionAvisoPrivacidad}</strong>. Se cambia publicando una versión nueva con
+        <code className="mx-1">publicar-aviso</code>(ver docs/operacion.md).
+      </p>
+      <Button type="submit" disabled={pendiente}>{pendiente ? "Guardando…" : "Guardar configuración"}</Button>
+    </form>
+  );
+}

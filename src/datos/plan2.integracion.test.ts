@@ -108,3 +108,22 @@ describe("modelo del Plan 2 con Postgres real", () => {
     ]);
   });
 });
+
+describe("publicación del aviso de privacidad", () => {
+  let base: BasePostgres;
+  beforeAll(async () => {
+    base = await crearBasePostgres();
+  });
+  afterAll(async () => base.cerrar());
+
+  it("publica una versión nueva vigente, con huella y bitácora; no permite repetirla", async () => {
+    const { publicarAviso } = await import("./avisos");
+    const { huella } = await publicarAviso(base.urlMigrador, { version: "2026-11-01", texto: "Texto del aviso", motivo: "Primera publicación", publicadoPor: "Prueba" });
+    expect(huella).toMatch(/^[0-9a-f]{64}$/);
+    const config = filasDe<{ version_aviso_privacidad: string; version: number }>(await base.bd.execute(sql`SELECT version_aviso_privacidad, version FROM configuracion`));
+    expect(config).toEqual([{ version_aviso_privacidad: "2026-11-01", version: 2 }]);
+    await expect(publicarAviso(base.urlMigrador, { version: "2026-11-01", texto: "Otro", motivo: "x", publicadoPor: "Prueba" })).rejects.toThrow(/ya existe/);
+    const avisos = filasDe<{ version: string; texto: string | null }>(await base.bd.execute(sql`SELECT version, texto FROM avisos_privacidad ORDER BY publicado_en`));
+    expect(avisos).toEqual([{ version: "2026-10", texto: null }, { version: "2026-11-01", texto: "Texto del aviso" }]);
+  });
+});
