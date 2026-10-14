@@ -4,17 +4,21 @@ Para quien revise el proyecto (una persona u otro modelo, por ejemplo Codex). El
 
 ## Qué leer, en orden
 
-1. `docs/superpowers/specs/2026-10-07-recycling-solution-piloto-design.md` — qué debe hacer el sistema.
+1. `docs/superpowers/specs/2026-10-07-recycling-solution-piloto-design.md` (revisión 2) — qué debe hacer el sistema.
 2. `docs/superpowers/plans/2026-10-07-hoja-de-ruta.md` — qué hito se está revisando y su lista de aceptación.
-3. El plan detallado del hito, en `docs/superpowers/plans/`. Su sección "Review Focus" lista las entradas riesgosas que deben tener prueba.
+3. El plan detallado del hito, en `docs/superpowers/plans/` (para el Plan 1, el v2 del 2026-10-13). Su sección "Review Focus" lista las entradas riesgosas que deben tener prueba.
+4. `docs/operacion.md` — cómo se levanta, respalda y muda el sistema.
 
 ## Cómo ejecutar
 
+Solo se necesita Docker; nada se instala en la máquina.
+
 ```bash
-npm ci
-npm run verificar        # tsc + eslint + pruebas unitarias y de integración (no requieren red ni cuentas)
-npx playwright test      # pruebas de punta a punta; requieren .env.local con las llaves y el usuario de prueba
+cp .env.example .env                 # y llenar las contraseñas (solo letras y números)
+scripts/verificar-todo.sh            # tipos, lint, unidad, integración con Postgres, punta a punta y búsqueda de secretos
 ```
+
+Cada etapa por separado está en la tabla de comandos del plan vigente (§6). Las pruebas usan bases desechables y usuarios sintéticos; no tocan los datos de operación.
 
 ## Invariantes
 
@@ -22,16 +26,21 @@ Cada una debe cumplirse siempre. Si alguna falla, es un hallazgo.
 
 | # | Invariante | Cómo comprobarla |
 |---|---|---|
-| 1 | Toda función exportada de `src/acciones/*.nucleo.ts` llama a `autorizar` antes de leer o escribir datos | Lectura del archivo; cada función tiene pruebas con rol equivocado y sin sesión |
+| 1 | Toda función exportada de `src/acciones/*.nucleo.ts` y `src/consultas/*.nucleo.ts` llama a `autorizar` con un permiso de la matriz antes de leer o escribir datos | Lectura del archivo; cada función tiene pruebas sin sesión, con usuario inactivo y con cada rol sin permiso |
 | 2 | Toda entrada externa pasa por un esquema Zod en el servidor antes de escribirse | Lectura de `src/acciones`; pruebas de entrada inválida |
-| 3 | Toda escritura deja un renglón en la bitácora con usuario, entidad y acción | Pruebas que consultan la tabla `bitacora` |
-| 4 | Ningún componente de navegador accede a la base de datos | `grep -rl '"use client"' src \| xargs grep -n '@/datos'` no devuelve nada |
-| 5 | `src/dominio`, `src/motor` y `src/indicadores` son puros | `grep -rnE "@/datos\|from \"next\|@clerk\|Date\.now\|Math\.random\|new Date\(\)" src/dominio src/motor src/indicadores` no devuelve nada fuera de archivos de prueba |
+| 3 | Toda escritura deja un renglón en la bitácora con usuario, entidad, acción y nombres de campos, dentro de la misma transacción; si la bitácora falla no se escribe nada | Pruebas de rollback con PGlite y con Postgres real |
+| 4 | Ningún componente de navegador ni pantalla accede a `src/datos` | `grep -rn '@/datos' src/app src/components` no devuelve nada |
+| 5 | `src/dominio`, `src/motor` y `src/indicadores` son puros | `grep -rnE "@/datos\|@/seguridad\|from \"next\|better-auth\|Date\.now\|Math\.random\|new Date\(\)" src/dominio src/motor src/indicadores` no devuelve nada fuera de archivos de prueba |
 | 6 | El motor es determinista | Prueba "misma semilla, mismo plan" |
 | 7 | El motor no rutea solicitudes bloqueadas ni excede capacidad, turno o ventanas | Pruebas de propiedades del motor (especificación §12) |
 | 8 | Una solicitud pospuesta conserva su hora de registro | Prueba de orden FIFO tras posponer |
 | 9 | Un operador solo ve y modifica sus propias rutas | Pruebas de acciones con otro operador |
-| 10 | El repositorio no contiene secretos ni datos reales de clientes | `git ls-files \| grep -i env` solo muestra ejemplos; los datos semilla son sintéticos |
+| 10 | El repositorio no contiene secretos ni datos reales de clientes | gitleaks en `scripts/verificar-todo.sh`; `git ls-files \| grep -i env` solo muestra `.env.example`; los datos semilla son sintéticos (gitleaks no detecta datos personales: se revisa a mano) |
+| 11 | Guardar con una versión vieja no escribe nada y responde `conflicto` | Prueba de concurrencia con Postgres real |
+| 12 | `rs_app` no puede modificar ni borrar `bitacora` ni `aceptaciones_privacidad` | Prueba de integración de permisos |
+| 13 | El registro público está cerrado; un usuario desactivado no conserva sesiones ni puede crear nuevas | Pruebas de autenticación y de punta a punta |
+| 15 | Solo `src/seguridad/identidades.ts` escribe en las tablas de Better Auth, siempre dentro de la transacción de quien llama | `grep -rn 'esquema-auth\|from "@/datos/esquema"' src` y revisión de usos de `user`, `account` y `session` |
+| 14 | Todo se ejecuta en contenedores con versiones fijas | Ningún `@latest` ni imagen sin versión exacta en `Dockerfile`, `compose*.yaml` ni scripts |
 
 ## Qué intentar romper
 
@@ -39,9 +48,13 @@ Cada una debe cumplirse siempre. Si alguna falla, es un hallazgo.
 - Clientes sin ubicación, sin ventanas el día pedido o con documentos que vencen justo hoy.
 - Más solicitudes que capacidad: ¿se posponen las más recientes y solo esas?
 - Zonas del motor con un solo cliente, todos los clientes en el mismo punto, una sola unidad disponible, ninguna unidad.
-- Dos despachadores guardando el mismo cliente al mismo tiempo. Limitación conocida: gana el último; no hay control de versiones.
+- Dos despachadores guardando el mismo cliente al mismo tiempo: el segundo debe recibir `conflicto`.
+- Registrar el aviso de privacidad con una versión que ya cambió, o después de que otro despachador registró un movimiento: `conflicto`.
+- Confirmar dos veces la misma importación, o confirmar después de que otro despachador agregó un cliente con el mismo nombre.
+- Entrar con un usuario desactivado; reactivarlo y comprobar que no reviven sus sesiones anteriores.
 - Identificadores mal formados en la URL y en las acciones.
-- Archivos CSV con codificación distinta de UTF-8, columnas repetidas o más de mil renglones.
+- Archivos CSV con codificación distinta de UTF-8, columnas repetidas, campos multilínea, comillas sin cerrar, más de 2000 registros o más de 1 MB; reimportar la misma cartera (posibles duplicados).
+- Borrar todos los contenedores y volver a levantarlos; restaurar un respaldo en una máquina limpia.
 
 ## Formato de un hallazgo
 

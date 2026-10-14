@@ -1,5 +1,7 @@
 # Plan 1 — Fundaciones y CRM de clientes — Implementation Plan
 
+> **Sustituido el 2026-10-13 por `2026-10-13-plan-1-v2-fundaciones-y-crm.md`.** Se conserva como referencia del código verificado el 2026-10-07; lo que dependa de Clerk, Neon o Vercel ya no aplica.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Dejar funcionando el CRM de clientes de Recycling Solution: alta, edición, listado con estado de completitud, ubicación en mapa e importación desde CSV, con inicio de sesión y roles.

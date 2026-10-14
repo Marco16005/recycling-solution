@@ -1,35 +1,35 @@
 # Recycling Solution — especificación de diseño del piloto
 
-- **Fecha:** 2026-10-07
-- **Estado:** borrador para revisión. No se escribe código del producto hasta que esta especificación y el plan de implementación estén aprobados.
-- **Fuente de requisitos:** `7°_LII_CF Solutions_DocumentoIntegrador (unificado).docx` (en la carpeta superior). Cuando este documento cita "DI §n" o "DI Tabla n" se refiere a ese archivo.
+- **Revisión 2 — 2026-10-13.** Incorpora la ejecución 100% en contenedores Docker y las correcciones de la revisión cruzada entre Claude y Codex. La revisión 1 (2026-10-07) está en el historial de git.
+- **Estado:** revisión técnica cerrada el 2026-10-13: Codex la validó con seis cambios bloqueantes, se incorporaron y Codex confirmó la versión resultante. Aprobación de producto: las decisiones de §14 siguen abiertas con el dueño del proyecto; ninguna bloquea el Plan 1.
+- **Fuente de requisitos:** `7°_LII_CF Solutions_DocumentoIntegrador (unificado).docx`, en la carpeta superior. "DI §n" y "DI Tabla n" se refieren a ese archivo.
 - **Hoja de ruta:** `docs/superpowers/plans/2026-10-07-hoja-de-ruta.md`
-- **Primer plan detallado:** `docs/superpowers/plans/2026-10-07-plan-1-fundaciones-y-crm.md`
+- **Plan vigente:** `docs/superpowers/plans/2026-10-13-plan-1-v2-fundaciones-y-crm.md`
 
 ---
 
 ## 1. Propósito
 
-Construir la prueba piloto de un asistente de logística para una recicladora de cartón en El Marqués, Querétaro (15 unidades de doble rodada, 80 a 110 clientes, 50 a 60 solicitudes de recolección por día, 2 despachadores).
+Construir la prueba piloto de un asistente de logística para una recicladora de cartón en El Marqués, Querétaro: 15 unidades de doble rodada, 80 a 110 clientes, 50 a 60 solicitudes de recolección por día y 2 despachadores.
 
-Hoy el despachador recibe solicitudes por llamada y WhatsApp, busca los datos del cliente en Excel o notas y asigna de memoria. El ciclo de una recolección dura 161 min, de los cuales 15 min son espera de asignación (desperdicio puro) y 45 min traslado (DI Tabla 3). La capacidad teórica (44.7 recolecciones por día) no cubre la demanda.
+Hoy el despachador recibe solicitudes por llamada y WhatsApp, busca los datos del cliente en Excel o en notas y asigna de memoria. El ciclo de una recolección dura 161 min; 15 min son espera de asignación (desperdicio puro) y 45 min traslado (DI Tabla 3). La capacidad teórica, 44.7 recolecciones por día, no cubre la demanda.
 
 El piloto se construye en dos etapas, en este orden:
 
 1. **Etapa 1 — datos.** CRM de clientes, catálogo de unidades y operadores, y registro de solicitudes en un canal único.
-2. **Etapa 2 — ruteo.** Un motor que une los datos del CRM con las unidades disponibles y propone las rutas del día; el despachador las valida; el operador las ejecuta desde su teléfono; la gerencia ve los indicadores.
+2. **Etapa 2 — ruteo.** Un motor une los datos del CRM con las unidades disponibles y propone las rutas del día; el despachador las valida; el operador las ejecuta desde su teléfono; la gerencia consulta los indicadores.
 
 ### Criterios de éxito (DI §1 y Tabla 8)
 
-| # | Indicador | Meta | Cómo lo mide el sistema |
+| # | Indicador | Meta | Definición |
 |---|---|---|---|
-| K1 | Tiempos muertos por recolección (espera de asignación + traslado) | 48 min o menos (base 60) | §11, K1 |
-| K2 | Tiempo administrativo para identificar las especificaciones del cliente | 30% menos que la línea base | §11, K2 |
-| K3 | Cumplimiento de ventanas horarias | 80% o más | §11, K3 |
-| K4 | Kilómetros y combustible por ruta | 10% menos | §11, K4 |
-| K5 | Clientes activos con campos obligatorios completos | 100% | §11, K5 |
-| K6 | Validación del plan por el despachador | 5 min o menos | §11, K6 |
-| K7 | Respuesta del motor de ruteo | 60 s o menos | §11, K7 |
+| K1 | Tiempos muertos por recolección (espera de asignación + traslado) | 48 min o menos (base 60) | §11 |
+| K2 | Tiempo administrativo para identificar las especificaciones del cliente | 30% menos que la línea base | §11 |
+| K3 | Cumplimiento de ventanas horarias | 80% o más | §11 |
+| K4 | Kilómetros y combustible por ruta | 10% menos | §11 |
+| K5 | Clientes activos con ficha completa | 100% | §11 |
+| K6 | Validación del plan por el despachador | 5 min o menos | §11 |
+| K7 | Respuesta del motor de ruteo | 60 s o menos | §11 |
 
 ## 2. Alcance
 
@@ -41,292 +41,335 @@ El piloto se construye en dos etapas, en este orden:
 | Catálogo de unidades y operadores | 1 | Despachador |
 | Registro de solicitudes | 1 | Despachador |
 | Motor de ruteo | 2 | Sistema y despachador |
-| Aplicación móvil del operador (vista web) | 2 | Operador |
+| Aplicación del operador (vista web móvil) | 2 | Operador |
 | Panel gerencial simplificado | 2 | Gerencia |
 
 ### Fuera del piloto (Fase 2)
 
-Checklist digital de operadores y unidades, alertas de vencimiento de licencias, trazabilidad de material (peso, valor, inventario en patio), manifiestos y documentos fiscales, cálculo de huella de carbono, optimización VRPTW con solver, rastreo GPS continuo, aplicación nativa, integración con WhatsApp.
+Checklist digital de operadores y unidades, alertas de vencimiento de licencias, trazabilidad de material (peso, valor, inventario en patio), manifiestos y documentos fiscales, cálculo de huella de carbono, optimización VRPTW con solver, rastreo GPS continuo, aplicación nativa e integración con WhatsApp.
 
-Lo que el piloto sí deja preparado para la Fase 2: kilómetros y combustible estimado por ruta (base de la huella de carbono) y una interfaz del motor que permite sustituir la heurística por un solver.
+El piloto deja preparado para la Fase 2: kilómetros y combustible por ruta (base de la huella de carbono) y un contrato del motor que permite sustituir la heurística por un solver.
 
-## 3. Decisión: partir de un proyecto de GitHub o desde cero
+### Supuesto de operación: "efímero"
 
-Se evaluaron proyectos de código abierto como posible base (consulta del 2026-10-07).
+Los contenedores son reemplazables: se pueden destruir y recrear en cualquier máquina con Docker sin perder nada. Los datos (cartera, usuarios, bitácora, planes) **no** son efímeros: viven en un volumen de Postgres y se respaldan y restauran con `pg_dump` y `pg_restore`. Mover el sistema a otra máquina es clonar el repositorio, crear el archivo de variables y restaurar el último respaldo. Desarrollo y pruebas usan bases desechables.
 
-| Candidato | Qué es | Licencia | Stack y operación | Encaje con el piloto |
-|---|---|---|---|---|
-| [Atomic CRM](https://github.com/marmelab/atomic-crm) | CRM de ventas ligero | MIT | React, Vite, shadcn/ui, Supabase | Bajo. Sus entidades son contactos, empresas, negocios en kanban, tareas y notas. No tiene ventanas horarias, documentos por cliente, unidades, solicitudes ni rutas. |
-| [Twenty](https://github.com/twentyhq/twenty) | CRM tipo Salesforce | AGPL-3.0 con módulos comerciales | Node, Postgres, Redis, worker; 2 a 4 GB de RAM | Bajo. Mismo desajuste de dominio y mucha más operación. |
-| [Fleetbase](https://github.com/fleetbase/fleetbase) | Plataforma de logística (órdenes, despacho, app de conductor, ruteo con OSRM) | AGPL-3.0, doble licencia | PHP y Ember en Docker; pide correo, mapas, SMS, almacenamiento, colas y sockets; 4 GB de RAM | Medio en dominio, bajo en viabilidad. Es una plataforma completa, no una base pequeña. |
-| Repos de recolección de residuos (Garbougie, GarbageTruckOptimization) | Proyectos académicos o de hackathon | Varias | Sin mantenimiento | Nulo como base. |
-| Solvers: [VROOM](https://github.com/VROOM-Project/vroom), OR-Tools, PyVRP, Timefold | Optimización de rutas con ventanas de tiempo | BSD, Apache-2.0, MIT, Apache-2.0 | Servicio aparte | Son la alternativa A4 del DI (descartada para el semestre). Se reservan para la Fase 2. |
+## 3. Decisión: base propia y reutilización
 
-**Decisión: desarrollo propio sobre un stack estándar, reutilizando librerías; no se hace fork de ningún producto.**
+### Productos evaluados como base (consulta del 2026-10-07, revisada el 2026-10-13)
 
-Razones:
-
-1. **El dominio no coincide.** Un CRM de ventas modela prospectos y negocios; aquí "CRM" significa ficha de restricciones del cliente. De Atomic CRM solo se aprovecharía el andamiaje (login, listas, formularios), que con el stack elegido se obtiene igual sin heredar código ajeno.
-2. **El modelo de datos es pequeño.** Son 14 tablas. Escribirlas cuesta menos que entender y recortar una plataforma.
-3. **Coherencia con el Documento Integrador.** La matriz de selección (DI Tabla 14) eligió A3, desarrollo propio con regla híbrida, sobre A1, software existente. Adoptar Fleetbase sería volver a A1 y perder el diferenciador que se defiende: una regla de asignación propia y explicable.
-4. **Licencia y operación.** AGPL obliga a publicar el código si se ofrece como servicio a terceros (el DI plantea comercializarlo a futuro). Fleetbase y Twenty requieren operar varios servicios en Docker.
-5. **Auditoría.** Un código propio y pequeño se puede revisar completo con otro modelo; un fork grande no.
-
-Lo que sí se reutiliza: Postgres y autenticación administrados, componentes de interfaz (shadcn/ui), mapas (MapLibre), y el diseño de Atomic CRM como referencia de patrones de pantalla.
-
-## 4. Stack tecnológico
-
-| Capa | Elección | Por qué | Alternativa |
+| Candidato | Licencia | Qué ofrece | Decisión |
 |---|---|---|---|
-| Aplicación | Next.js 16 (App Router, con Cache Components activo) + TypeScript | Una sola base de código para despachador, operador y gerencia; despliegue directo en Vercel | — |
-| Interfaz | Tailwind CSS + shadcn/ui | Componentes accesibles y editables; rápido de construir | — |
-| Base de datos | Postgres en Neon (integración nativa del Marketplace de Vercel) | Variables de entorno automáticas; ramas de base de datos para pruebas | Supabase (Postgres + Auth + Storage en un proveedor) |
-| Acceso a datos | Drizzle ORM + migraciones versionadas | Esquema en TypeScript, SQL legible y auditable | Prisma |
-| Autenticación | Clerk (integración nativa) con registro público desactivado | Los usuarios los crea el administrador; sin manejar contraseñas propias | Supabase Auth |
-| Validación | Zod en cada acción del servidor | Una definición por entidad, reutilizada en formularios y servidor | — |
-| Mapa | MapLibre GL JS con teselas de OpenFreeMap | Sin llave de API ni costo; el servicio público se ofrece sin garantía de disponibilidad, aceptable para un piloto | MapTiler (plan gratuito) |
-| Motor de ruteo | Módulo TypeScript puro en `src/motor/`, sin dependencias de red ni de base de datos | Determinista, probado con pruebas unitarias, auditable | Solver externo en Fase 2 |
-| Pruebas | Vitest (unidad e integración) y Playwright (flujos de punta a punta) | — | — |
-| Hospedaje | Vercel | — | — |
+| [Atomic CRM](https://github.com/marmelab/atomic-crm) | MIT | CRM de ventas: contactos, empresas, negocios, tareas. React, shadcn/ui, Supabase | No como base: sus entidades no modelan ventanas, documentos, unidades, solicitudes ni rutas, y sus pantallas dependen de su entorno de administración y de Supabase. Se pueden copiar patrones o piezas de presentación autocontenidas, conservando el aviso MIT. |
+| [Twenty](https://github.com/twentyhq/twenty) | AGPL-3.0 y módulos comerciales; el paquete `twenty-ui` tiene licencia MIT propia | CRM tipo Salesforce; `twenty-ui` es una biblioteca React con Base UI y temas propios | No como base. `twenty-ui` solo si un componente concreto ahorra trabajo medible, tras probar SSR, hidratación, accesibilidad y tamaño; no se mezcla un segundo sistema visual completo con shadcn/ui. |
+| [Fleetbase](https://github.com/fleetbase/fleetbase) | AGPL-3.0, doble licencia | Plataforma de logística en PHP y Ember; su SDK de JavaScript es cliente de esa plataforma y también es AGPL | No se incorpora: no es un motor ni un componente reutilizable en Next.js. Sirve como referencia de flujos operativos. Usa OSRM para rutas; si la Fase 2 necesita tiempos de calle reales, se usará OSRM directamente en un contenedor. |
+| Solvers: VROOM, OR-Tools, PyVRP, Timefold | BSD, Apache-2.0, MIT, Apache-2.0 | Optimización de rutas con ventanas de tiempo | Alternativa A4 del DI; se reserva para la Fase 2 detrás del mismo contrato del motor. |
 
-Decisiones derivadas:
+Sobre AGPL: no impide comercializar, pero quien ofrece por red una versión modificada debe poner su código fuente a disposición de esos usuarios. La obligación depende de lo que efectivamente se incorpore; separar contenedores no la elimina por sí solo.
 
-- **Sin API de geocodificación.** Con 80 a 110 clientes, la ubicación se captura una vez moviendo un pin en el mapa o pegando coordenadas.
-- **Tiempos de traslado estimados**, no consultados a un servicio: distancia haversine × factor de circuidad ÷ velocidad promedio, ambos configurables y calibrables con los datos del piloto. El motor recibe el modelo de traslado como parámetro, así que se puede sustituir por OSRM o Google sin tocar el resto.
-- **Sin tiempo real por sockets.** Las pantallas del despachador se refrescan cada 20 s; para 5 a 10 usuarios es suficiente.
-- **Vocabulario.** Tablas, rutas de la aplicación e interfaz usan los términos del DI en español (`clientes`, `unidades`, `solicitudes`, `rutas`, `paradas`). El código técnico genérico va en inglés.
-- **Requisito previo:** actualizar la CLI de Vercel (`npm i -g vercel@latest`); la instalada (54.0.0) no soporta los comandos del Marketplace. Al implementar base de datos y autenticación se siguen las guías `vercel:vercel-storage` y `vercel:auth`.
-- **Planes gratuitos.** Bastan para el piloto. El plan Hobby de Vercel es para uso no comercial; si la empresa lo adopta en operación, hay que pasar a un plan de pago.
+**Decisión:** desarrollo propio sobre un stack estándar, reutilizando librerías abiertas. Coincide con la alternativa A3 que eligió el DI (Tabla 14): una regla de asignación propia y explicable. Un código propio y pequeño se puede auditar completo.
+
+### Librerías que sí se usan
+
+shadcn/ui (componentes), MapLibre GL JS (mapa), Papa Parse (CSV), Zod (validación), Drizzle ORM (datos), Better Auth (autenticación) y, en el Plan 3, fast-check (pruebas de propiedades del motor). React Hook Form queda como opción si los formularios crecen; el del Plan 1 no lo necesita.
+
+## 4. Stack y operación en contenedores
+
+| Capa | Elección | Por qué |
+|---|---|---|
+| Aplicación | Next.js 16.4 (App Router) + TypeScript; `output: "standalone"`; Cache Components activado explícitamente (`cacheComponents: true`) | Una base de código para los tres roles; la imagen de producción incluye solo lo necesario |
+| Interfaz | Tailwind CSS 4 + shadcn/ui; fuentes locales con el paquete `geist` | El build no depende de Google Fonts ni de Internet |
+| Base de datos | Postgres 17 en contenedor | Sin cuentas externas |
+| Acceso a datos | Drizzle ORM y migraciones SQL versionadas | Esquema en TypeScript, SQL revisable |
+| Autenticación | Better Auth 1.7 con su adaptador de Drizzle, sobre el mismo Postgres; solo correo y contraseña; registro público cerrado | Librería dentro de la aplicación, sin servicio extra. Auth.js pasó al mantenimiento del equipo de Better Auth en septiembre de 2025, que recomienda Better Auth para proyectos nuevos |
+| Mapa | MapLibre con un estilo cuya URL es configurable en el servidor (por omisión, OpenFreeMap) | Si se exige operar sin Internet, se sirven estilos y teselas locales |
+| Pruebas | Vitest (unidad e integración), PGlite para pruebas rápidas, Postgres real para integración, Playwright para punta a punta | — |
+| Entrada HTTP en producción | Caddy como proxy inverso con HTTPS | Los teléfonos de los operadores necesitan HTTPS |
+
+### Servicios de Compose
+
+| Servicio | Archivos | Qué hace |
+|---|---|---|
+| `db` | base | Postgres 17. Al crear el volumen ejecuta el script que crea los dos roles (§10) |
+| `app` | dev | Servidor de desarrollo con el código montado; `node_modules` y `.next` en volúmenes propios del proyecto |
+| `migrate` | base | Trabajo de una sola ejecución: aplica migraciones con el rol migrador y vuelve a aplicar permisos |
+| `bootstrap` | base | Trabajo idempotente que crea el primer administrador |
+| `unit` | test | Vitest de dominio, motor e indicadores |
+| `integration` | test | Vitest contra un Postgres de prueba desechable |
+| `e2e` | test | Playwright, con imagen de la misma versión que `@playwright/test`, contra la imagen de producción |
+| `web` | prod | Imagen `runner` (`node server.js`, usuario sin privilegios) |
+| `proxy` | prod | Caddy con HTTPS |
+| `respaldo` | base, perfil `respaldo` | `pg_dump` y `pg_restore` a una carpeta montada |
+
+Dockerfile multietapa: `deps` (Node 24 con `npm ci`), `dev`, `build` (`next build`) y `runner` (`.next/standalone`, `.next/static`, `public`). `migrate`, `bootstrap`, `unit` e `integration` usan la etapa `dev`, que trae las herramientas.
+
+Reglas:
+
+- Cada comando oficial se expresa con `docker compose`; nada requiere Node instalado en el anfitrión.
+- Versiones fijadas: imágenes por etiqueta exacta, dependencias por `package-lock.json`. Ningún `@latest` en el procedimiento.
+- Sin `container_name` fijo: cada worktree y cada corrida de pruebas usa su propio nombre de proyecto de Compose, y por tanto sus propios volúmenes y red.
+- Secretos solo en el archivo `.env` (no versionado) y en variables del entorno; `.env.example` documenta cada variable sin valores reales. Nada de secretos en capas de imagen ni en variables `NEXT_PUBLIC_*`.
 
 ## 5. Arquitectura
 
 ```
-┌────────────────────────── Next.js en Vercel ──────────────────────────┐
-│                                                                       │
-│  /despacho/*        /operador/*          /gerencia/*      /admin/*    │
-│  (escritorio)       (móvil)              (panel)          (usuarios)  │
-│        │                 │                    │               │       │
-│        └────────── acciones del servidor (src/acciones) ──────┘       │
-│                  autorización por rol + validación Zod                │
-│                              │                                        │
-│        ┌─────────────────────┼──────────────────────┐                 │
-│        ▼                     ▼                      ▼                 │
-│  src/datos (Drizzle)   src/motor (puro)      src/indicadores (puro)   │
-│        │               sin BD, sin red        cálculo de K1..K7       │
-│        ▼                                                              │
-│   Postgres (Neon)                                                     │
-└───────────────────────────────────────────────────────────────────────┘
-        Clerk: identidad                MapLibre + OpenFreeMap: mapa
+navegador ──▶ proxy (Caddy, solo producción) ──▶ Next.js
+                                                 │
+   src/app (pantallas por rol) ──lecturas──▶ src/consultas ─┐
+            └──────────mutaciones─────────▶ src/acciones ──┤ autorizan con src/seguridad
+                                                            ▼
+                         src/dominio (reglas puras) ◀── usan ── consultas y acciones
+                         src/datos (persistencia, recibe la transacción) ──▶ Postgres
+                         src/motor, src/indicadores (puros; Planes 3 y 6)
 ```
 
-Unidades y sus límites:
+| Capa | Hace | No hace |
+|---|---|---|
+| `src/dominio` | Tipos, validaciones, completitud, habilitación, lectura de CSV | Acceso a datos, red, reloj o azar sin sembrar |
+| `src/datos` | Esquema, migraciones, consultas y escrituras SQL; recibe `BD` o `Tx` y nunca abre ni confirma una transacción por su cuenta | Reglas de negocio, autorización |
+| `src/seguridad` | Better Auth, sesión, usuario de la aplicación, matriz de permisos | Reglas de negocio |
+| `src/consultas` | Lecturas para las pantallas: autorizan y componen datos con reglas de dominio | Escribir |
+| `src/acciones` | Casos de uso: autorizan, validan con Zod, abren **una** transacción que incluye la escritura y su renglón de bitácora | Presentación |
+| `src/app` | Pantallas; solo llaman consultas y acciones | Acceso directo a `src/datos` |
+| `src/motor`, `src/indicadores` | Funciones puras deterministas | Leer la base o la red |
 
-| Unidad | Hace | No hace | Depende de |
-|---|---|---|---|
-| `src/datos` | Esquema, migraciones y consultas | Reglas de negocio | Postgres |
-| `src/motor` | Recibe datos planos y devuelve un plan de rutas | Leer o escribir la base de datos; llamar a la red; usar reloj o azar no sembrado | Nada |
-| `src/indicadores` | Calcula K1 a K7 a partir de registros | Leer la base de datos | Nada |
-| `src/acciones` | Autoriza, valida, llama a datos y motor, escribe la bitácora | Lógica de presentación | `datos`, `motor`, `indicadores`, Clerk |
-| `src/app` | Pantallas por rol | Acceso directo a la base de datos | `acciones` |
-
-El motor y los indicadores son funciones puras a propósito: se prueban sin infraestructura y un auditor puede verificar su comportamiento leyendo solo esas carpetas.
+`src/consultas`, `src/seguridad/sesion.ts` y la conexión real llevan `import "server-only"`. Los scripts y las pruebas no importan esos módulos.
 
 ### Flujo principal del día
 
-1. El despachador registra las solicitudes conforme llegan (quedan con hora de registro).
+1. El despachador registra las solicitudes conforme llegan.
 2. Operador y unidad hacen check-in; el despachador marca las unidades no disponibles.
-3. El despachador pulsa "Generar plan". La acción carga los datos, llama al motor y guarda un plan en estado `propuesto`.
-4. El despachador revisa el plan en lista y mapa, ajusta si quiere (mover o posponer una parada) y lo valida.
-5. Cada operador ve su ruta en el teléfono y marca: salida de patio, llegada y salida de cada parada, cierre de ruta con odómetro.
-6. Si hay un incidente, el operador lo reporta; el despachador pide una nueva propuesta para las paradas pendientes.
+3. "Generar plan": la acción toma una instantánea de la entrada, llama al motor y guarda un plan `propuesto`.
+4. El despachador revisa en lista y mapa, ajusta y valida. La validación vuelve a comprobar elegibilidad, disponibilidad y versión dentro de una transacción.
+5. El operador ve su ruta en el teléfono y registra eventos.
+6. Ante un incidente, el despachador pide una nueva propuesta para las paradas pendientes.
 7. La gerencia consulta el panel.
 
 ## 6. Modelo de datos
 
-Todas las tablas tienen `id` (uuid) y, salvo `bitacora`, `creado_en` y `actualizado_en`. Las horas se guardan con zona horaria (`timestamptz`) y se muestran en hora de la Ciudad de México.
+Reglas generales: `id` uuid; `creado_en` y `actualizado_en` en las tablas mutables; fechas calendario en `date`, horarios recurrentes en `time`, instantes en `timestamptz`; la fecha de operación se calcula en `America/Mexico_City` dentro del código, no con la variable `TZ`.
 
-### Etapa 1
+### Etapa 1 (Plan 1)
 
-**`usuarios`** — `clerk_id` (único), `nombre`, `rol` (`admin` | `despachador` | `operador` | `gerencia`), `operador_id` (opcional), `activo`. Es la única fuente del rol.
+**Better Auth** — `user`, `session`, `account`, `verification`, generadas por su CLI. Solo autentican.
 
-**`clientes`** — `nombre`, `contacto_nombre`, `contacto_telefono`, `direccion`, `lat`, `lng`, `tipo_residuo` (`RSU` | `RME` | `RP`), `material` (texto), `tipos_unidad_admitidos` (lista de `tipo_unidad`), `notas_acceso`, `tiempo_servicio_min` (predeterminado 66), `carga_estimada_kg`, `aviso_privacidad_aceptado_en`, `activo`.
+**`usuarios`** — `auth_user_id` (único, referencia a `user.id`), `nombre`, `rol` (`admin` | `despachador` | `operador` | `gerencia`), `activo`. Única fuente de autorización; el navegador nunca elige rol. `operador_id` se agrega en el Plan 2.
 
-**`ventanas_cliente`** — `cliente_id`, `dia_semana` (0 a 6), `hora_inicio`, `hora_fin`. Un cliente puede tener varias.
+**`clientes`** — `nombre`, `contacto_nombre`, `contacto_telefono`, `direccion`, `lat`, `lng`, `tipo_residuo` (`RSU` | `RME` | `RP`), `material`, `tipos_unidad_admitidos`, `notas_acceso`, `tiempo_servicio_min` (66 por omisión, entre 5 y 480), `carga_estimada_kg`, `activo`, `version` (entero, empieza en 1 y sube en cada actualización).
 
-**`documentos_cliente`** — `cliente_id`, `nombre` (por ejemplo "SUA vigente"), `obligatorio`, `estado` (`vigente` | `pendiente` | `vencido`), `vence_el` (opcional).
+**`ventanas_cliente`** — `cliente_id`, `dia_semana` (0 a 6), `hora_inicio`, `hora_fin`, con `CHECK (hora_inicio < hora_fin)`.
 
-**`unidades`** — `clave` (única, por ejemplo U-03), `placas`, `tipo` (`doble_rodada` | `rabon` | `camioneta`), `capacidad_kg`, `rendimiento_km_l`, `disponible`, `motivo_no_disponible`, `activo`.
+**`documentos_cliente`** — `cliente_id`, `nombre`, `obligatorio`, `estado` (`vigente` | `pendiente` | `vencido`), `vence_el` (`date`, opcional).
 
-**`operadores`** — `nombre`, `telefono`, `unidad_habitual_id` (opcional), `activo`.
+**`avisos_privacidad`** — una fila por versión del aviso: `version` (llave), `descripcion`, `huella_sha256` del texto publicado (opcional mientras la empresa no entregue el texto), `publicado_en`. Conserva qué decía cada versión.
 
-**`solicitudes`** — `folio` (consecutivo), `cliente_id`, `registrada_en` (inmutable; es la llave FIFO), `fecha_requerida`, `canal` (`llamada` | `whatsapp` | `otro`), `carga_estimada_kg`, `notas`, `estado`, `motivos_bloqueo` (lista), `registrada_por`, `captura_seg`.
+**`aceptaciones_privacidad`** — solo inserción: `secuencia` (identidad, orden total), `cliente_id`, `version_aviso` (referencia a `avisos_privacidad`), `accion` (`aceptado` | `retirado`), `medio` (`papel` | `correo` | `verbal` | `otro`), `registrado_por`, `en`. El estado vigente es el renglón de mayor `secuencia` del cliente. Registrar un movimiento exige la versión del aviso que vio el despachador y el identificador del último movimiento que vio; si cualquiera cambió, la acción responde `conflicto`.
 
-Estados de una solicitud:
+**`importaciones`** — una fila por importación confirmada: `id` (lo genera la pantalla; hace idempotente el reintento), `usuario_id`, `huella` del análisis confirmado, `importados`, `en`.
 
-```
-registrada ──▶ programada ──▶ en_ruta ──▶ completada
-     │              │
-     ├──▶ bloqueada (documentación, residuo, ventana o acceso; vuelve a registrada al corregirse)
-     ├──▶ pospuesta (no cupo hoy; conserva su hora de registro y mañana va primero)
-     └──▶ cancelada
-```
+**`configuracion`** — una sola fila: `id smallint PRIMARY KEY DEFAULT 1 CHECK (id = 1)`; `patio_lat`, `patio_lng`, `turno_inicio` (08:00), `turno_fin` (16:00), `velocidad_kmh` (> 0), `factor_circuidad` (≥ 1), `descarga_min` (≥ 0), `version_aviso_privacidad` (referencia a `avisos_privacidad`), `linea_base` (espera 15, traslado 45, ciclo 161; el Plan 6 agrega la línea base de K2 con su fecha y tamaño de muestra).
 
-**`configuracion`** — una sola fila: `patio_lat`, `patio_lng`, `turno_inicio` (08:00), `turno_fin` (16:00), `velocidad_kmh` (30), `factor_circuidad` (1.4), `descarga_min` (20), y `linea_base` (espera 15, traslado 45, ciclo 161, según DI Tabla 3).
+Cambiar `version_aviso_privacidad` deja sin aviso vigente a todo cliente que aceptó una versión anterior: su ficha queda incompleta (K5) y no se pueden programar sus recolecciones hasta que acepte la nueva. La regla es configurable, pero usarla en operación requiere la confirmación del dueño (§14, decisión 6).
 
-**`bitacora`** — solo inserción: `en`, `usuario_id`, `entidad`, `entidad_id`, `accion`, `datos` (json). Toda acción que modifica datos escribe aquí.
+**`bitacora`** — solo inserción (el rol de la aplicación solo tiene INSERT y SELECT): `en`, `usuario_id`, `entidad`, `entidad_id`, `accion`, `campos` (nombres de los campos que cambiaron; nunca sus valores personales).
 
-Regla de completitud (K5): un cliente está completo si tiene ubicación, al menos una ventana, tipo de residuo, tipos de unidad admitidos y aviso de privacidad aceptado.
+**Regla de completitud (K5):** un cliente está completo si tiene ubicación, al menos una ventana, tipo de residuo, tipos de unidad admitidos y aviso de privacidad aceptado vigente.
 
-### Etapa 2
+### Etapa 2 (Planes 2 a 5) — contrato de captura
 
-**`jornadas`** — `fecha`, `unidad_id`, `operador_id`, `check_in_en`, `check_out_en`. Únicos: (`fecha`, `unidad_id`) y (`fecha`, `operador_id`).
+Los campos que alimentan los indicadores se definen desde ahora, porque los datos que no se capturen no se recuperan después.
 
-**`planes`** — `fecha`, `estado` (`propuesto` | `validado` | `descartado`), `generado_en`, `generado_por`, `validado_en`, `validado_por`, `parametros` (json: semilla, k, velocidad, circuidad), `version_motor`, `duracion_ms`, `resumen` (json: km, paradas, pospuestas, bloqueadas, comparación contra el método actual).
+- **`unidades`**, **`operadores`** — como en la revisión 1; `operadores` tendrá su propio aviso de privacidad.
+- **`jornadas`** — `fecha`, `unidad_id`, `operador_id`, `check_in_en`, `disponible_desde`, `check_out_en`.
+- **`solicitudes`** — `folio` único, `cliente_id`, `registrada_en` (inmutable, llave FIFO), `fecha_solicitada`, `proxima_fecha_elegible`, `canal`, `carga_estimada_kg`, `estado`, `motivos`, `captura_inicio_en`, `captura_fin_en` (K2).
+- **`ejecuciones_motor`** — toda corrida, incluso fallida: `inicio_en`, `fin_en`, `duracion_ms` (reloj monotónico, fuera del motor), `resultado` (`ok` | `error` | `tiempo_agotado`), `plan_id` (K7).
+- **`planes`** — `fecha`, `estado`, `version`, `generado_en`, `revision_iniciada_en`, `validado_en`, `validado_por`, `entrada` (instantánea versionada de solicitudes, restricciones, unidades y parámetros), `version_motor` (K6).
+- **`rutas`** — `plan_id`, `jornada_id`, `numero_viaje`, `version`, `disponible_para_salir_en`, `asignada_en`, `salida_patio_en`, `regreso_patio_en`, `descarga_fin_en`, `odometro_inicio_km`, `odometro_fin_km`, `rendimiento_km_l_usado`, `km_contrafactual` (K1, K4).
+- **`paradas`** — `ruta_id`, `solicitud_id`, `secuencia` (única por ruta), `ventana_inicio` y `ventana_fin` comprometidas, `llegada_estimada`, `llegada_en`, `inicio_servicio_en`, `fin_servicio_en`, `estado` (K1, K3).
+- **`eventos_operador`** — `evento_id` único generado en el teléfono (idempotencia), `ruta_id`, `parada_id`, `tipo`, `ocurrido_en`, `recibido_en`, `version_ruta`.
+- **`incidentes`** — como en la revisión 1.
 
-**`rutas`** — `plan_id`, `jornada_id`, `numero_viaje`, `km_estimados`, `min_estimados`, `estado` (`propuesta` | `asignada` | `en_curso` | `terminada` | `cancelada`), `asignada_en`, `salida_patio_en`, `cerrada_en`, `odometro_inicio_km`, `odometro_fin_km`.
-
-**`paradas`** — `ruta_id`, `solicitud_id`, `secuencia`, `llegada_estimada`, `llegada_en`, `salida_en`, `dentro_de_ventana` (se calcula al registrar la llegada), `estado` (`pendiente` | `en_sitio` | `completada` | `omitida`).
-
-**`incidentes`** — `ruta_id`, `parada_id` (opcional), `tipo` (`averia` | `retraso` | `cierre_vial` | `cliente_no_disponible` | `otro`), `descripcion`, `reportado_en`, `reportado_por`, `resuelto_en`, `accion` (`re_ruteo` | `continuar` | `cancelar`).
+Una solicitud tiene a lo sumo una asignación operativa vigente, garantizada por un índice único parcial; las propuestas descartadas se conservan como historial. Una jornada no puede quedar en dos planes validados para la misma fecha.
 
 ## 7. Reglas de negocio
 
-1. **Canal único.** Toda recolección nace como solicitud registrada en el sistema; no se asigna nada que no tenga folio.
-2. **Hora de registro inmutable.** `registrada_en` no se edita; es la base del orden FIFO.
-3. **Bloqueo a prueba de errores (poka-yoke).** Una solicitud no puede programarse si se cumple cualquiera de estas condiciones; el sistema guarda el motivo:
-   - el cliente genera residuos peligrosos (`RP`);
-   - el cliente tiene un documento obligatorio en `pendiente` o `vencido`;
-   - el cliente no tiene ventana el día requerido;
-   - el cliente no tiene ubicación;
-   - ninguna unidad disponible es de un tipo que el cliente admita.
-4. **Sin inanición.** Una solicitud pospuesta conserva su hora de registro, así que al día siguiente queda al frente de la cola.
-5. **El despachador decide.** El motor propone; nada llega al operador sin validación. Los ajustes manuales quedan en la bitácora.
-6. **Unidad no disponible no recibe ruta.**
+1. **Canal único.** Toda recolección nace como solicitud con folio.
+2. **Hora de registro inmutable**; es la base del orden FIFO.
+3. **Completitud y habilitación son cosas distintas.** `faltantesDeCliente` dice qué le falta a la ficha; `motivosDeBloqueo` dice por qué no se puede programar una recolección en una fecha. Se bloquea si: el cliente está inactivo; el tipo de residuo es `RP` o no está definido; un documento obligatorio no está vigente en la fecha de servicio (un documento "vigente" con fecha vencida cuenta como vencido); no hay aviso de privacidad aceptado; no hay ventana ese día; no hay ubicación; falta un documento que el catálogo de documentos requeridos (Plan 2, decisión 6) exige y nunca se capturó.
 
-## 8. Motor de ruteo
+   No tener hoy una unidad disponible de un tipo admitido no bloquea: la solicitud se **pospone** con ese motivo, porque depende de la flota del día y no de los datos del cliente.
+4. **FIFO global de admisión.** Las solicitudes elegibles se procesan por `registrada_en` y folio. Cada una se intenta insertar de forma factible en cualquier unidad compatible, sin mover a las ya admitidas. Una solicitud admitida nunca se desplaza por otra más reciente. Si una solicitud antigua no cabe junto con las que se admitieron antes que ella, se pospone con su motivo y el proceso continúa con las más recientes, que pueden caber (por ejemplo, por ser más pequeñas o estar en otra zona). Una carga mayor que la capacidad de cualquier unidad del catálogo es inviabilidad física: la solicitud se bloquea con ese motivo. Que la versión 1 continúe con las recientes es la propuesta para la decisión abierta 3.
+5. **Sin inanición.** Una solicitud pospuesta conserva su hora de registro y su `proxima_fecha_elegible` avanza al siguiente día hábil.
+6. **El despachador decide.** El motor propone; nada llega al operador sin validación. Validar es una transacción que bloquea el plan y las jornadas que usa, comprueba su `version` y vuelve a verificar elegibilidad, disponibilidad y capacidad, y que ninguna de sus solicitudes tenga ya una asignación vigente por otro plan; si algo cambió, la validación se rechaza con el motivo. Prueba obligatoria: dos planes distintos con solicitudes en común validados al mismo tiempo; uno gana y el otro recibe el motivo.
+7. **Una unidad no disponible no recibe ruta.**
+8. **Ediciones concurrentes.** Guardar un cliente exige la `version` que se leyó; si cambió, se responde `conflicto` y nada se escribe.
+
+## 8. Motor de ruteo (Plan 3)
 
 ### Contrato
 
 ```ts
 generarPlan(entrada: EntradaPlan): Plan
+reasignarPendientes(entrada: EntradaReruteo): Plan
 ```
 
-`EntradaPlan`: fecha, solicitudes candidatas con los datos de su cliente (ubicación, ventanas del día, documentos, residuo, tipos admitidos, tiempo de servicio, carga), jornadas del día (unidad, tipo, capacidad), configuración y semilla.
+`EntradaPlan`: fecha, instante de planificación, solicitudes candidatas con los datos de su cliente, unidades disponibles desde el instante de planificación con su ubicación conocida o el patio, carga actual y viajes ya comprometidos, configuración y semilla.
 
-`Plan`: rutas (unidad, número de viaje, paradas en orden con hora estimada de llegada y minutos de espera, km y minutos), solicitudes pospuestas con motivo, solicitudes bloqueadas con motivos, y un resumen con la comparación contra el método actual.
+`Plan`: rutas (unidad, viaje, paradas en orden con llegada estimada y espera), solicitudes pospuestas y bloqueadas con su motivo, y resumen con la comparación contra el método actual.
 
-Propiedad obligatoria: **misma entrada y misma semilla producen exactamente el mismo plan.**
+Propiedades obligatorias, verificadas con fast-check:
+
+- Misma entrada y misma semilla producen exactamente el mismo plan.
+- Toda solicitud termina en una sola categoría: ruteada, bloqueada o pospuesta, con motivo.
+- Ninguna ruta excede capacidad por viaje, fin de turno (incluido regreso y descarga) ni ventanas.
+- Si una solicitud A quedó pospuesta y una B más reciente quedó ruteada, entonces A no tenía ninguna inserción factible en el plan formado solo por las solicitudes admitidas antes que A. La validación final lo comprueba reintentando A sobre ese plan; casos de prueba: dos zonas con antigüedades cruzadas, y una antigua grande con recientes pequeñas.
+- Una validación final independiente del algoritmo comprueba todo lo anterior antes de devolver el plan.
 
 ### Algoritmo (versión 1)
 
-"Híbrida FIFO + agrupación geográfica" queda definida así: **FIFO decide qué solicitudes entran al plan del día y cuáles se posponen cuando no caben; la geografía decide cómo se agrupan en rutas.**
+1. **Elegibilidad** con `motivosDeBloqueo`.
+2. **Orden FIFO** por `registrada_en` y folio; desempates estables por id.
+3. **Zonas iniciales:** k-means++ con semilla sobre coordenadas proyectadas a kilómetros, con k = mínimo entre unidades disponibles y solicitudes, a lo sumo 100 iteraciones. Puntos idénticos y grupos vacíos se resuelven reasignando el punto más lejano a la zona vacía. Las zonas solo ordenan qué unidad se prueba primero para cada solicitud.
+4. **Admisión FIFO con inserción factible:** cada solicitud, en orden, se inserta en la posición de menor costo entre todas las rutas compatibles (primero las de su zona), respetando ventana, capacidad por viaje, servicio, espera, regreso, descarga y fin de turno. Si no cabe en ninguna, se abre un nuevo viaje en la unidad con holgura; si tampoco, se pospone con motivo.
+5. **Comparación** contra el método actual (un viaje redondo por cliente) para las mismas solicitudes ruteadas; se reporta como ahorro **simulado**, separado del ahorro observado en el piloto.
 
-1. **Filtro.** Aplica la regla 3 de §7. Las que no pasan salen como bloqueadas.
-2. **Orden FIFO.** Ordena las válidas por `registrada_en` y, en empate, por folio.
-3. **Agrupación geográfica.** k-means++ con semilla sobre las coordenadas (proyectadas a kilómetros alrededor del patio), con k = mínimo entre unidades disponibles y solicitudes. Cada grupo es la zona de una unidad.
-4. **Asignación de zona a unidad.** Las zonas se ordenan por carga total descendente y las unidades por capacidad descendente; una unidad solo toma una zona si todos sus clientes admiten ese tipo de unidad. Si una zona queda sin unidad compatible, sus solicitudes pasan al paso de reparación.
-5. **Secuencia y viajes.** Dentro de cada zona, a partir del patio y de la hora de inicio de turno: se elige la siguiente parada con menor (traslado + espera) entre las que aún pueden cumplir su ventana. Si la carga acumulada excede la capacidad, la unidad regresa a patio, descarga (`descarga_min`) e inicia otro viaje.
-6. **Reparación.** Si una ruta termina después del fin de turno o una parada ya no puede cumplir su ventana: primero se intenta mover esa parada a la zona vecina más cercana que tenga holgura; si no se puede, se pospone la solicitud con registro más reciente de esa zona y se recalcula. Máximo 50 iteraciones; lo que no se resuelva se reporta como pospuesto con motivo.
-7. **Comparación.** Para las mismas solicitudes se calcula el método actual (un viaje redondo por cliente) y se reporta la diferencia en kilómetros y minutos.
+Casos límite con salida definida: sin unidades, todo se pospone con motivo "sin unidades disponibles"; ninguna unidad disponible hoy de un tipo admitido por el cliente, se pospone con motivo "sin unidad compatible disponible"; carga mayor que toda capacidad del catálogo, se bloquea por inviabilidad física.
 
-Modelo de traslado: `km = haversine × factor_circuidad`; `min = km ÷ velocidad_kmh × 60`.
+Modelo de traslado: `km = haversine × factor_circuidad`; `min = km ÷ velocidad_kmh × 60`. Es un parámetro del motor; OSRM en contenedor puede sustituirlo en la Fase 2.
 
-Tamaño del problema: hasta 60 solicitudes y 15 unidades; se resuelve en milisegundos, muy por debajo de la meta de 60 s.
+### Re-ruteo
 
-### Re-ruteo ante incidente
-
-`reasignarPendientes(plan, rutaAfectada, ahora)`: libera las paradas pendientes de la ruta afectada e inserta cada una, en orden FIFO, en la ruta donde cueste menos (kilómetros añadidos) entre las que cumplan ventana, capacidad y fin de turno. Las que no quepan se posponen. No toca paradas completadas ni en sitio.
-
-### Simulación
-
-El mismo `generarPlan` se ejecuta sobre un conjunto de solicitudes históricas sin guardar el plan. Es el entregable "Simulación del sistema propuesto" (DI Tabla 1) y la tercera fase del proceso (DI §2).
+Recibe la instantánea original, el estado actual de cada ruta (paradas completadas, en sitio y tramo comprometido, que quedan congeladas) y las unidades disponibles desde ese instante. Solo reubica las paradas pendientes de la ruta afectada, en orden FIFO.
 
 ### Por qué se le llama inteligencia artificial
 
-El paso 3 es agrupamiento no supervisado: las zonas no son fijas, se forman cada día con las solicitudes reales. La optimización completa (VRPTW) queda para la Fase 2 detrás del mismo contrato.
-
-### Límites conocidos de la versión 1
-
-- k-means no equilibra cargas por sí mismo; lo compensa el paso de reparación.
-- Los tiempos de traslado son estimados; se calibran comparando hora estimada contra hora real de llegada durante el piloto.
-- No optimiza globalmente; es una heurística explicable. Es la decisión tomada en DI Tabla 14.
+El paso 3 es agrupamiento no supervisado: las zonas se forman cada día con las solicitudes reales. La optimización completa (VRPTW) queda para la Fase 2 detrás del mismo contrato.
 
 ## 9. Pantallas
 
 | Rol | Pantalla | Qué permite |
 |---|---|---|
-| Despachador | Clientes | Lista con búsqueda y estado de completitud; ficha con ventanas, documentos, pin en mapa; importación desde CSV |
-| Despachador | Unidades y operadores | Altas, disponibilidad con motivo |
-| Despachador | Jornada | Quién sale hoy en qué unidad; check-in |
-| Despachador | Solicitudes | Alta rápida (cliente, fecha, carga, canal); cola en orden FIFO; bloqueadas con motivo |
-| Despachador | Plan del día | Generar, ver en lista y mapa, mover o posponer paradas, validar, pedir re-ruteo |
-| Operador | Mi ruta (móvil) | Check-in, salida de patio, llegada y salida por parada, incidente, cierre con odómetro |
-| Gerencia | Panel | K1 a K7 contra la línea base, tendencia diaria, exportación CSV |
-| Admin | Usuarios y configuración | Roles, patio, turno, parámetros del modelo de traslado |
+| Despachador | Clientes | Lista con búsqueda; K5 global, independiente de la búsqueda; insignias "completa" y "habilitada hoy" por separado; ficha con ventanas, documentos, aviso de privacidad y pin en mapa; aviso de conflicto si otro despachador guardó antes |
+| Gerencia | Clientes (solo lectura) | Las mismas pantallas, sin botones de alta, edición, importación ni registro de privacidad |
+| Despachador | Importar clientes | Dos pasos: analizar (vista previa con errores, posibles duplicados y conteos, sin escribir) y confirmar (escribe todo el lote o nada) |
+| Despachador | Unidades, operadores, jornada, solicitudes, plan del día | Planes 2 y 4 |
+| Operador | Mi ruta (móvil) | Plan 5 |
+| Gerencia | Panel | Plan 6 |
+| Admin | Usuarios | Alta, cambio de rol, desactivación con revocación de sesiones, restablecimiento de contraseña (Plan 2). En el Plan 1 lo mismo se hace con scripts auditados dentro del contenedor: `bootstrap`, `alta-usuario`, `desactivar-usuario` y `restablecer-clave` |
 
 ## 10. Seguridad y privacidad
 
-- **Autenticación:** Clerk; registro público desactivado; el administrador crea las cuentas.
-- **Autorización:** toda acción del servidor empieza con `exigirRol(...)`. Un operador solo ve y modifica sus propias rutas. No hay acceso a la base de datos desde el navegador.
-- **Validación:** toda entrada pasa por un esquema Zod en el servidor, aunque el formulario ya valide.
-- **Datos personales (LFPDPPP):** se guarda el mínimo (nombre y teléfono de contacto). La ubicación del operador se registra solo en los eventos que él marca (llegada, salida), no de forma continua. Aviso de privacidad para clientes y operadores.
-- **Bitácora** de toda modificación, con usuario y hora.
-- **Secretos** solo en variables de entorno de Vercel; nunca en el repositorio.
-- **Datos de prueba:** el repositorio solo contiene datos sintéticos. La cartera real se importa directo a la base de datos.
+### Autenticación
+
+- Better Auth con correo y contraseña (mínimo 10 caracteres). `disableSignUp: true`: el registro público responde 400 (comprobado el 2026-10-13).
+- No se usa el plugin de administración de Better Auth: tiene roles y rutas propios que duplicarían la autorización.
+- Las altas no usan el adaptador de la librería, que está ligado a su propia conexión y no participaría en nuestra transacción. Un solo módulo, `src/seguridad/identidades.ts`, escribe con Drizzle y **en una sola transacción** la identidad (`user`), la credencial (`account` con proveedor `credential` y la contraseña calculada con `hashPassword` de `better-auth/crypto`), el renglón de `usuarios` y su bitácora. Si algo falla, no queda nada. Comprobado en contenedor el 2026-10-13: un usuario creado así entra con la API de Better Auth. El módulo depende de la versión fijada 1.7.7; actualizar Better Auth exige repetir esa prueba.
+- Un `databaseHook` de Better Auth (`session.create.before`) impide crear sesión si el usuario no tiene renglón en `usuarios` o está inactivo (comprobado el 2026-10-13: responde 401).
+- Desactivar un usuario pone `activo = false` y borra sus sesiones en la misma transacción, con su bitácora. Reactivarlo no revive sesiones. Cada petición protegida vuelve a leer `usuarios`, así que un cambio de rol surte efecto de inmediato.
+- Recuperación de acceso sin correo: el administrador restablece la contraseña (script en el Plan 1, pantalla en el Plan 2), lo que borra las sesiones del usuario y queda en la bitácora.
+- `bootstrap` es idempotente: si el correo ya pertenece a un administrador, no hace nada (ni cambia su contraseña); si pertenece a una identidad con otro rol o sin renglón en `usuarios`, termina con error y no la promueve; si no existe, crea el administrador con la transacción anterior.
+
+### Autorización: matriz de permisos
+
+| Operación | admin | despachador | operador | gerencia |
+|---|---|---|---|---|
+| Ver y editar clientes, importar | sí | sí | no | no |
+| Ver clientes (solo lectura) | sí | sí | no | sí |
+| Gestionar usuarios | sí | no | no | no |
+| Unidades, solicitudes, planes (Planes 2 y 4) | sí | sí | no | lectura |
+| Su propia ruta y sus eventos (Plan 5) | intervención registrada | lectura | sí, solo si la jornada es suya | lectura |
+| Panel (Plan 6) | sí | sí | no | sí |
+
+Toda acción de `admin` sobre datos de operación queda en la bitácora como intervención.
+
+### Base de datos
+
+Dos roles creados por el script de inicio de `db`: `rs_migrador`, dueño del esquema, que usa `migrate`; y `rs_app`, que usa la aplicación con permisos mínimos y sin UPDATE ni DELETE sobre `bitacora`, `aceptaciones_privacidad` ni `importaciones`. Se revoca `CREATE` sobre `public` a `PUBLIC`. Las llaves foráneas hacia el historial no borran en cascada. Los permisos se vuelven a aplicar después de cada migración y de cada restauración, y la aplicación solo arranca cuando `migrate` terminó bien. El migrador toma un candado de Postgres para que dos ejecuciones no se crucen, y compara la huella de cada migración aplicada con la del archivo. Solo el entorno de pruebas tiene un superusuario, con el que crea y borra sus bases desechables.
+
+### Privacidad (LFPDPPP)
+
+- Datos personales mínimos: nombre y teléfono de contacto.
+- Historial de aceptación del aviso en `aceptaciones_privacidad`; retirar la aceptación no borra el historial.
+- La bitácora registra qué campos cambiaron, no sus valores.
+- La ubicación del operador solo se capturará en los eventos que él marque (Plan 5), con su propio aviso de privacidad.
+- El repositorio solo contiene datos sintéticos.
+- Retención: la bitácora y el historial de privacidad se conservan mientras dure el piloto; el plazo posterior y el borrado o anonimización los decide el dueño (§14, decisión 10).
 
 ## 11. Indicadores
 
-Cada indicador es una función pura en `src/indicadores` con su prueba.
+Cada indicador será una función pura en `src/indicadores` (Plan 6) con su prueba; los datos que necesita ya están en el contrato de captura de §6.
 
-| # | Definición operativa |
+| # | Definición |
 |---|---|
-| K1 | Por ruta: espera = `asignada_en − check_in_en` de la jornada (0 si la ruta se asignó antes del check-in). Traslado por parada = `llegada_en −` (salida de la parada anterior o `salida_patio_en`). K1 = espera prorrateada entre las paradas + traslado promedio. |
-| K2 | Mediana de `captura_seg` de las solicitudes del periodo, contra la línea base cronometrada del método actual. |
-| K3 | Paradas completadas con `dentro_de_ventana` ÷ paradas completadas. |
-| K4 | Km reales = `odometro_fin_km − odometro_inicio_km`; litros = km ÷ `rendimiento_km_l`. Se compara contra los km del método actual que calcula el motor para las mismas solicitudes. |
-| K5 | Clientes activos completos ÷ clientes activos. |
-| K6 | `validado_en − generado_en` del plan. |
-| K7 | `duracion_ms` del plan. |
-| Ciclo | Por ruta: (`cerrada_en −` inicio de la ruta) ÷ paradas completadas. Se exporta en CSV para construir las cartas X̄-R (DI Figura 3). |
+| K1 | Por recolección: espera = (`asignada_en − disponible_para_salir_en` de la ruta, 0 si se asignó antes) dividida entre las recolecciones del viaje; traslado = `llegada_en` de la parada menos `fin_servicio_en` de la parada anterior del viaje, o menos `salida_patio_en` si es la primera. Se reporta la media por recolección y el tamaño de la muestra. |
+| K2 | Mediana de `captura_fin_en − captura_inicio_en` de las solicitudes, contra una línea base cronometrada con el mismo inicio y fin, guardada en `configuracion.linea_base` con su fecha y tamaño de muestra. |
+| K3 | Paradas cuya **llegada** cae dentro de la ventana comprometida, entre paradas programadas; se reportan aparte las omitidas y las no atendidas. |
+| K4 | Km reales por odómetro contra el contrafactual guardado en la ruta para las mismas solicitudes atendidas; litros estimados con el rendimiento guardado en la ruta. El ahorro simulado se reporta por separado del observado. |
+| K5 | Clientes activos completos entre clientes activos, calculado sobre toda la cartera. Para ver su evolución, el Plan 6 guarda una instantánea diaria (fecha, activos, completos). |
+| K6 | Demora total `validado_en − generado_en` y trabajo activo `validado_en − revision_iniciada_en`; la meta de 5 min se compara con el trabajo activo. |
+| K7 | `duracion_ms` de cada ejecución del motor, incluidas las fallidas. |
+| Ciclo | Por recolección: espera prorrateada + traslado + servicio (`fin_servicio_en − llegada_en`) + (regreso al patio y descarga del viaje) ÷ recolecciones del viaje. Es comparable con los 161 min de la línea base (15 + 45 + 66 + 35). Se exporta con el tamaño de muestra para las cartas X̄-R. |
 
 ## 12. Pruebas
 
-- **Motor (unidad, Vitest).** Casos fijos y propiedades: toda solicitud admitida aparece exactamente una vez; ninguna bloqueada aparece en una ruta; ninguna ruta excede capacidad, turno ni ventanas; al faltar cupo se posponen las de registro más reciente; misma semilla, mismo plan.
-- **Indicadores (unidad).** Un caso por indicador con valores calculados a mano.
-- **Acciones (integración).** Cada acción rechaza al rol equivocado y a la entrada inválida, y escribe en la bitácora.
-- **Flujos (Playwright).** Tres: alta de cliente completa; solicitud bloqueada por documento pendiente; generar, validar y ejecutar una ruta.
-- **Datos semilla** sintéticos: 30 clientes alrededor de El Marqués, 5 unidades, 40 solicitudes.
+| Nivel | Dónde corre | Qué cubre |
+|---|---|---|
+| Unidad | Servicio `unit` | Dominio, motor (con fast-check) e indicadores |
+| Integración rápida | Servicio `unit`, con PGlite | Repositorios y casos de uso |
+| Integración real | Servicio `integration`, con Postgres desechable | Migración desde base vacía y, desde el Plan 2, desde la versión anterior con datos; migración repetida; roles y permisos; transacciones con rollback; conflictos de versión; concurrencia |
+| Punta a punta | Servicio `e2e` contra la imagen de producción | Flujos completos con usuarios y datos sintéticos exclusivos |
+
+Casos obligatorios del Plan 1: rollback completo cuando falla la bitácora (clientes y altas de usuario); conflicto de versión del cliente y del aviso de privacidad; importación sin sesión, con gerencia, con usuario inactivo, con entrada que no es texto, con archivo dañado, con duplicados que cambiaron después del análisis y con reintento de la misma operación; acceso directo a cada acción y consulta por rol; registro público cerrado; cookie falsificada o caducada; usuario desactivado sin acceso y sin poder volver a entrar; reactivación sin sesiones anteriores.
 
 ## 13. Riesgos y supuestos
 
-| Riesgo o supuesto | Consecuencia | Mitigación |
-|---|---|---|
-| La cartera real no tiene coordenadas | El motor no puede agrupar | Captura con pin en mapa durante la Etapa 1; K5 lo vigila |
-| Tiempos de traslado estimados alejados de la realidad | Horas estimadas poco fiables | Parámetros configurables y calibración con datos del piloto |
-| Poca señal en campo | El operador no puede marcar eventos | La ruta del día se guarda en el teléfono y los eventos se reintentan al recuperar señal |
-| El despachador no adopta el canal único | El motor trabaja con datos incompletos | Alta de solicitud en menos de 30 s; él valida todo |
-| Calendario | Faltan semanas para el piloto | Ver decisión abierta 1 |
-| Se asume un viaje redondo por cliente en el método actual | La comparación de ahorro depende de ello | Confirmar con la empresa (DI §3 menciona que a veces ya se atienden varios clientes por viaje) |
+| Riesgo o supuesto | Mitigación |
+|---|---|
+| La cartera real no tiene coordenadas | Captura con pin en mapa; K5 lo vigila |
+| Tiempos de traslado estimados alejados de la realidad | Parámetros configurables y calibración con el piloto |
+| Poca señal en campo | Ruta guardada en el teléfono y eventos idempotentes con reintento (Plan 5) |
+| El despachador no adopta el canal único | Alta de solicitud rápida; él valida todo |
+| Pérdida de datos en la máquina del piloto | Respaldo diario con el servicio `respaldo` y prueba de restauración |
+| Dependencia de OpenFreeMap | URL de estilo configurable; teselas locales si se exige operar sin Internet |
+| Se asume un viaje redondo por cliente en el método actual | Confirmar con la empresa (decisión abierta 6) |
 
-## 14. Decisiones abiertas
+## 14. Decisiones abiertas para el dueño del proyecto
 
-1. **Calendario.** ¿Cuál es la fecha de la 4ª entrega y del cierre? El plan está en semanas relativas; los objetivos del DI ("primeras 6 semanas", "meses 2 y 3") deben anclarse al calendario real.
-2. **Turno.** El DI usa 480 min; una versión anterior decía 450. Confirmar.
-3. **Datos de la cartera.** ¿Quién entrega el Excel de clientes y quién captura ubicaciones y documentos?
-4. **Cuentas.** ¿A nombre de quién quedan el proyecto de Vercel, la base de datos y Clerk?
-5. **Teléfonos de los operadores.** ¿Tienen datos móviles durante la ruta?
-6. **Captura asistida desde WhatsApp (opcional).** Pegar el mensaje del cliente y que un modelo de lenguaje proponga la solicitud ya llenada. Reforzaría el componente de IA, pero no es necesaria para los indicadores. Está fuera del plan base.
+Ninguna bloquea el Plan 1. Bloquean los módulos indicados.
 
-## 15. Trazabilidad con el Documento Integrador
+1. **Calendario y destino** (todo): fecha límite real del piloto; máquina o servidor donde correrá, arquitectura, dominio y HTTPS.
+2. **Turno** (Planes 3 y 6): confirmar 480 min; si incluye regreso, descarga y descansos.
+3. **FIFO** (Plan 3): ¿se acepta atender una solicitud reciente cuando una antigua no cabe físicamente?
+4. **Ventanas** (Planes 3 y 6): ¿limitan la llegada, el inicio o el fin del servicio?
+5. **Capacidad** (Plan 3): ¿el límite del cartón es peso, volumen o ambos? ¿Qué hacer si falta la carga estimada?
+6. **Documentos y privacidad** (Plan 2): qué documentos exige cada cliente, quién acredita su revisión, si un aviso pendiente bloquea la recolección (hoy: sí), el texto de la primera versión del aviso y si cambiar de versión debe invalidar las aceptaciones anteriores (hoy: sí).
+7. **Indicadores** (Plan 6): qué mide exactamente K2; si habrá combustible medido o solo estimado; si hoy se hace un viaje por cliente.
+8. **Identidades** (Plan 2): primer administrador; identificador y recuperación de acceso de los operadores.
+9. **Operación sin señal** (Plan 5): cuánto tiempo y qué pasa si la ruta cambió mientras el teléfono no tenía conexión.
+10. **Retención** (antes del piloto): cuánto tiempo se conservan bitácora, historial de privacidad y datos de clientes inactivos, y cómo se borran o anonimizan.
+11. **HTTPS en la red local** (despliegue): si no hay dominio público, Caddy emite su propio certificado y cada teléfono debe confiar en su autoridad; alternativa, un dominio con certificado público.
 
-| Elemento del DI | Dónde se cumple aquí |
+## 15. Colaboración Claude–Codex
+
+| Responsable | Carpetas |
+|---|---|
+| Claude | Archivos raíz, `package*.json`, Docker, `infra/`, `src/datos`, `drizzle/`, `src/seguridad`, `src/acciones`, `src/consultas`, rutas de autenticación y `src/app/layout.tsx`, scripts y CI |
+| Codex | `src/dominio`, `src/app/despacho`, `src/components` (salvo lo que genere el andamiaje), pruebas de punta a punta funcionales; en el Plan 3, `src/motor` |
+
+- Contratos primero: tipos, `Resultado`, `Contexto` y firmas de consultas y acciones se integran antes de trabajar en paralelo.
+- Ramas cortas en worktrees separados; un solo responsable modifica el esquema, genera migraciones y resuelve el lockfile.
+- Cada entrega trae su commit, sus pruebas y la evidencia de ejecución en contenedores. Codex no tiene acceso al socket de Docker: prepara y revisa pruebas; Claude las ejecuta en contenedores y entrega la evidencia.
+- Validación cruzada: Codex revisa transacciones, permisos, migraciones y Docker; Claude revisa dominio y pantallas y corre sus pruebas. La aceptación final es sobre el mismo commit integrado.
+
+## 16. Trazabilidad con el Documento Integrador
+
+| Elemento del DI | Dónde se cumple |
 |---|---|
 | §1 Alcance en dos etapas | §2 |
-| §1 Indicadores de éxito; Tabla 8 | §1 y §11 |
-| Tabla 1, simulación | §8, Simulación |
-| Tabla 1, cartas X̄-R y panel | §11, Ciclo; §9, Panel |
+| §1 Indicadores; Tabla 8 | §1, §6 (captura) y §11 |
+| Tabla 1, simulación, cartas X̄-R y panel | §8 y §11 |
 | Tabla 6, roles | §9 y §10 |
 | Tabla 9, seis módulos | §2 |
-| Tabla 10, requerimientos por etapa | §7 (bloqueos), §10 (LFPDPPP), §6 (aviso de privacidad) |
+| Tabla 10, requerimientos por etapa | §7, §10 |
 | §6, cuatro pasos del motor | §8 |
 | Tabla 14, alternativa A3 | §3 |
