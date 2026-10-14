@@ -3,7 +3,7 @@ import { hashPassword } from "better-auth/crypto";
 import { and, eq, sql } from "drizzle-orm";
 import type { BD, Tx } from "@/datos/bd";
 import { registrarEvento } from "@/datos/bitacora";
-import { account, session, user, usuarios } from "@/datos/esquema";
+import { account, operadores, session, user, usuarios } from "@/datos/esquema";
 import type { Rol } from "./permisos";
 
 /**
@@ -13,11 +13,13 @@ import type { Rol } from "./permisos";
  * al actualizar la librería hay que repetir src/seguridad/auth.integracion.test.ts.
  */
 
+/** operadorId: ficha de operador que se liga (solo rol operador); si falta, se crea una con el mismo nombre. */
 export interface DatosIdentidad {
   correo: string;
   nombre: string;
   clave: string;
   rol: Rol;
+  operadorId?: string | null;
 }
 
 /** Quién hace el cambio: un usuario de la aplicación, o null si es un script dentro del contenedor. */
@@ -77,9 +79,15 @@ export async function crearIdentidad(tx: Tx, datos: DatosIdentidad, por: Autor, 
     createdAt: ahora,
     updatedAt: ahora,
   });
+  let operadorId: string | null = null;
+  if (datos.rol === "operador") {
+    operadorId =
+      datos.operadorId ??
+      (await tx.insert(operadores).values({ nombre, creadoEn: ahora, actualizadoEn: ahora }).returning({ id: operadores.id }))[0].id;
+  }
   const [fila] = await tx
     .insert(usuarios)
-    .values({ authUserId, nombre, rol: datos.rol, creadoEn: ahora, actualizadoEn: ahora })
+    .values({ authUserId, nombre, rol: datos.rol, operadorId, creadoEn: ahora, actualizadoEn: ahora })
     .returning({ id: usuarios.id });
   await registrarEvento(tx, {
     usuarioId: por,
