@@ -1,0 +1,22 @@
+# Desarrollo: código montado; node_modules y .next en volúmenes del proyecto de Compose.
+services:
+  app:
+    build: { context: ., target: dev }
+    command: ["npm", "run", "dev"]
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://rs_app:${RS_APP_PASSWORD}@db:5432/recycling
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Falta BETTER_AUTH_SECRET en .env}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      MAPA_ESTILO_URL: ${MAPA_ESTILO_URL:-https://tiles.openfreemap.org/styles/liberty}
+    volumes:
+      - .:/app
+      - modulos:/app/node_modules
+      - next_cache:/app/.next
+    depends_on:
+      db: { condition: service_healthy }
+
+volumes:
+  modulos: {}
+  next_cache: {}

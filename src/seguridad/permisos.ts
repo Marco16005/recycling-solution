@@ -1,0 +1,46 @@
+export const ROLES = ["admin", "despachador", "operador", "gerencia"] as const;
+export type Rol = (typeof ROLES)[number];
+
+export interface UsuarioSesion {
+  id: string;
+  nombre: string;
+  rol: Rol;
+  activo: boolean;
+}
+
+/** Matriz de la especificación §10. admin puede todo; un rol que no aparece no puede. */
+export const PERMISOS = {
+  "clientes.ver": ["despachador", "gerencia"],
+  "clientes.editar": ["despachador"],
+  "clientes.importar": ["despachador"],
+  "usuarios.gestionar": [],
+} as const satisfies Record<string, readonly Rol[]>;
+
+export type Permiso = keyof typeof PERMISOS;
+
+export class NoAutenticado extends Error {
+  constructor() {
+    super("No hay una sesión activa");
+    this.name = "NoAutenticado";
+  }
+}
+
+export class NoAutorizado extends Error {
+  constructor() {
+    super("Tu rol no permite esta acción");
+    this.name = "NoAutorizado";
+  }
+}
+
+export function puede(usuario: UsuarioSesion | null, permiso: Permiso): boolean {
+  if (usuario === null || !usuario.activo) return false;
+  if (usuario.rol === "admin") return true;
+  return (PERMISOS[permiso] as readonly Rol[]).includes(usuario.rol);
+}
+
+/** Devuelve al usuario si puede actuar. Lanza NoAutenticado (sin sesión o inactivo) o NoAutorizado. */
+export function autorizar(usuario: UsuarioSesion | null, permiso: Permiso): UsuarioSesion {
+  if (usuario === null || !usuario.activo) throw new NoAutenticado();
+  if (!puede(usuario, permiso)) throw new NoAutorizado();
+  return usuario;
+}

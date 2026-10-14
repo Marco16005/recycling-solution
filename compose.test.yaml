@@ -1,0 +1,20 @@
+# Pruebas: base desechable en memoria y servicios de verificación.
+services:
+  db:
+    environment:
+      POSTGRES_PASSWORD: rs_super_prueba
+    volumes: !reset []
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  unit:
+    build: { context: ., target: dev }
+    command: ["npm", "run", "verificar"]
+    volumes:
+      - .:/app
+      - modulos:/app/node_modules
+      - next_cache:/app/.next
+
+volumes:
+  modulos: {}
+  next_cache: {}

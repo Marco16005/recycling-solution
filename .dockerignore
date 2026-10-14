@@ -1,0 +1,12 @@
+.git
+.worktrees
+node_modules
+.next
+coverage
+playwright-report
+test-results
+respaldos
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
