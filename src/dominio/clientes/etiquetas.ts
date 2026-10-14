@@ -1,4 +1,6 @@
 import type { Faltante } from "./completitud";
+import type { CodigoNoDisponible } from "../flota/tipos";
+import type { Canal, EstadoSolicitud } from "../solicitudes/tipos";
 import type { CodigoBloqueo } from "./habilitacion";
 import type { AccionPrivacidad, MedioPrivacidad, EstadoDocumento, TipoResiduo, TipoUnidad } from "./tipos";
 
@@ -36,14 +38,14 @@ export const ETIQUETA_BLOQUEO: Record<CodigoBloqueo, string> = {
   residuo_no_definido: "Falta tipo de residuo",
   residuo_peligroso: "Residuo peligroso",
   documento_no_vigente: "Documento obligatorio no vigente",
-  sin_aviso_privacidad: "Falta aceptación del aviso de privacidad vigente",
+  sin_aviso_privacidad: "Falta aviso vigente sin oposición del contacto",
   sin_ventana_ese_dia: "Sin ventana horaria ese día",
   sin_tipos_unidad: "Faltan tipos de unidad admitidos",
 };
 
 export const ETIQUETA_ACCION_PRIVACIDAD: Record<AccionPrivacidad, string> = {
-  aceptado: "Aceptado",
-  retirado: "Retirado",
+  aceptado: "Aviso dado a conocer sin oposición",
+  retirado: "Consentimiento revocado",
 };
 
 export const ETIQUETA_MEDIO_PRIVACIDAD: Record<MedioPrivacidad, string> = {
@@ -51,4 +53,26 @@ export const ETIQUETA_MEDIO_PRIVACIDAD: Record<MedioPrivacidad, string> = {
   correo: "Correo electrónico",
   verbal: "Verbal",
   otro: "Otro",
+};
+
+export const ETIQUETA_NO_DISPONIBLE: Record<CodigoNoDisponible, string> = {
+  inactivo: "Inactivo",
+  documento_faltante: "Falta documento obligatorio",
+  documento_no_vigente: "Documento obligatorio no vigente",
+  aviso_no_entregado: "Aviso de privacidad no entregado",
+};
+
+export const ETIQUETA_CANAL: Record<Canal, string> = {
+  telefono: "Teléfono",
+  whatsapp: "WhatsApp",
+  correo: "Correo electrónico",
+  presencial: "Presencial",
+  otro: "Otro",
+};
+
+export const ETIQUETA_ESTADO_SOLICITUD: Record<EstadoSolicitud, string> = {
+  pendiente: "Pendiente",
+  cancelada: "Cancelada",
+  atendida: "Atendida",
+  no_atendida: "No atendida",
 };
