@@ -41,6 +41,48 @@ services:
     environment:
       DATABASE_URL: postgres://rs_app:app_prueba@db:5432/recycling
 
+  # Usuarios sintéticos para punta a punta. Se niega a correr fuera de este archivo.
+  semilla:
+    build: { context: ., target: dev }
+    command: ["npx", "tsx", "scripts/semilla-e2e.mts"]
+    environment:
+      DATABASE_URL: postgres://rs_app:app_prueba@db:5432/recycling
+      E2E_CLAVE: clave-e2e-sintetica
+      E2E_SEMILLA_PERMITIDA: "1"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  # La imagen de producción, como la correría la empresa.
+  web:
+    build: { context: ., target: runner }
+    environment:
+      DATABASE_URL: postgres://rs_app:app_prueba@db:5432/recycling
+      BETTER_AUTH_SECRET: secreto-de-pruebas-e2e-de-al-menos-32-caracteres
+      BETTER_AUTH_URL: http://web:3000
+      MAPA_ESTILO_URL: https://tiles.openfreemap.org/styles/liberty
+      # Las pruebas entran muchas veces desde una sola IP; el límite se prueba en auth.integracion.test.ts.
+      AUTH_LIMITAR_INTENTOS: "no"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/entrar').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    depends_on:
+      semilla: { condition: service_completed_successfully }
+
+  e2e:
+    build: { context: ., target: e2e }
+    ipc: host
+    environment:
+      PLAYWRIGHT_BASE_URL: http://web:3000
+      DATABASE_URL: postgres://rs_app:app_prueba@db:5432/recycling
+      E2E_CLAVE: clave-e2e-sintetica
+    volumes:
+      - ./playwright-report:/app/playwright-report
+      - ./test-results:/app/test-results
+    depends_on:
+      web: { condition: service_healthy }
+
 volumes:
   modulos: {}
   next_cache: {}

@@ -44,5 +44,22 @@ services:
       migrate: { condition: service_completed_successfully }
     restart: "no"
 
+  # Respaldo con pg_dump a ./respaldos (docs/operacion.md explica cómo restaurar).
+  respaldo:
+    image: postgres:17.11-alpine
+    profiles: ["respaldo"]
+    environment:
+      PGPASSWORD: ${RS_MIGRADOR_PASSWORD:-}
+    volumes:
+      - ./respaldos:/respaldos
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        pg_dump -h db -U rs_migrador -d recycling -Fc -f /respaldos/recycling-$$(date +%Y%m%d-%H%M%S).dump
+        && echo "Respaldo creado:" && ls -1t /respaldos | head -1
+    depends_on:
+      db: { condition: service_healthy }
+
 volumes:
   db_datos: {}

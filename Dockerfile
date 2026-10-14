@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.7
-# Etapas: deps (dependencias exactas del lockfile), dev (herramientas y pruebas), build (next build), runner (producción).
+# Etapas: deps (dependencias exactas del lockfile), dev (herramientas y pruebas), build (next build), runner (producción)
+# y e2e (Playwright con navegadores, para las pruebas de punta a punta).
 
 FROM node:24.21.0-bookworm-slim AS deps
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
@@ -25,3 +26,11 @@ COPY --from=build --chown=node:node /app/.next/static ./.next/static
 USER node
 EXPOSE 3000
 CMD ["node", "server.js"]
+
+FROM mcr.microsoft.com/playwright:v1.64.0-noble AS e2e
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false CI=1
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
+COPY . .
+CMD ["npx", "playwright", "test"]

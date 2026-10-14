@@ -35,7 +35,7 @@ describe("autenticación con Better Auth y Postgres real", () => {
 
   beforeAll(async () => {
     base = await crearBasePostgres();
-    auth = crearAuth(base.bd, { secreto: "secreto-de-prueba-de-al-menos-32-caracteres", url: URL_APP });
+    auth = crearAuth(base.bd, { secreto: "secreto-de-prueba-de-al-menos-32-caracteres", url: URL_APP, limitarIntentos: false });
   });
   afterAll(async () => base.cerrar());
 
@@ -92,6 +92,22 @@ describe("autenticación con Better Auth y Postgres real", () => {
     expect(await sesionCon(cookie)).toBeNull();
     expect((await entrar("olvido@prueba.local")).status).toBe(401);
     expect((await entrar("olvido@prueba.local", "clave-nueva-456")).status).toBe(200);
+  });
+
+  it("con el límite activo, el sexto intento de entrada en un minuto desde la misma IP responde 429", async () => {
+    const limitada = crearAuth(base.bd, { secreto: "secreto-de-prueba-de-al-menos-32-caracteres", url: URL_APP, limitarIntentos: true });
+    const intento = () =>
+      limitada.handler(
+        new Request(`${URL_APP}/api/auth/sign-in/email`, {
+          method: "POST",
+          headers: { "content-type": "application/json", origin: URL_APP, "x-forwarded-for": "10.0.0.7" },
+          body: JSON.stringify({ email: "nadie@prueba.local", password: "clave-equivocada" }),
+        }),
+      );
+    const estados: number[] = [];
+    for (let i = 0; i < 6; i++) estados.push((await intento()).status);
+    expect(estados.slice(0, 5).every((e) => e === 401)).toBe(true);
+    expect(estados[5]).toBe(429);
   });
 
   it.each(["account", "usuarios", "bitacora"])("si falla la inserción en %s, el alta no deja nada", async (tabla) => {
