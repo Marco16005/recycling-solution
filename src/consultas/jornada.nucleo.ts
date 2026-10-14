@@ -2,11 +2,9 @@ import type { Contexto, Resultado } from "@/acciones/tipos";
 import type { MotivoNoDisponible } from "@/dominio/flota/tipos";
 import type { OperadorResumen, UnidadResumen } from "./flota.nucleo";
 
-/** disponibleDesde: "HH:MM". */
-export interface JornadaGuardada {
-  id: string; fecha: string; unidadId: string; operadorId: string; disponibleDesde: string;
-  checkInEn: Date | null; checkOutEn: Date | null; notas: string | null; version: number;
-}
+import type { JornadaGuardada } from "@/datos/jornadas";
+
+export type { JornadaGuardada };
 export type FilaJornada = JornadaGuardada & { unidad: UnidadResumen; operador: OperadorResumen };
 export interface NoDisponible { tipo: "unidad" | "operador"; id: string; nombre: string; motivos: MotivoNoDisponible[] }
 /** libres: activos, disponibles en la fecha y sin jornada ese día. */
