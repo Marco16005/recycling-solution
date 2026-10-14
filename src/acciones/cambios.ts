@@ -17,3 +17,11 @@ export function camposCambiados(antes: ClienteEntrada | null, despues: ClienteEn
     Array.isArray(v) ? JSON.stringify(v.map((x) => JSON.stringify(x)).sort()) : JSON.stringify(v);
   return CAMPOS.filter((campo) => comparable(antes[campo]) !== comparable(despues[campo]));
 }
+
+/** Igual que camposCambiados, para cualquier registro: compara solo los campos indicados. */
+export function camposDistintos<T extends object>(antes: T | null, despues: T, campos: readonly (keyof T & string)[]): string[] {
+  if (antes === null) return campos.filter((campo) => tieneValor(despues[campo]));
+  const comparable = (v: unknown) =>
+    Array.isArray(v) ? JSON.stringify(v.map((x) => JSON.stringify(x)).sort()) : JSON.stringify(v);
+  return campos.filter((campo) => comparable(antes[campo]) !== comparable(despues[campo]));
+}

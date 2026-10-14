@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { permitir } from "@/acciones/autorizacion";
 import type { Contexto, Resultado } from "@/acciones/tipos";
-import type { BD, Tx } from "@/datos/bd";
 import { leerCartera, leerCliente } from "@/datos/clientes";
 import { leerConfiguracion } from "@/datos/configuracion";
 import { faltantesDeCliente, resumenK5, type Faltante, type ResumenK5 } from "@/dominio/clientes/completitud";
@@ -10,6 +9,8 @@ import { motivosDeBloqueoCliente, type MotivoBloqueo } from "@/dominio/clientes/
 import type { ClienteGuardado, TipoResiduo } from "@/dominio/clientes/tipos";
 import { fechaEnMexico } from "@/dominio/tiempo";
 import { puede } from "@/seguridad/permisos";
+import { leerInstantanea } from "./instantanea";
+import { estiloMapaUrl } from "./mapa";
 
 export interface ClienteResumen {
   id: string;
@@ -45,16 +46,10 @@ export interface ContextoAlta {
   versionAvisoVigente: string;
 }
 
-const ESTILO_MAPA_POR_OMISION = "https://tiles.openfreemap.org/styles/liberty";
-const estiloMapaUrl = () => process.env.MAPA_ESTILO_URL || ESTILO_MAPA_POR_OMISION;
 
 const filtroSchema = z.object({ texto: z.string().max(100).optional() });
 const idSchema = z.uuid();
 
-/** Lectura coherente de cliente, hijos y configuración: una sola instantánea de solo lectura. */
-function leerInstantanea<T>(bd: BD, lectura: (tx: Tx) => Promise<T>): Promise<T> {
-  return bd.transaction(lectura, { isolationLevel: "repeatable read", accessMode: "read only" });
-}
 
 /** Permiso clientes.ver. filtro: { texto?: string }; la búsqueda ignora mayúsculas, acentos y signos. */
 export async function listarClientes(ctx: Contexto, filtro: unknown): Promise<Resultado<ListadoClientes>> {

@@ -1,4 +1,7 @@
+import { permitir } from "@/acciones/autorizacion";
 import type { Contexto, Resultado } from "@/acciones/tipos";
+import { leerConfiguracionCompleta } from "@/datos/configuracion";
+import { estiloMapaUrl } from "./mapa";
 
 /** Horas "HH:MM"; diasOperacion: 0 = domingo … 6 = sábado. */
 export interface ConfiguracionVista {
@@ -10,6 +13,7 @@ export interface ConfiguracionVista {
 
 /** Permiso configuracion.editar. */
 export async function obtenerConfiguracion(ctx: Contexto): Promise<Resultado<ConfiguracionVista>> {
-  void ctx;
-  throw new Error("pendiente: Plan 2 T3 (Claude)");
+  const permiso = permitir(ctx, "configuracion.editar");
+  if (!permiso.ok) return permiso;
+  return { ok: true, valor: { ...(await leerConfiguracionCompleta(ctx.bd)), estiloMapaUrl: estiloMapaUrl() } };
 }
