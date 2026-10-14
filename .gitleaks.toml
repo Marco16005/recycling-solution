@@ -1,0 +1,9 @@
+# Configuración de gitleaks para scripts/verificar-todo.sh. Usa las reglas por omisión y solo permite los
+# secretos sintéticos de las pruebas, por su texto exacto. No protegen nada: firman sesiones de bases desechables.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Secretos sintéticos de pruebas"
+regexTarget = "match"
+regexes = ['''secreto-de-pruebas?(-e2e)?-de-al-menos-32-caracteres''']
