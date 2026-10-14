@@ -146,7 +146,7 @@ async function leerClientes(bd: Conexion, ids?: string[]): Promise<ClienteGuarda
       .map((v) => ({ diaSemana: v.diaSemana, horaInicio: hhmm(v.horaInicio), horaFin: hhmm(v.horaFin) })),
     documentos: documentos
       .filter((d) => d.clienteId === c.id)
-      .map((d) => ({ nombre: d.nombre, obligatorio: d.obligatorio, estado: d.estado, venceEl: d.venceEl })),
+      .map((d) => ({ nombre: d.nombre, obligatorio: d.obligatorio, estado: d.estado, venceEl: d.venceEl, tipoDocumentoId: d.tipoDocumentoId })),
     privacidad: privacidadPorCliente.get(c.id) ?? null,
   }));
 }
