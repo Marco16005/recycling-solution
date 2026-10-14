@@ -2,8 +2,13 @@
 services:
   db:
     environment:
+      # Contraseñas fijas de una base desechable en memoria; no protegen nada.
       POSTGRES_PASSWORD: rs_super_prueba
-    volumes: !reset []
+      RS_MIGRADOR_PASSWORD: migrador_prueba
+      RS_APP_PASSWORD: app_prueba
+    # Sin volumen de datos (memoria), pero con el script que crea los roles.
+    volumes: !override
+      - ./infra/db/init:/docker-entrypoint-initdb.d:ro
     tmpfs:
       - /var/lib/postgresql/data
 
@@ -14,6 +19,23 @@ services:
       - .:/app
       - modulos:/app/node_modules
       - next_cache:/app/.next
+
+  integration:
+    build: { context: ., target: dev }
+    command: ["npm", "run", "prueba:integracion"]
+    environment:
+      PRUEBA_ADMIN_URL: postgres://rs_super:rs_super_prueba@db:5432/postgres
+      RS_MIGRADOR_PASSWORD: migrador_prueba
+      RS_APP_PASSWORD: app_prueba
+    volumes:
+      - .:/app
+      - modulos:/app/node_modules
+    depends_on:
+      db: { condition: service_healthy }
+
+  migrate:
+    environment:
+      MIGRADOR_DATABASE_URL: postgres://rs_migrador:migrador_prueba@db:5432/recycling
 
 volumes:
   modulos: {}

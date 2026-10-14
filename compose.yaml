@@ -7,13 +7,28 @@ services:
       POSTGRES_USER: rs_super
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}  # obligatorio fuera de pruebas (ver .env.example)
       POSTGRES_DB: recycling
+      RS_MIGRADOR_PASSWORD: ${RS_MIGRADOR_PASSWORD:-}
+      RS_APP_PASSWORD: ${RS_APP_PASSWORD:-}
     volumes:
       - db_datos:/var/lib/postgresql/data
+      - ./infra/db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rs_super -d recycling"]
+      # Por TCP: durante la inicialización Postgres solo escucha en el socket local, así que
+      # el servicio no se reporta sano hasta que existen los roles.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U rs_super -d recycling"]
       interval: 2s
       timeout: 3s
       retries: 30
+
+  # Aplica migraciones como rs_migrador, vuelve a aplicar permisos y verifica huellas. Termina y sale.
+  migrate:
+    build: { context: ., target: dev }
+    command: ["npm", "run", "migrar"]
+    environment:
+      MIGRADOR_DATABASE_URL: postgres://rs_migrador:${RS_MIGRADOR_PASSWORD:-}@db:5432/recycling
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
 
 volumes:
   db_datos: {}

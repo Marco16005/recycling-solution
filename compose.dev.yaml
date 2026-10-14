@@ -15,7 +15,7 @@ services:
       - modulos:/app/node_modules
       - next_cache:/app/.next
     depends_on:
-      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
 
 volumes:
   modulos: {}
