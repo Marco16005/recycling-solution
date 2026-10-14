@@ -50,6 +50,14 @@ Checklist digital de operadores y unidades, alertas de vencimiento de licencias,
 
 El piloto deja preparado para la Fase 2: kilómetros y combustible por ruta (base de la huella de carbono) y un contrato del motor que permite sustituir la heurística por un solver.
 
+### Destino del piloto
+
+Un VPS de Hostinger que ya corre un sistema de punto de venta (decisión 1). Consecuencias para el diseño:
+
+- **Sin dominio propio por ahora:** Caddy atiende `<ip-con-guiones>.sslip.io`, un nombre gratuito que resuelve a la IP del VPS, y obtiene un certificado público. Cuando haya dominio, basta cambiar `DOMINIO`.
+- **Recursos compartidos:** cada servicio tiene un límite de memoria en `compose.prod.yaml` y la imagen se puede construir en otra máquina para `linux/amd64` y copiarse al VPS (`docs/operacion.md`).
+- **Puertos 80 y 443:** si el punto de venta ya los usa, la aplicación se publica detrás de su proxy por nombre (`docs/operacion.md`, §9).
+
 ### Supuesto de operación: "efímero"
 
 Los contenedores son reemplazables: se pueden destruir y recrear en cualquier máquina con Docker sin perder nada. Los datos (cartera, usuarios, bitácora, planes) **no** son efímeros: viven en un volumen de Postgres y se respaldan y restauran con `pg_dump` y `pg_restore`. Mover el sistema a otra máquina es clonar el repositorio, crear el archivo de variables y restaurar el último respaldo. Desarrollo y pruebas usan bases desechables.
@@ -198,7 +206,7 @@ Una solicitud tiene a lo sumo una asignación operativa vigente, garantizada por
 3. **Completitud y habilitación son cosas distintas.** `faltantesDeCliente` dice qué le falta a la ficha; `motivosDeBloqueo` dice por qué no se puede programar una recolección en una fecha. Se bloquea si: el cliente está inactivo; el tipo de residuo es `RP` o no está definido; un documento obligatorio no está vigente en la fecha de servicio (un documento "vigente" con fecha vencida cuenta como vencido); no hay aviso de privacidad aceptado; no hay ventana ese día; no hay ubicación; falta un documento que el catálogo de documentos requeridos (Plan 2, decisión 6) exige y nunca se capturó.
 
    No tener hoy una unidad disponible de un tipo admitido no bloquea: la solicitud se **pospone** con ese motivo, porque depende de la flota del día y no de los datos del cliente.
-4. **FIFO global de admisión.** Las solicitudes elegibles se procesan por `registrada_en` y folio. Cada una se intenta insertar de forma factible en cualquier unidad compatible, sin mover a las ya admitidas. Una solicitud admitida nunca se desplaza por otra más reciente. Si una solicitud antigua no cabe junto con las que se admitieron antes que ella, se pospone con su motivo y el proceso continúa con las más recientes, que pueden caber (por ejemplo, por ser más pequeñas o estar en otra zona). Una carga mayor que la capacidad de cualquier unidad del catálogo es inviabilidad física: la solicitud se bloquea con ese motivo. Que la versión 1 continúe con las recientes es la propuesta para la decisión abierta 3.
+4. **FIFO global de admisión.** Las solicitudes elegibles se procesan por `registrada_en` y folio. Cada una se intenta insertar de forma factible en cualquier unidad compatible, sin mover a las ya admitidas. Una solicitud admitida nunca se desplaza por otra más reciente. Si una solicitud antigua no cabe junto con las que se admitieron antes que ella, se pospone con su motivo y el proceso continúa con las más recientes, que pueden caber (por ejemplo, por ser más pequeñas o estar en otra zona). Una carga mayor que la capacidad de cualquier unidad del catálogo es inviabilidad física: la solicitud se bloquea con ese motivo. La pospuesta conserva su hora de registro y pasa al frente de la cola del siguiente día de operación; con dos o más días de operación pospuesta se marca atrasada para que decida el despachador (§14, decisión 3).
 5. **Sin inanición.** Una solicitud pospuesta conserva su hora de registro y su `proxima_fecha_elegible` avanza al siguiente día hábil.
 6. **El despachador decide.** El motor propone; nada llega al operador sin validación. Validar es una transacción que bloquea el plan y las jornadas que usa, comprueba su `version` y vuelve a verificar elegibilidad, disponibilidad y capacidad, y que ninguna de sus solicitudes tenga ya una asignación vigente por otro plan; si algo cambió, la validación se rechaza con el motivo. Prueba obligatoria: dos planes distintos con solicitudes en común validados al mismo tiempo; uno gana y el otro recibe el motivo.
 7. **Una unidad no disponible no recibe ruta.**
@@ -334,21 +342,23 @@ Casos obligatorios del Plan 1: rollback completo cuando falla la bitácora (clie
 | Dependencia de OpenFreeMap | URL de estilo configurable; teselas locales si se exige operar sin Internet |
 | Se asume un viaje redondo por cliente en el método actual | Confirmar con la empresa (decisión abierta 6) |
 
-## 14. Decisiones abiertas para el dueño del proyecto
+## 14. Decisiones del dueño del proyecto
 
-Ninguna bloquea el Plan 1. Bloquean los módulos indicados.
+Actualizado el 2026-10-14 con lo que respondió el dueño. "Dueño" indica que la tomó él; "Claude" indica que el dueño la delegó y Claude la propuso, y que la confirmó Codex en la revisión del Plan 2.
 
-1. **Calendario y destino** (todo): fecha límite real del piloto; máquina o servidor donde correrá, arquitectura, dominio y HTTPS.
-2. **Turno** (Planes 3 y 6): confirmar 480 min; si incluye regreso, descarga y descansos.
-3. **FIFO** (Plan 3): ¿se acepta atender una solicitud reciente cuando una antigua no cabe físicamente?
-4. **Ventanas** (Planes 3 y 6): ¿limitan la llegada, el inicio o el fin del servicio?
-5. **Capacidad** (Plan 3): ¿el límite del cartón es peso, volumen o ambos? ¿Qué hacer si falta la carga estimada?
-6. **Documentos y privacidad** (Plan 2): qué documentos exige cada cliente, quién acredita su revisión, si un aviso pendiente bloquea la recolección (hoy: sí), el texto de la primera versión del aviso y si cambiar de versión debe invalidar las aceptaciones anteriores (hoy: sí).
-7. **Indicadores** (Plan 6): qué mide exactamente K2; si habrá combustible medido o solo estimado; si hoy se hace un viaje por cliente.
-8. **Identidades** (Plan 2): primer administrador; identificador y recuperación de acceso de los operadores.
-9. **Operación sin señal** (Plan 5): cuánto tiempo y qué pasa si la ruta cambió mientras el teléfono no tenía conexión.
-10. **Retención** (antes del piloto): cuánto tiempo se conservan bitácora, historial de privacidad y datos de clientes inactivos, y cómo se borran o anonimizan.
-11. **HTTPS en la red local** (despliegue): si no hay dominio público, Caddy emite su propio certificado y cada teléfono debe confiar en su autoridad; alternativa, un dominio con certificado público.
+| # | Tema | Decisión | Quién | Estado |
+|---|---|---|---|---|
+| 1 | Calendario y destino | VPS de Hostinger **compartido con un punto de venta**, sin dominio por ahora. HTTPS con un nombre gratuito que apunta a la IP del VPS (`<ip-con-guiones>.sslip.io`) y certificado público de Let's Encrypt emitido por Caddy, sin instalar nada en los teléfonos. Límites de memoria en Compose para no afectar al punto de venta. La fecha límite real sigue abierta | Dueño (destino); Claude (HTTPS) | Falta saber si el punto de venta ya ocupa los puertos 80 y 443 del VPS (ver `docs/operacion.md`, §9) |
+| 2 | Turno | 480 min (08:00 a 16:00), que incluye el regreso al patio y la descarga. Los descansos no se modelan en el piloto | Dueño | Resuelta |
+| 3 | FIFO cuando una solicitud antigua no cabe | El motor atiende a las más recientes que sí caben. La antigua **conserva su lugar en la fila**: pasa al día siguiente como la primera en la cola y el despachador la ve marcada como pospuesta con su motivo. Si lleva dos días hábiles o más pospuesta, se marca **atrasada** para que el despachador decida (por ejemplo, un viaje extra o pedir otra unidad) | Claude | Resuelta |
+| 4 | Ventanas | La ventana limita la **llegada** de la unidad, que es como se mide K3. El servicio puede terminar después del fin de la ventana | Claude | Resuelta |
+| 5 | Capacidad | Límite por **peso** (kg) de cada unidad. Si una solicitud no trae carga estimada, se usa la del cliente y, si tampoco hay, `configuracion.carga_por_omision_kg` (1000 kg) | Claude | Resuelta |
+| 6 | Documentos y privacidad | Catálogo de documentos en `docs/catalogo-de-documentos.md`. Un aviso pendiente bloquea la recolección. Cambiar la versión del aviso invalida las aceptaciones anteriores. Aviso de privacidad redactado en `docs/legal/` (pendiente de revisión por una persona abogada y de los datos de la empresa) | Dueño (pidió el aviso); Claude (contenido) | Resuelta, con revisión legal pendiente |
+| 7 | Indicadores | K2 mide desde que se abre el alta de solicitud hasta que se guarda. Combustible estimado con el rendimiento de cada unidad. Se supone que hoy se hace un viaje por cliente. Ambos supuestos se confirman con la empresa durante el piloto | Claude | Resuelta como supuesto |
+| 8 | Identidades | El dueño es el primer administrador. Los operadores entran con un correo interno que asigna el administrador (por ejemplo, `jperez@operadores.local`) y una contraseña que el administrador restablece si la olvidan | Claude | Resuelta |
+| 9 | Operación sin señal | La ruta del día queda guardada en el teléfono. Los eventos se guardan en cola y se envían al recuperar la señal, hasta 24 h después. Si mientras tanto la ruta cambió, el servidor rechaza los eventos de paradas que ya no le tocan y el teléfono pide llamar al despachador | Claude | Resuelta |
+| 10 | Retención | Clientes y aceptaciones: 5 años después de la última recolección. Bitácora: 5 años. Rutas y ubicaciones: 12 meses; después solo cifras agregadas sin identificar al operador | Claude | Propuesta para confirmar con la empresa |
+| 11 | HTTPS en red local | Ya no aplica: el sistema corre en un VPS público (decisión 1). `tls internal` queda solo como alternativa | Claude | Resuelta |
 
 ## 15. Colaboración Claude–Codex
 

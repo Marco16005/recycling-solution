@@ -2,7 +2,7 @@
 
 - **Fecha:** 2026-10-07; revisión 2 del 2026-10-13 (Docker, Better Auth y correcciones de la revisión cruzada con Codex).
 - **Especificación:** `docs/superpowers/specs/2026-10-07-recycling-solution-piloto-design.md`
-- **Estado:** especificación (revisión 2) y Plan 1 v2 validados técnicamente por Claude y Codex el 2026-10-13, tras incorporar las correcciones de Codex. El Plan 1 se desarrolla entre ambos. Las decisiones de producto de la especificación §14 siguen abiertas con el dueño.
+- **Estado (2026-10-14):** Plan 1 terminado y validado (`main`, etiqueta `plan-1-validado`). Decisiones del dueño registradas en la especificación §14. Planes 2 y 3 escritos, en validación con Codex.
 
 El piloto se construye en seis planes. Cada uno deja software funcionando y probado por sí mismo. Solo el Plan 1 está escrito al detalle; el plan detallado de cada hito siguiente se escribe al iniciarlo, con el mismo formato y la misma verificación previa del código, porque depende de lo que se aprenda en el anterior.
 
@@ -32,12 +32,16 @@ Trabajo de datos en paralelo: capturar la cartera real (80 a 110 clientes) con u
 
 ### Plan 2 — Unidades, operadores y solicitudes
 
+Detalle en `2026-10-14-plan-2-flota-solicitudes-y-administracion.md` (amplía lo de abajo con el catálogo de documentos, la administración de usuarios y configuración, el aviso de privacidad público y el despliegue en el VPS).
+
 - Tablas: `unidades`, `operadores`, `jornadas`, `solicitudes`; columna `operador_id` en `usuarios`.
 - Dominio: `motivosDeBloqueo(solicitud, cliente, unidadesDisponibles, fecha)` extiende `motivosDeBloqueoCliente` del Plan 1 con la disponibilidad de unidades (especificación §7, regla 3). Es función pura y el motor la reutiliza.
 - Pantallas: unidades y operadores; jornada del día; solicitudes (alta rápida, cola en orden de registro, bloqueadas con motivo); usuarios y roles (alta, cambio de rol, desactivación con revocación de sesiones, restablecimiento de contraseña).
 - Aceptación: una solicitud de un cliente con documento pendiente queda bloqueada y dice por qué; al corregir el documento vuelve a la cola con su hora original; la hora de registro no se puede editar; cada solicitud guarda `captura_inicio_en` y `captura_fin_en` (K2); una unidad marcada como no disponible no aparece para la jornada.
 
 ### Plan 3 — Motor de ruteo y simulación
+
+Detalle en `2026-10-14-plan-3-motor-de-ruteo.md`. Codex lo desarrolla en paralelo con el Plan 2.
 
 - `src/motor`: tipos `EntradaPlan` y `Plan`, modelo de traslado, filtro, orden FIFO, k-means++ con semilla, admisión FIFO global con inserción factible, viajes, validación final independiente, comparación contra el método actual, `reasignarPendientes` y modo simulación (especificación §8).
 - Datos semilla sintéticos: 30 clientes alrededor de El Marqués, 5 unidades, 40 solicitudes.
