@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clienteSchema, erroresPorCampo, type ClienteEntrada } from "./esquemas";
+import { clienteSchema, documentoSchema, privacidadSchema, erroresPorCampo, type ClienteEntrada } from "./esquemas";
 
 export const clienteValido: ClienteEntrada = {
   nombre: "Cartonera del Bajío",
@@ -73,5 +73,46 @@ describe("clienteSchema", () => {
     const e = errores({ ...clienteValido, contactoTelefono: "llamar a Laura", tiempoServicioMin: 0 });
     expect(e.contactoTelefono).toEqual(["Teléfono no válido"]);
     expect(e.tiempoServicioMin).toBeDefined();
+  });
+});
+
+describe("fechas de documentos", () => {
+  it.each(["2026-02-30", "2026-13-01", "2026-02-29", "1900-02-29", "2026-04-31", "2026-00-10", "2026-01-00", "2026-1-01"])("rechaza %s", (venceEl) => {
+    expect(documentoSchema.safeParse({ ...clienteValido.documentos[0], venceEl }).success).toBe(false);
+  });
+
+  it.each([null, "2026-02-28", "2028-02-29", "2000-02-29", "2026-12-31"])("acepta %s", (venceEl) => {
+    expect(documentoSchema.safeParse({ ...clienteValido.documentos[0], venceEl }).success).toBe(true);
+  });
+
+  it("clienteSchema también rechaza una fecha imposible", () => {
+    expect(errores({ ...clienteValido, documentos: [{ ...clienteValido.documentos[0], venceEl: "2026-02-30" }] })["documentos.0.venceEl"]).toBeDefined();
+  });
+});
+
+describe("teléfonos", () => {
+  it.each([null, "1234567890", "123456789012345", "+52 (442) 555-0101", "  (1) (2) (3) (4) (5) (6) (7) (8) (9) (0)  "])("acepta %s contando solo dígitos", (contactoTelefono) => {
+    expect(errores({ ...clienteValido, contactoTelefono })).toEqual({});
+  });
+
+  it.each(["", "123456789", "1234567890123456", "+ () -", "4425550101 ext 2", "442.555.0101"])("rechaza %s", (contactoTelefono) => {
+    expect(errores({ ...clienteValido, contactoTelefono }).contactoTelefono).toEqual(["Teléfono no válido"]);
+  });
+});
+
+describe("privacidadSchema", () => {
+  const entrada = { accion: "aceptado", medio: "papel", versionAviso: "v1", movimientoAnteriorId: null };
+
+  it("acepta el primer movimiento y un movimiento con antecedente UUID", () => {
+    expect(privacidadSchema.parse({ ...entrada, versionAviso: " v1 " })).toEqual(entrada);
+    expect(privacidadSchema.safeParse({ ...entrada, accion: "retirado", medio: "correo", movimientoAnteriorId: "00000000-0000-4000-8000-000000000001" }).success).toBe(true);
+  });
+
+  it.each([
+    { versionAviso: undefined }, { versionAviso: " " }, { versionAviso: "x".repeat(41) },
+    { movimientoAnteriorId: undefined }, { movimientoAnteriorId: "incorrecto" },
+    { accion: "otra" }, { medio: "mensaje" },
+  ])("rechaza el movimiento inválido %j", (cambios) => {
+    expect(privacidadSchema.safeParse({ ...entrada, ...cambios }).success).toBe(false);
   });
 });
