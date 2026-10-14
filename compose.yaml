@@ -30,5 +30,19 @@ services:
       db: { condition: service_healthy }
     restart: "no"
 
+  # Crea el primer administrador si no existe (ADMIN_* en .env). Idempotente. También sirve para los
+  # scripts de usuarios: docker compose run --rm bootstrap npm run alta-usuario -- --correo … --nombre … --rol …
+  bootstrap:
+    build: { context: ., target: dev }
+    command: ["npm", "run", "bootstrap"]
+    environment:
+      DATABASE_URL: postgres://rs_app:${RS_APP_PASSWORD:-}@db:5432/recycling
+      ADMIN_CORREO: ${ADMIN_CORREO:-}
+      ADMIN_NOMBRE: ${ADMIN_NOMBRE:-}
+      ADMIN_CLAVE: ${ADMIN_CLAVE:-}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: "no"
+
 volumes:
   db_datos: {}

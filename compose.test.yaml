@@ -37,6 +37,10 @@ services:
     environment:
       MIGRADOR_DATABASE_URL: postgres://rs_migrador:migrador_prueba@db:5432/recycling
 
+  bootstrap:
+    environment:
+      DATABASE_URL: postgres://rs_app:app_prueba@db:5432/recycling
+
 volumes:
   modulos: {}
   next_cache: {}
