@@ -7,6 +7,7 @@ import { analizarImportacionAccion, confirmarImportacionAccion } from "@/accione
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { COLUMNAS_CSV, LIMITES_CSV } from "@/dominio/clientes/csv";
+import { generarOperacionId } from "./generar-operacion-id";
 import { Campo, ResumenErrores, type Errores } from "./campos-formulario";
 import { ResultadoFallido, type Fallo } from "./resultado-fallido";
 
@@ -52,24 +53,32 @@ export function FormularioImportar() {
     }
     setPaso("analisis");
     iniciar(async () => {
+      let contenido: string;
       try {
-        const contenido = await archivo.text();
-        if (new TextEncoder().encode(contenido).byteLength > LIMITES_CSV.bytes) {
-          setErrores({ archivo: ["El contenido supera el límite de 1 MB en UTF-8."] });
-          return;
-        }
-        const resultado = await analizarImportacionAccion(contenido);
-        if (!resultado.ok) {
-          mostrarFallo(resultado);
-          return;
-        }
-        setAnalisis({ contenido, resumen: resultado.valor, operacionId: crypto.randomUUID() });
-        setRequiereAnalisis(false);
+        contenido = await archivo.text();
       } catch {
-        setErrores({
-          archivo: ["No pudimos leer o analizar el archivo. Revisa la conexión e inténtalo de nuevo."],
-        });
+        setErrores({ archivo: ["No pudimos leer el archivo. Vuelve a seleccionarlo e inténtalo de nuevo."] });
+        return;
       }
+      if (new TextEncoder().encode(contenido).byteLength > LIMITES_CSV.bytes) {
+        setErrores({ archivo: ["El contenido supera el límite de 1 MB en UTF-8."] });
+        return;
+      }
+
+      let resultado: Awaited<ReturnType<typeof analizarImportacionAccion>>;
+      try {
+        resultado = await analizarImportacionAccion(contenido);
+      } catch {
+        setErrores({ archivo: ["No pudimos analizar el archivo. Revisa la conexión e inténtalo de nuevo."] });
+        return;
+      }
+      if (!resultado.ok) {
+        mostrarFallo(resultado);
+        return;
+      }
+      const operacionId = generarOperacionId();
+      setAnalisis({ contenido, resumen: resultado.valor, operacionId });
+      setRequiereAnalisis(false);
     });
   }
 
