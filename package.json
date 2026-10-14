@@ -6,7 +6,9 @@
     "node": ">=24 <25"
   },
   "scripts": {
+    "predev": "node scripts/copiar-worker-mapa.mjs",
     "dev": "next dev --hostname 0.0.0.0",
+    "prebuild": "node scripts/copiar-worker-mapa.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

@@ -38,6 +38,9 @@ yarn-error.log*
 /.worktrees/
 /respaldos/
 
+# copia del worker de MapLibre (scripts/copiar-worker-mapa.mjs)
+/public/maplibre-gl-worker.mjs
+
 # reportes de Playwright
 /playwright-report/
 /test-results/
