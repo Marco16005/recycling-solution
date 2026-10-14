@@ -202,12 +202,14 @@ export function minutosDeTraslado(km: number, velocidadKmh: number): number;    
 ## 7. Simulación (`scripts/simular.mts`, Codex escribe, Claude ejecuta)
 
 - Datos sintéticos con semilla:
-  - 30 clientes alrededor de El Marqués, en un radio de 15 km del patio;
-  - ventanas de 2 a 6 horas;
+  - escenario de la empresa del Documento Integrador: 100 clientes alrededor de El Marqués, en un radio de 15 km del patio;
+  - ventanas de 2 a 6 horas; servicio de 66 min;
   - cargas de 300 a 3000 kg;
-  - 5 unidades doble rodada de 8 toneladas;
-  - 40 a 60 solicitudes por día;
-  - 20 días.
+  - 15 unidades doble rodada de 8 toneladas;
+  - 50 a 60 solicitudes por día de operación (lunes a sábado);
+  - 20 días de operación.
+
+  (Corregido el 2026-10-14: la primera versión decía 30 clientes y 5 unidades, lo que no representa a la empresa y hacía crecer las pendientes sin límite.)
 - Las solicitudes pospuestas un día pasan al siguiente, conservando su hora de registro.
 - Salida en `docs/simulacion/` (Markdown y CSV), por día y total:
   - solicitudes ruteadas, pospuestas y bloqueadas;
