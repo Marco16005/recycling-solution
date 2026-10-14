@@ -1,5 +1,6 @@
 import { marked } from "marked";
 import Link from "next/link";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { avisoVigente, historialAvisos } from "@/consultas/aviso";
 
@@ -7,6 +8,8 @@ const fecha = (d: Date) => d.toLocaleDateString("es-MX", { timeZone: "America/Me
 
 /** Lee la base; por eso va dentro de <Suspense>. El texto lo publica scripts/publicar-aviso.mts (no lo escribe rs_app). */
 async function Aviso() {
+  // Se lee en cada petición, no al compilar: el aviso vive en la base.
+  await connection();
   const [vigente, historial] = await Promise.all([avisoVigente(), historialAvisos()]);
   if (vigente === null) {
     return <p>El aviso de privacidad aún no se ha publicado. Pídelo en el domicilio de la empresa.</p>;
