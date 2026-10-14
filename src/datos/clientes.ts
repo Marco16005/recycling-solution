@@ -6,6 +6,17 @@ import { aceptacionesPrivacidad, clientes, documentosCliente, ventanasCliente } 
 
 type Conexion = BD | Tx;
 
+/** Llave del candado que serializa las escrituras que crean o cambian nombres de clientes. */
+const CANDADO_NOMBRES = 727_002;
+
+/**
+ * Altas, ediciones e importaciones lo toman antes de leer o escribir nombres, para que una importación que ya revisó
+ * sus posibles duplicados no se cruce con un cliente nuevo o renombrado. Se suelta al terminar la transacción.
+ */
+export async function tomarCandadoDeNombres(tx: Tx): Promise<void> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(${CANDADO_NOMBRES})`);
+}
+
 export type ResultadoActualizacion =
   | { estado: "actualizado"; version: number }
   | { estado: "no_encontrado" }

@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { account, bitacora, session, user, usuarios } from "@/datos/esquema";
 import { crearBasePostgres, type BasePostgres } from "@/datos/pruebas/postgres-prueba";
-import { crearAuth, type Auth } from "./auth-base";
+import { crearAuth, type Autenticacion, type OpcionesAuth } from "./auth-base";
 import { buscarPorCorreo, crearIdentidad, desactivarUsuario, reactivarUsuario, restablecerClave } from "./identidades";
 
 const URL_APP = "http://localhost:3000";
@@ -15,19 +15,23 @@ const CLAVE = "clave-larga-123";
  */
 describe("autenticación con Better Auth y Postgres real", () => {
   let base: BasePostgres;
-  let auth: Auth;
+  let autenticacion: Autenticacion;
 
-  const peticion = (ruta: string, cuerpo: unknown) =>
-    auth.handler(
+  const nuevaAutenticacion = (extra: Partial<OpcionesAuth> = {}) =>
+    crearAuth(base.bd, { secreto: "secreto-de-prueba-de-al-menos-32-caracteres", url: URL_APP, limitarIntentos: false, ...extra });
+
+  const peticion = (ruta: string, cuerpo: unknown, a: Autenticacion = autenticacion) =>
+    a.manejar(
       new Request(`${URL_APP}/api/auth/${ruta}`, {
         method: "POST",
         headers: { "content-type": "application/json", origin: URL_APP },
         body: JSON.stringify(cuerpo),
       }),
     );
-  const entrar = (email: string, password = CLAVE) => peticion("sign-in/email", { email, password });
+  const entrar = (email: string, password = CLAVE, a: Autenticacion = autenticacion) =>
+    peticion("sign-in/email", { email, password }, a);
   const cookieDe = (respuesta: Response) => (respuesta.headers.get("set-cookie") ?? "").split(";")[0];
-  const sesionCon = (cookie: string) => auth.api.getSession({ headers: new Headers({ cookie }) });
+  const sesionCon = (cookie: string) => autenticacion.auth.api.getSession({ headers: new Headers({ cookie }) });
 
   async function alta(correo: string, rol: "despachador" | "gerencia" = "despachador") {
     return base.bd.transaction((tx) => crearIdentidad(tx, { correo, nombre: "Prueba", clave: CLAVE, rol }, null, AHORA));
@@ -35,7 +39,7 @@ describe("autenticación con Better Auth y Postgres real", () => {
 
   beforeAll(async () => {
     base = await crearBasePostgres();
-    auth = crearAuth(base.bd, { secreto: "secreto-de-prueba-de-al-menos-32-caracteres", url: URL_APP, limitarIntentos: false });
+    autenticacion = nuevaAutenticacion();
   });
   afterAll(async () => base.cerrar());
 
@@ -95,9 +99,9 @@ describe("autenticación con Better Auth y Postgres real", () => {
   });
 
   it("con el límite activo, el sexto intento de entrada en un minuto desde la misma IP responde 429", async () => {
-    const limitada = crearAuth(base.bd, { secreto: "secreto-de-prueba-de-al-menos-32-caracteres", url: URL_APP, limitarIntentos: true });
+    const limitada = nuevaAutenticacion({ limitarIntentos: true });
     const intento = () =>
-      limitada.handler(
+      limitada.manejar(
         new Request(`${URL_APP}/api/auth/sign-in/email`, {
           method: "POST",
           headers: { "content-type": "application/json", origin: URL_APP, "x-forwarded-for": "10.0.0.7" },
@@ -122,5 +126,64 @@ describe("autenticación con Better Auth y Postgres real", () => {
     const eventos = await base.bd.select().from(bitacora).where(eq(bitacora.entidad, "usuario"));
     const usuariosVivos = await base.bd.select({ id: usuarios.id }).from(usuarios);
     expect(eventos.every((e) => usuariosVivos.some((u) => u.id === e.entidadId))).toBe(true);
+  });
+
+  /** Detiene la creación de la sesión en un punto y la deja seguir cuando la prueba lo indica. */
+  function barrera() {
+    let avisarLlegada!: () => void;
+    let continuar!: () => void;
+    const llegada = new Promise<void>((resolver) => (avisarLlegada = resolver));
+    const sigue = new Promise<void>((resolver) => (continuar = resolver));
+    return { pausa: async () => (avisarLlegada(), sigue), llegada, continuar };
+  }
+
+  async function sesionesDe(correo: string) {
+    const { authUserId } = (await buscarPorCorreo(base.bd, correo))!;
+    return base.bd.select().from(session).where(eq(session.userId, authUserId));
+  }
+
+  it.each([
+    ["antes de revisar la sesión", "antesDeRevisar"],
+    ["entre la revisión y el guardado", "despuesDeRevisar"],
+  ] as const)("un restablecimiento %s deja sin sesión a la entrada con la contraseña anterior", async (_momento, punto) => {
+    const correo = `cruce-${punto}@prueba.local`;
+    const { usuarioId } = await alta(correo);
+    const b = barrera();
+    const conPausa = nuevaAutenticacion({ pruebas: { [punto]: b.pausa } });
+    const entrada = entrar(correo, CLAVE, conPausa);
+    await b.llegada;
+    await base.bd.transaction((tx) => restablecerClave(tx, usuarioId, "clave-nueva-789", null, AHORA));
+    b.continuar();
+    const respuesta = await entrada;
+    expect(await sesionesDe(correo)).toEqual([]);
+    const cookie = cookieDe(respuesta);
+    if (cookie) expect(await sesionCon(cookie)).toBeNull();
+  });
+
+  it("una baja y reactivación entre la revisión y el guardado tampoco dejan viva la sesión", async () => {
+    const correo = "cruce-baja@prueba.local";
+    const { usuarioId } = await alta(correo);
+    const b = barrera();
+    const conPausa = nuevaAutenticacion({ pruebas: { despuesDeRevisar: b.pausa } });
+    const entrada = entrar(correo, CLAVE, conPausa);
+    await b.llegada;
+    await base.bd.transaction((tx) => desactivarUsuario(tx, usuarioId, null, AHORA));
+    await base.bd.transaction((tx) => reactivarUsuario(tx, usuarioId, null, AHORA));
+    b.continuar();
+    await entrada;
+    expect(await sesionesDe(correo)).toEqual([]);
+  });
+
+  it("sin cambios durante la pausa, la sesión se crea normalmente", async () => {
+    const correo = "cruce-control@prueba.local";
+    await alta(correo);
+    const b = barrera();
+    const conPausa = nuevaAutenticacion({ pruebas: { despuesDeRevisar: b.pausa } });
+    const entrada = entrar(correo, CLAVE, conPausa);
+    await b.llegada;
+    b.continuar();
+    const respuesta = await entrada;
+    expect(respuesta.status).toBe(200);
+    expect(await sesionCon(cookieDe(respuesta))).not.toBeNull();
   });
 });

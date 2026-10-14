@@ -21,16 +21,19 @@ limpiar() {
 }
 trap limpiar EXIT
 
-echo "== 1/4 Tipos, lint y pruebas de unidad"
+echo "== 1/5 Tipos, lint y pruebas de unidad"
 compose unidad run --rm --build unit
 
-echo "== 2/4 Integración con Postgres"
+echo "== 2/5 Integración con Postgres"
 compose integracion run --rm --build integration
 
-echo "== 3/4 Punta a punta contra la imagen de producción"
+echo "== 3/5 Punta a punta contra la imagen de producción"
 compose e2e run --rm --build e2e
 
-echo "== 4/4 Búsqueda de secretos en el historial (gitleaks; no detecta datos personales)"
+echo "== 4/5 Respaldo y restauración (correcta y con respaldo dañado)"
+scripts/probar-restauracion.sh
+
+echo "== 5/5 Búsqueda de secretos en el historial (gitleaks; no detecta datos personales)"
 docker run --rm -v "$PWD:/repo:ro" zricethezav/gitleaks:v8.30.1 detect --source /repo --no-banner --redact
 
 echo "Verificación completa: todo en verde."

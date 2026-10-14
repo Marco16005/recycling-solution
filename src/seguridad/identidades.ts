@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { BD, Tx } from "@/datos/bd";
 import { registrarEvento } from "@/datos/bitacora";
 import { account, session, user, usuarios } from "@/datos/esquema";
@@ -91,6 +91,12 @@ export async function crearIdentidad(tx: Tx, datos: DatosIdentidad, por: Autor, 
   return { usuarioId: fila.id };
 }
 
+/**
+ * Toda baja, reactivación o cambio de contraseña sube la generación del usuario. Una entrada que empezó antes del cambio
+ * no logra conservar su sesión (ver auth-base.ts), aunque Better Auth haya verificado la contraseña anterior.
+ */
+const siguienteGeneracion = sql`${usuarios.generacion} + 1`;
+
 async function authUserIdDe(tx: Tx, usuarioId: string): Promise<string | null> {
   const [fila] = await tx.select({ authUserId: usuarios.authUserId }).from(usuarios).where(eq(usuarios.id, usuarioId));
   return fila?.authUserId ?? null;
@@ -100,7 +106,10 @@ async function authUserIdDe(tx: Tx, usuarioId: string): Promise<string | null> {
 export async function desactivarUsuario(tx: Tx, usuarioId: string, por: Autor, ahora: Date): Promise<boolean> {
   const authUserId = await authUserIdDe(tx, usuarioId);
   if (authUserId === null) return false;
-  await tx.update(usuarios).set({ activo: false, actualizadoEn: ahora }).where(eq(usuarios.id, usuarioId));
+  await tx
+    .update(usuarios)
+    .set({ activo: false, generacion: siguienteGeneracion, actualizadoEn: ahora })
+    .where(eq(usuarios.id, usuarioId));
   await tx.delete(session).where(eq(session.userId, authUserId));
   await registrarEvento(tx, { usuarioId: por, entidad: "usuario", entidadId: usuarioId, accion: accion("desactivar", por), campos: ["activo"] });
   return true;
@@ -110,7 +119,10 @@ export async function desactivarUsuario(tx: Tx, usuarioId: string, por: Autor, a
 export async function reactivarUsuario(tx: Tx, usuarioId: string, por: Autor, ahora: Date): Promise<boolean> {
   const authUserId = await authUserIdDe(tx, usuarioId);
   if (authUserId === null) return false;
-  await tx.update(usuarios).set({ activo: true, actualizadoEn: ahora }).where(eq(usuarios.id, usuarioId));
+  await tx
+    .update(usuarios)
+    .set({ activo: true, generacion: siguienteGeneracion, actualizadoEn: ahora })
+    .where(eq(usuarios.id, usuarioId));
   await registrarEvento(tx, { usuarioId: por, entidad: "usuario", entidadId: usuarioId, accion: accion("reactivar", por), campos: ["activo"] });
   return true;
 }
@@ -125,6 +137,10 @@ export async function restablecerClave(tx: Tx, usuarioId: string, claveNueva: st
     .update(account)
     .set({ password: hash, updatedAt: ahora })
     .where(and(eq(account.userId, authUserId), eq(account.providerId, "credential")));
+  await tx
+    .update(usuarios)
+    .set({ generacion: siguienteGeneracion, actualizadoEn: ahora })
+    .where(eq(usuarios.id, usuarioId));
   await tx.delete(session).where(eq(session.userId, authUserId));
   await registrarEvento(tx, { usuarioId: por, entidad: "usuario", entidadId: usuarioId, accion: accion("restablecer_clave", por), campos: ["clave"] });
   return true;

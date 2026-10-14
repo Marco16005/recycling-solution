@@ -51,18 +51,18 @@ Deja `respaldos/recycling-AAAAMMDD-HHMMSS.dump` (formato de `pg_dump -Fc`). La c
 
 ## 4. Restauración (misma máquina o una nueva)
 
-En una máquina nueva, hacer primero los pasos de §1 con las mismas contraseñas de base de datos, pero sin levantar todavía la aplicación:
-
 ```bash
-docker compose up -d db                          # crea los roles al iniciar el volumen
-cp /ruta/al/respaldo.dump respaldos/
-docker compose --profile respaldo run --rm --entrypoint sh respaldo -c \
-  'pg_restore -h db -U rs_migrador -d recycling --clean --if-exists --no-owner /respaldos/respaldo.dump'
-docker compose run --rm migrate                  # verifica migraciones y vuelve a aplicar permisos
-docker compose up -d
+cp /ruta/al/respaldo.dump respaldos/          # el respaldo debe quedar dentro de respaldos/
+scripts/restaurar.sh respaldos/respaldo.dump
 ```
 
-`migrate` comprueba que las migraciones del respaldo coinciden con las del repositorio y deja a `rs_app` con sus permisos mínimos. Si el respaldo es de una versión anterior del sistema, `migrate` aplica las migraciones que falten.
+El script:
+
+1. Detiene la aplicación y los trabajos que escriben en la base.
+2. Restaura con `pg_restore --single-transaction --exit-on-error`: o queda todo el respaldo o la base sigue como estaba.
+3. Solo si la restauración salió bien, corre `migrate` (verifica que las migraciones del respaldo coinciden con las del repositorio, aplica las que falten y vuelve a dar a `rs_app` sus permisos mínimos) y arranca la aplicación.
+
+Si falla, la aplicación queda detenida y la base sin cambios: revisar el mensaje, conseguir un respaldo bueno y repetir. En una máquina nueva, antes de restaurar, hacer los pasos de §1 con las mismas contraseñas de base de datos. `scripts/verificar-todo.sh` prueba una restauración correcta y una con un respaldo dañado.
 
 ## 5. HTTPS en producción
 
@@ -71,12 +71,33 @@ Caddy atiende `DOMINIO`:
 - **Dominio público** (`rs.empresa.mx` apuntando a la máquina, puertos 80 y 443 abiertos): Caddy obtiene y renueva el certificado solo.
 - **Red local sin dominio** (`localhost`, una IP o un nombre interno): Caddy firma con su propia autoridad. Cada teléfono y computadora debe instalar y confiar en esa autoridad, que está en el volumen `caddy_datos` (`/data/caddy/pki/authorities/local/root.crt`). Es la decisión abierta 11 de la especificación.
 
+Para obtener el certificado que se instala en los teléfonos (es público; la llave privada no sale del volumen):
+
+```bash
+docker compose cp proxy:/data/caddy/pki/authorities/local/root.crt respaldos/caddy-raiz.crt
+```
+
 ## 6. Mudar el sistema a otra máquina
 
 1. En la máquina actual: `docker compose --profile respaldo run --rm respaldo`.
-2. Copiar el último `respaldos/*.dump` y el archivo `.env` (por un medio seguro; contiene secretos).
-3. En la máquina nueva: clonar el repositorio, poner el `.env` y restaurar con §4.
-4. Entrar con un usuario conocido y revisar la lista de clientes antes de apagar la máquina anterior.
+2. Si se usa HTTPS de red local (§5), decidir qué pasa con la autoridad de Caddy:
+   - **Conservarla** para que los teléfonos no tengan que reinstalar nada. Copiar el volumen, que contiene la llave privada de la autoridad (tratarlo como un secreto):
+
+     ```bash
+     docker compose stop proxy
+     docker compose run --rm --no-deps --entrypoint tar -v "$PWD/respaldos:/salida" proxy czf /salida/caddy-datos.tgz -C /data .
+     ```
+
+     En la máquina nueva, antes del primer arranque de `proxy`:
+
+     ```bash
+     docker compose run --rm --no-deps --entrypoint tar -v "$PWD/respaldos:/entrada" proxy xzf /entrada/caddy-datos.tgz -C /data
+     ```
+
+   - **Crear una nueva**: no copiar nada; en la máquina nueva Caddy genera otra autoridad y hay que instalar su certificado (§5) en cada teléfono y computadora antes del cambio.
+3. Copiar el último `respaldos/*.dump`, el archivo `.env` y, si aplica, `caddy-datos.tgz`, por un medio seguro (contienen secretos).
+4. En la máquina nueva: clonar el repositorio, poner el `.env` y restaurar con §4.
+5. Comprobar desde una computadora **y desde un teléfono de operador** que la aplicación abre por HTTPS sin advertencias, entrar con un usuario conocido y revisar la lista de clientes antes de apagar la máquina anterior.
 
 ## 7. Actualizar a una versión nueva del código
 
@@ -92,4 +113,4 @@ docker compose up -d --build
 scripts/verificar-todo.sh
 ```
 
-Construye las imágenes y corre tipos, lint, pruebas de unidad, integración con Postgres desechable, punta a punta contra la imagen de producción y búsqueda de secretos. No toca los datos de operación.
+Construye las imágenes y corre tipos, lint, pruebas de unidad, integración con Postgres desechable, punta a punta contra la imagen de producción, la prueba de respaldo y restauración, y la búsqueda de secretos. No toca los datos de operación.

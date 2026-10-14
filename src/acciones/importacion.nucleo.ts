@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { registrarEvento } from "@/datos/bitacora";
-import { insertarCliente, nombresDeCartera } from "@/datos/clientes";
-import { buscarImportacion, registrarImportacion, tomarCandadoDeImportacion } from "@/datos/importaciones";
+import { insertarCliente, nombresDeCartera, tomarCandadoDeNombres } from "@/datos/clientes";
+import { buscarImportacion, registrarImportacion } from "@/datos/importaciones";
 import {
   analizarClientesCsv, posiblesDuplicados, type ErrorDeImportacion, type PosibleDuplicado,
 } from "@/dominio/clientes/csv";
@@ -73,7 +73,7 @@ export async function analizarImportacion(ctx: Contexto, csv: unknown): Promise<
 
 /**
  * opciones: { operacionId: uuid; huella: string; aceptarDuplicados: boolean }.
- * Si operacionId ya se confirmó, devuelve el mismo resultado sin escribir. Si no, toma el candado de importación,
+ * Si operacionId ya se confirmó, devuelve el mismo resultado sin escribir. Si no, toma el candado de nombres,
  * vuelve a analizar dentro de la transacción y escribe todo el lote o nada.
  * Huella distinta: "conflicto". Con errores: "invalido" con campos.archivo.
  * Con duplicados sin aceptarDuplicados: "invalido" con campos.duplicados.
@@ -92,7 +92,7 @@ export async function confirmarImportacion(
   const usuarioId = permiso.usuario.id;
 
   return ctx.bd.transaction(async (tx): Promise<Resultado<{ importados: number }>> => {
-    await tomarCandadoDeImportacion(tx);
+    await tomarCandadoDeNombres(tx);
     const previa = await buscarImportacion(tx, operacionId);
     if (previa !== null) {
       return previa.huella === huella ? { ok: true, valor: { importados: previa.importados } } : { ok: false, error: "conflicto" };

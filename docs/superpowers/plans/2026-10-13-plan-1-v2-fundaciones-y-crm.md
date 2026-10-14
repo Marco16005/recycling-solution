@@ -402,6 +402,12 @@ Lo que cambió respecto de lo escrito arriba, con su motivo:
 - `crypto.randomUUID()` no existe fuera de HTTPS o localhost; el identificador de importación usa `crypto.getRandomValues` como respaldo.
 - gitleaks usa `.gitleaks.toml` para permitir solo los secretos sintéticos de las pruebas.
 - Puertos de Caddy configurables (`PUERTO_HTTP`, `PUERTO_HTTPS`).
+- Revisión de Codex del código de Claude (T8, "aprueba con cambios"), corregida:
+  1. Entrada a media baja o restablecimiento: generación de credenciales en `usuarios` y revisión de la sesión antes y después de guardarla (migración `0002`); pruebas con pausas y comprobación de que fallan sin la corrección.
+  2. Importación contra altas manuales: candado de nombres compartido por altas, ediciones e importaciones.
+  3. Migrador: valida el historial antes de aplicar; prueba con historial alterado y migración pendiente.
+  4. Restauración atómica con `scripts/restaurar.sh` y su prueba (`scripts/probar-restauracion.sh`, etapa 4 de la verificación).
+  5. Mudanza con HTTPS local: traslado de la autoridad de Caddy o reinstalación en los teléfonos (`docs/operacion.md`).
 
 ## 5. Orden y paralelismo
 

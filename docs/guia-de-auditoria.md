@@ -40,6 +40,8 @@ Cada una debe cumplirse siempre. Si alguna falla, es un hallazgo.
 | 12 | `rs_app` no puede modificar ni borrar `bitacora` ni `aceptaciones_privacidad` | Prueba de integración de permisos |
 | 13 | El registro público está cerrado; un usuario desactivado no conserva sesiones ni puede crear nuevas | Pruebas de autenticación y de punta a punta |
 | 15 | Solo `src/seguridad/identidades.ts` escribe en las tablas de Better Auth, siempre dentro de la transacción de quien llama | `grep -rn 'esquema-auth\|from "@/datos/esquema"' src` y revisión de usos de `user`, `account` y `session` |
+| 16 | Toda petición HTTP a Better Auth pasa por `manejar`; una baja, reactivación o restablecimiento a media entrada no deja sesión viva | `src/app/api/auth/[...all]/route.ts` solo llama a `manejarPeticionDeAuth`; pruebas con pausas en `auth.integracion.test.ts` |
+| 17 | Una restauración falla completa o se aplica completa, y no corre con la aplicación activa | `scripts/probar-restauracion.sh` |
 | 14 | Todo se ejecuta en contenedores con versiones fijas | Ningún `@latest` ni imagen sin versión exacta en `Dockerfile`, `compose*.yaml` ni scripts |
 
 ## Qué intentar romper

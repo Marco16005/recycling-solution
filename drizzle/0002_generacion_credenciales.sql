@@ -1,0 +1,1 @@
+ALTER TABLE "usuarios" ADD COLUMN "generacion" integer DEFAULT 1 NOT NULL;
