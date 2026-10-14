@@ -237,8 +237,10 @@ Claude entrega la infraestructura y Codex escribe los casos funcionales sobre el
 
 - Corren en el servicio `e2e` contra `http://web:3000` (`PLAYWRIGHT_BASE_URL`), con un solo worker.
 - Cada corrida parte de una base vacía en `tmpfs`: `migrate`, `bootstrap` y `scripts/semilla-e2e.mts`.
-- La semilla crea un usuario sintético por rol: `admin@e2e.local`, `despachador@e2e.local`, `despachador2@e2e.local`, `gerencia@e2e.local`, `operador@e2e.local` e `inactivo@e2e.local` (despachador desactivado), todos con la contraseña de `E2E_CLAVE`. No crea clientes.
-- `e2e/ayudas/sesion.ts` (Claude) exporta `entrarComo(page: Page, usuario: UsuarioE2E): Promise<void>` y el tipo `UsuarioE2E` con los seis anteriores.
+- La semilla crea un usuario sintético por rol: `admin@e2e.local`, `despachador@e2e.local`, `despachador2@e2e.local`, `gerencia@e2e.local`, `operador@e2e.local`, `inactivo@e2e.local` (despachador desactivado) y `baja@e2e.local` (despachador que las pruebas de autenticación desactivan a media sesión), todos con la contraseña de `E2E_CLAVE`. No crea clientes.
+- `e2e/ayudas/sesion.ts` (Claude) exporta `entrarComo(page: Page, usuario: UsuarioE2E): Promise<void>`, `intentarEntrar(page, usuario, clave?)` (sin esperar el resultado), `claveE2E()` y el tipo `UsuarioE2E` con los siete anteriores. `e2e/ayudas/base.ts` exporta `desactivar(usuario)`.
+- La imagen de punta a punta apaga el límite de intentos de entrada (`AUTH_LIMITAR_INTENTOS=no`), porque todas las pruebas entran desde una sola IP; el límite se prueba en integración.
+- `getByRole("alert")` también encuentra el anunciador de rutas de Next; las pruebas lo acotan con `filter({ hasText })` o dentro del formulario.
 - `e2e/ayudas/datos.ts` (Claude) exporta `nombreUnico(prefijo: string): string`. Cada prueba crea sus propios clientes con nombres únicos y no depende de cuántos existen; las que miden K5 comparan dos lecturas de la misma corrida.
 
 ## 4. Tareas
@@ -387,6 +389,19 @@ Archivo: `e2e/clientes.spec.ts`, con las ayudas de §3.5. Casos: alta completa c
 3. Se corrigen los hallazgos en ramas cortas.
 4. Ambos ejecutan la lista de aceptación de §1 sobre el mismo commit, con `scripts/verificar-todo.sh` corrido por Claude y la salida revisada por Codex.
 5. El commit de cierre anota la lista de aceptación y el hash verificado.
+
+## 4.1 Ajustes durante la implementación (2026-10-14)
+
+Lo que cambió respecto de lo escrito arriba, con su motivo:
+
+- T0 trajo también el esquema con su migración inicial y `completitud.ts` adaptado del v1, para que los contratos compilaran; desde ahí `completitud.ts` es de Codex.
+- Codex no puede escribir en `.git` desde su worktree: Claude confirma sus cambios en la rama `codex/dominio-crm` sin modificarlos, con "Autor: Codex" en el mensaje, después de correr tipos, lint y pruebas.
+- Claude integró `codex/dominio-crm` en `claude/fundaciones` en cada entrega (T3, T5, T7) para probar con el dominio y las pantallas reales.
+- Las pruebas de unidad corren con 2 procesos: con 4 o más, algunos PGlite se quedaban colgados al crear la base.
+- Better Auth limita a 5 entradas por minuto por IP (explícito en `auth-base.ts`).
+- `crypto.randomUUID()` no existe fuera de HTTPS o localhost; el identificador de importación usa `crypto.getRandomValues` como respaldo.
+- gitleaks usa `.gitleaks.toml` para permitir solo los secretos sintéticos de las pruebas.
+- Puertos de Caddy configurables (`PUERTO_HTTP`, `PUERTO_HTTPS`).
 
 ## 5. Orden y paralelismo
 
