@@ -9,6 +9,7 @@ Piloto de un asistente de logística para una recicladora: CRM de clientes, cat�
 | [Hoja de ruta](superpowers/plans/2026-10-07-hoja-de-ruta.md) | Los seis planes, su orden, sus criterios de aceptación y qué recortar si falta tiempo |
 | [Plan 1 v2: fundaciones y CRM](superpowers/plans/2026-10-13-plan-1-v2-fundaciones-y-crm.md) | Contratos y tareas T0 a T8 del primer hito, repartidas entre Claude y Codex |
 | [Plan 1 v1](superpowers/plans/2026-10-07-plan-1-fundaciones-y-crm.md) | Sustituido; se conserva por el código verificado que sirvió de base |
+| [Operación](operacion.md) | Levantar, respaldar, restaurar y mudar el sistema con Docker |
 | [Guía de auditoría](guia-de-auditoria.md) | Cómo revisar el proyecto con otra persona u otro modelo |
 | [Pendientes del Documento Integrador](pendientes-documento-integrador.md) | Decisiones por confirmar y datos reales que faltan en el documento académico |
 

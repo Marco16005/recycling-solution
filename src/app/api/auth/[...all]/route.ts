@@ -1,10 +1,9 @@
-import { toNextJsHandler } from "better-auth/next-js";
-import { authDeLaAplicacion } from "@/seguridad/auth";
+import { manejarPeticionDeAuth } from "@/seguridad/auth";
 
 export async function GET(peticion: Request) {
-  return toNextJsHandler(authDeLaAplicacion()).GET(peticion);
+  return manejarPeticionDeAuth(peticion);
 }
 
 export async function POST(peticion: Request) {
-  return toNextJsHandler(authDeLaAplicacion()).POST(peticion);
+  return manejarPeticionDeAuth(peticion);
 }

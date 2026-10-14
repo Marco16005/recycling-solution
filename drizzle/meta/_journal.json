@@ -15,6 +15,13 @@
       "when": 1791957529972,
       "tag": "0001_datos_iniciales",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791990798519,
+      "tag": "0002_generacion_credenciales",
+      "breakpoints": true
     }
   ]
 }

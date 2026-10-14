@@ -1,0 +1,35 @@
+# Producción: imagen runner detrás de Caddy con HTTPS. Datos en el volumen db_datos (respaldar con el perfil respaldo).
+services:
+  db:
+    restart: unless-stopped
+
+  web:
+    build: { context: ., target: runner }
+    environment:
+      DATABASE_URL: postgres://rs_app:${RS_APP_PASSWORD:?Falta RS_APP_PASSWORD en .env}@db:5432/recycling
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Falta BETTER_AUTH_SECRET en .env}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Falta BETTER_AUTH_URL en .env}
+      MAPA_ESTILO_URL: ${MAPA_ESTILO_URL:-https://tiles.openfreemap.org/styles/liberty}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      bootstrap: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2.11.6-alpine
+    ports:
+      - "${PUERTO_HTTP:-80}:80"
+      - "${PUERTO_HTTPS:-443}:443"
+    environment:
+      DOMINIO: ${DOMINIO:-localhost}
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_datos:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    restart: unless-stopped
+
+volumes:
+  caddy_datos: {}
+  caddy_config: {}

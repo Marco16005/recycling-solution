@@ -28,6 +28,8 @@ export const usuarios = pgTable("usuarios", {
   nombre: text("nombre").notNull(),
   rol: rolEnum("rol").notNull(),
   activo: boolean("activo").notNull().default(true),
+  /** Sube al desactivar, reactivar o restablecer la contraseña; invalida las entradas que estaban en curso. */
+  generacion: integer("generacion").notNull().default(1),
   ...marcas,
 });
 

@@ -1,0 +1,7 @@
+# DOMINIO en .env. Con un dominio público, Caddy obtiene el certificado solo.
+# Con localhost, una IP o un nombre de la red local, Caddy usa su propia autoridad; cada teléfono
+# debe confiar en ella (docs/operacion.md y especificación §14, decisión 11).
+{$DOMINIO} {
+	encode zstd gzip
+	reverse_proxy web:3000
+}

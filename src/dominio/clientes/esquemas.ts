@@ -2,8 +2,12 @@ import { z } from "zod";
 import { ACCIONES_PRIVACIDAD, ESTADOS_DOCUMENTO, MEDIOS_PRIVACIDAD, TIPOS_RESIDUO, TIPOS_UNIDAD } from "./tipos";
 
 const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
-const FECHA = /^\d{4}-\d{2}-\d{2}$/;
-const TELEFONO = /^[0-9+() -]{7,20}$/;
+const TELEFONO = /^[0-9+() -]+$/;
+
+function telefonoValido(valor: string): boolean {
+  const digitos = valor.replace(/\D/g, "").length;
+  return TELEFONO.test(valor) && digitos >= 10 && digitos <= 15;
+}
 
 /** Caja que contiene a México; atrapa coordenadas invertidas o capturadas en otro país. */
 const MEXICO = { latMin: 14.5, latMax: 32.8, lngMin: -118.5, lngMax: -86.5 };
@@ -23,14 +27,14 @@ export const documentoSchema = z.object({
   nombre: z.string().trim().min(1, "Escribe el nombre del documento").max(120),
   obligatorio: z.boolean(),
   estado: z.enum(ESTADOS_DOCUMENTO),
-  venceEl: z.string().regex(FECHA, "Usa el formato AAAA-MM-DD").nullable(),
+  venceEl: z.iso.date("Usa una fecha real con formato AAAA-MM-DD").nullable(),
 });
 
 export const clienteSchema = z
   .object({
     nombre: z.string().trim().min(2, "Escribe el nombre del cliente").max(160),
     contactoNombre: z.string().trim().max(120).nullable(),
-    contactoTelefono: z.string().trim().regex(TELEFONO, "Teléfono no válido").nullable(),
+    contactoTelefono: z.string().trim().refine(telefonoValido, "Teléfono no válido").nullable(),
     direccion: z.string().trim().max(300).nullable(),
     lat: z.number().min(MEXICO.latMin, "Latitud fuera de México").max(MEXICO.latMax, "Latitud fuera de México").nullable(),
     lng: z.number().min(MEXICO.lngMin, "Longitud fuera de México").max(MEXICO.lngMax, "Longitud fuera de México").nullable(),

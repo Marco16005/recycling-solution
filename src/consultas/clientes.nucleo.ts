@@ -1,7 +1,15 @@
+import { z } from "zod";
+import { permitir } from "@/acciones/autorizacion";
 import type { Contexto, Resultado } from "@/acciones/tipos";
-import type { Faltante, ResumenK5 } from "@/dominio/clientes/completitud";
-import type { MotivoBloqueo } from "@/dominio/clientes/habilitacion";
+import type { BD, Tx } from "@/datos/bd";
+import { leerCartera, leerCliente } from "@/datos/clientes";
+import { leerConfiguracion } from "@/datos/configuracion";
+import { faltantesDeCliente, resumenK5, type Faltante, type ResumenK5 } from "@/dominio/clientes/completitud";
+import { nombreNormalizado } from "@/dominio/clientes/csv";
+import { motivosDeBloqueoCliente, type MotivoBloqueo } from "@/dominio/clientes/habilitacion";
 import type { ClienteGuardado, TipoResiduo } from "@/dominio/clientes/tipos";
+import { fechaEnMexico } from "@/dominio/tiempo";
+import { puede } from "@/seguridad/permisos";
 
 export interface ClienteResumen {
   id: string;
@@ -37,22 +45,84 @@ export interface ContextoAlta {
   versionAvisoVigente: string;
 }
 
-/** Permiso clientes.ver. filtro: { texto?: string }. */
+const ESTILO_MAPA_POR_OMISION = "https://tiles.openfreemap.org/styles/liberty";
+const estiloMapaUrl = () => process.env.MAPA_ESTILO_URL || ESTILO_MAPA_POR_OMISION;
+
+const filtroSchema = z.object({ texto: z.string().max(100).optional() });
+const idSchema = z.uuid();
+
+/** Lectura coherente de cliente, hijos y configuración: una sola instantánea de solo lectura. */
+function leerInstantanea<T>(bd: BD, lectura: (tx: Tx) => Promise<T>): Promise<T> {
+  return bd.transaction(lectura, { isolationLevel: "repeatable read", accessMode: "read only" });
+}
+
+/** Permiso clientes.ver. filtro: { texto?: string }; la búsqueda ignora mayúsculas, acentos y signos. */
 export async function listarClientes(ctx: Contexto, filtro: unknown): Promise<Resultado<ListadoClientes>> {
-  void ctx;
-  void filtro;
-  throw new Error("pendiente: T4 (Claude)");
+  const permiso = permitir(ctx, "clientes.ver");
+  if (!permiso.ok) return permiso;
+  const validado = filtroSchema.safeParse(filtro ?? {});
+  if (!validado.success) return { ok: false, error: "invalido", campos: { texto: ["Búsqueda no válida"] } };
+  const texto = nombreNormalizado(validado.data.texto ?? "");
+  const fecha = fechaEnMexico(ctx.ahora);
+
+  const { version, cartera } = await leerInstantanea(ctx.bd, async (tx) => ({
+    version: (await leerConfiguracion(tx)).versionAvisoPrivacidad,
+    cartera: await leerCartera(tx),
+  }));
+  const encontrados = texto === "" ? cartera : cartera.filter((c) => nombreNormalizado(c.nombre).includes(texto));
+
+  return {
+    ok: true,
+    valor: {
+      fecha,
+      k5: resumenK5(cartera, version),
+      puedeEditar: puede(permiso.usuario, "clientes.editar"),
+      clientes: encontrados.map((c) => {
+        const faltantes = faltantesDeCliente(c, version);
+        return {
+          id: c.id,
+          nombre: c.nombre,
+          direccion: c.direccion,
+          tipoResiduo: c.tipoResiduo,
+          activo: c.activo,
+          faltantes,
+          completo: faltantes.length === 0,
+          motivosHoy: motivosDeBloqueoCliente(c, fecha, version),
+        };
+      }),
+    },
+  };
 }
 
 /** Permiso clientes.ver. */
 export async function obtenerFicha(ctx: Contexto, id: unknown): Promise<Resultado<FichaCliente>> {
-  void ctx;
-  void id;
-  throw new Error("pendiente: T4 (Claude)");
+  const permiso = permitir(ctx, "clientes.ver");
+  if (!permiso.ok) return permiso;
+  const valido = idSchema.safeParse(id);
+  if (!valido.success) return { ok: false, error: "no_encontrado" };
+
+  const { version, cliente } = await leerInstantanea(ctx.bd, async (tx) => ({
+    version: (await leerConfiguracion(tx)).versionAvisoPrivacidad,
+    cliente: await leerCliente(tx, valido.data),
+  }));
+  if (cliente === null) return { ok: false, error: "no_encontrado" };
+  return {
+    ok: true,
+    valor: {
+      cliente,
+      faltantes: faltantesDeCliente(cliente, version),
+      motivosHoy: motivosDeBloqueoCliente(cliente, fechaEnMexico(ctx.ahora), version),
+      versionAvisoVigente: version,
+      puedeEditar: puede(permiso.usuario, "clientes.editar"),
+      estiloMapaUrl: estiloMapaUrl(),
+    },
+  };
 }
 
 /** Permiso clientes.editar. */
 export async function obtenerContextoAlta(ctx: Contexto): Promise<Resultado<ContextoAlta>> {
-  void ctx;
-  throw new Error("pendiente: T4 (Claude)");
+  const permiso = permitir(ctx, "clientes.editar");
+  if (!permiso.ok) return permiso;
+  const { versionAvisoPrivacidad } = await leerConfiguracion(ctx.bd);
+  return { ok: true, valor: { estiloMapaUrl: estiloMapaUrl(), versionAvisoVigente: versionAvisoPrivacidad } };
 }
