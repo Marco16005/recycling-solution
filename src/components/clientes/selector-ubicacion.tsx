@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
+// Turbopack cambia la URL relativa del worker de MapLibre; usamos la copia servida desde public.
+maplibregl.setWorkerUrl("/maplibre-gl-worker.mjs");
+
 const EL_MARQUES: [number, number] = [-100.28, 20.61]; // MapLibre usa [longitud, latitud]
 const redondear = (grados: number) => Math.round(grados * 1e6) / 1e6;
 
