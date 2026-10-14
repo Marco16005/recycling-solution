@@ -4,6 +4,7 @@
 - **Especificación:** revisión 2, con las decisiones del dueño de §14 (actualizadas el 2026-10-14).
 - **Base:** `main` en `0443d0d` (Plan 1 cerrado).
 - **Ejecutan:** Claude y Codex. Codex desarrolla el Plan 3 (motor) en paralelo desde el inicio, contra los contratos de `2026-10-14-plan-3-motor-de-ruteo.md`.
+- **Revisión 2 (2026-10-14):** incorpora los bloqueantes 5, 6, 8 y 9 de la revisión de Codex (requisitos por entidad, contratos compilables, sin constancia psicofísica, versiones del aviso inmutables).
 
 ## 1. Objetivo y aceptación
 
@@ -28,16 +29,16 @@ Al terminar:
 
 | Tabla | Columnas |
 |---|---|
-| `tipos_documento` | `id` (texto, p. ej. `licencia_conducir`), `nombre`, `aplica_a` (`cliente` \| `unidad` \| `operador`), `obligatorio_por_omision`, `requiere_vencimiento`, `descripcion`. La migración lo llena con el catálogo |
+| `tipos_documento` | `id` (texto, p. ej. `licencia_conducir`), `nombre`, `aplica_a` (`cliente` \| `unidad` \| `operador`), `origen` (`ley` \| `contrato` \| `politica`), `obligatorio_por_omision`, `requiere_vencimiento`, `descripcion`. La migración lo llena con el catálogo. En clientes, ningún tipo es obligatorio por omisión |
 | `unidades` | `id`, `placa` (única, normalizada), `numero_economico` (único, opcional), `tipo` (`tipo_unidad`), `capacidad_kg` (> 0), `rendimiento_km_l` (> 0), `activo`, `notas`, `version`, marcas |
-| `documentos_unidad` | `id`, `unidad_id`, `tipo_documento_id` (de `aplica_a = unidad`), `estado` (`estado_documento`), `vence_el`, `notas`, marcas; único por (`unidad_id`, `tipo_documento_id`) |
+| `documentos_unidad` | `id`, `unidad_id`, `tipo_documento_id` (de `aplica_a = unidad`), `obligatorio` (se inicia con el valor del catálogo y la unidad lo puede cambiar), `estado` (`estado_documento`), `vence_el`, `notas`, marcas; único por (`unidad_id`, `tipo_documento_id`). Un tipo obligatorio por omisión **sin renglón** cuenta como faltante |
 | `operadores` | `id`, `nombre`, `telefono`, `activo`, `aviso_version`, `aviso_entregado_en`, `version`, marcas |
 | `documentos_operador` | Igual que `documentos_unidad`, con `operador_id` |
 | `usuarios` | Nueva columna `operador_id` (opcional, única, referencia a `operadores`). Si el rol es `operador`, es obligatoria (CHECK) |
 | `documentos_cliente` | Nueva columna `tipo_documento_id` (opcional; si no la hay, el nombre es libre) |
 | `jornadas` | `id`, `fecha` (`date`), `unidad_id`, `operador_id`, `disponible_desde` (`time`), `check_in_en`, `check_out_en`, `notas`, `version`, marcas. Únicas por (`fecha`, `unidad_id`) y por (`fecha`, `operador_id`) |
 | `solicitudes` | `id`, `folio` (único, `S-AAAAMMDD-NNN` según la fecha de registro en Ciudad de México), `cliente_id`, `registrada_en` (`timestamptz`, inmutable), `registrada_por`, `fecha_solicitada` (`date`), `proxima_fecha_elegible` (`date`), `canal` (`telefono` \| `whatsapp` \| `correo` \| `presencial` \| `otro`), `carga_estimada_kg` (opcional), `notas`, `estado` (`pendiente` \| `cancelada` \| `atendida` \| `no_atendida`), `motivo_cancelacion`, `veces_pospuesta`, `captura_inicio_en`, `captura_fin_en`, `version`, marcas |
-| `configuracion` | Nuevas columnas `carga_por_omision_kg` (1000), `dias_operacion` (`smallint[]`, por omisión `{1,2,3,4,5,6}`, lunes a sábado), `dias_para_atrasada` (2) |
+| `configuracion` | Nuevas columnas `carga_por_omision_kg` (1000), `dias_operacion` (`smallint[]`, por omisión `{1,2,3,4,5,6}`, lunes a sábado), `dias_para_atrasada` (2) y `version` (control de edición concurrente) |
 | `avisos_privacidad` | Nueva columna `texto` (el aviso completo de esa versión) |
 
 Reglas de la base:
@@ -45,10 +46,10 @@ Reglas de la base:
 - Un trigger impide cambiar `solicitudes.registrada_en`, `folio` y `registrada_por`. Así la hora de registro es inmutable aunque haya un error en el código.
 - El folio usa una secuencia por día: tabla `folios_dia(fecha, ultimo)` con `INSERT … ON CONFLICT DO UPDATE … RETURNING`.
 - Permisos de `rs_app`:
-  - UPDATE en `configuracion`;
-  - INSERT, sin UPDATE, en `avisos_privacidad`;
-  - DELETE solo en las tablas de documentos y en `jornadas`;
-  - nunca DELETE en `solicitudes`: se cancelan.
+  - UPDATE, sin INSERT ni DELETE, en `configuracion`;
+  - solo lectura en `avisos_privacidad` y `tipos_documento` (los avisos los publica `scripts/publicar-aviso.mts` como `rs_migrador`);
+  - nunca DELETE en `solicitudes` (se cancelan) ni en `folios_dia`.
+- El trigger también impide cambiar `cliente_id`. `rs_app` no es dueño de las tablas, así que no puede desactivar el trigger.
 
 Los estados `programada` y `en_ruta` de las solicitudes los agrega el Plan 4, junto con `planes`, `rutas` y `paradas`.
 
@@ -60,8 +61,9 @@ Se integran en T0 del Plan 2, antes de trabajar en paralelo, con el mismo proced
 
 ```ts
 export const TIPOS_DOCUMENTO_APLICA = ["cliente", "unidad", "operador"] as const;
-export interface TipoDocumento { id: string; nombre: string; aplicaA: "cliente" | "unidad" | "operador"; obligatorioPorOmision: boolean; requiereVencimiento: boolean }
-export interface DocumentoRegistrado { tipoDocumentoId: string; estado: EstadoDocumento; venceEl: string | null }
+export interface TipoDocumento { id: string; nombre: string; aplicaA: "cliente" | "unidad" | "operador"; origen: "ley" | "contrato" | "politica"; obligatorioPorOmision: boolean; requiereVencimiento: boolean }
+/** obligatorio: el de la entidad; si un tipo obligatorio por omisión no tiene renglón, es faltante. */
+export interface DocumentoRegistrado { tipoDocumentoId: string; obligatorio: boolean; estado: EstadoDocumento; venceEl: string | null }
 export interface Unidad { placa: string; numeroEconomico: string | null; tipo: TipoUnidad; capacidadKg: number; rendimientoKmL: number; activo: boolean; notas: string | null; documentos: DocumentoRegistrado[] }
 export interface Operador { nombre: string; telefono: string | null; activo: boolean; avisoVersion: string | null; avisoEntregadoEn: Date | null; documentos: DocumentoRegistrado[] }
 export type UnidadGuardada = Unidad & { id: string; version: number };
@@ -126,7 +128,7 @@ export function formatoFolio(fecha: string, consecutivo: number): string; // S-A
 
 ### 3.4 Consultas y acciones (Claude)
 
-Mismo patrón que el Plan 1: `*.nucleo.ts` con `Contexto` y argumentos `unknown`, envoltorios `server-only` o `"use server"`, y `Resultado<T>`.
+Mismo patrón que el Plan 1: `*.nucleo.ts` con `Contexto` y argumentos `unknown`, envoltorios `server-only` o `"use server"`, y `Promise<Resultado<T>>`. Esta sección resume las firmas; el **contrato compilable** (todos los tipos de entrada, resúmenes, filtros y retornos) lo entrega Claude en T0 en `src/consultas/*.nucleo.ts`, `src/acciones/*.nucleo.ts` y `src/dominio/*/tipos.ts`, y Codex lo revisa antes de empezar las pantallas.
 
 ```ts
 // src/consultas/flota.nucleo.ts
@@ -146,7 +148,6 @@ obtenerJornada(ctx, fecha: unknown): Resultado<{
 // src/acciones/jornada.nucleo.ts
 asignarJornada(ctx, entrada: unknown /* { fecha, unidadId, operadorId, disponibleDesde } */): Resultado<{ id }>   // revalida disponibilidad en la transacción
 quitarJornada(ctx, id: unknown, versionEsperada: unknown): Resultado<{}>
-registrarCheckIn(ctx, id, instante?) / registrarCheckOut(ctx, id)   // el Plan 5 los usa desde el teléfono
 
 // src/consultas/solicitudes.nucleo.ts
 colaDeSolicitudes(ctx, fecha: unknown): Resultado<{ fecha; elementos: (ElementoCola & { cliente: { id; nombre } })[]; resumen: { listas; bloqueadas; atrasadas; futuras } }>
@@ -158,8 +159,10 @@ reprogramarSolicitud(ctx, id, versionEsperada, fecha: unknown): Resultado<{}>   
 
 // src/consultas/usuarios.nucleo.ts y src/acciones/usuarios.nucleo.ts (usuarios.gestionar)
 listarUsuarios(ctx): Resultado<{ usuarios: { id; nombre; correo; rol; activo; operadorId }[]; operadores: OperadorResumen[] }>
-crearUsuario(ctx, entrada): Resultado<{ id; claveTemporal: string }>    // la clave se muestra una sola vez
-cambiarRol(ctx, id, entrada): Resultado<{}>                               // sube la generación (cierra sesiones)
+crearUsuario(ctx, entrada): Resultado<{ id; claveTemporal: string }>    // la clave se muestra una sola vez; correo repetido → invalido { correo }
+cambiarRol(ctx, id, versionEsperada, entrada): Resultado<{}>              // sube la generación y cierra sesiones en la misma transacción
+// Rol operador ⇔ operadorId obligatorio y único; dejar de ser operador lo limpia. No se puede quitar el rol ni desactivar
+// al último admin activo, ni desactivarse a uno mismo (invalido). usuarios gana columna version.
 desactivarUsuarioAccion / reactivarUsuarioAccion / restablecerClaveAccion  // → { claveTemporal } en restablecer
 // src/consultas/configuracion.nucleo.ts y src/acciones/configuracion.nucleo.ts (configuracion.editar)
 obtenerConfiguracion(ctx) / guardarConfiguracion(ctx, versionEsperada, entrada)  // configuracion gana columna version
@@ -185,21 +188,20 @@ avisoVigente(): Promise<{ version; texto; publicadoEn }>
 ### 3.6 Aviso de privacidad en el sistema (Claude)
 
 - **Variables de entorno:** `EMPRESA_RAZON_SOCIAL`, `EMPRESA_NOMBRE_COMERCIAL`, `EMPRESA_DOMICILIO`, `PRIVACIDAD_RESPONSABLE`, `PRIVACIDAD_CORREO`, `PRIVACIDAD_TELEFONO`, `PRIVACIDAD_HORARIO`, `PROVEEDOR_HOSPEDAJE`, `PROVEEDOR_RESPALDOS`, `PROVEEDOR_MAPAS`, `URL_AVISO`, y los plazos de conservación.
-- **`scripts/publicar-aviso.mts`:**
+- **`scripts/publicar-aviso.mts --version AAAA-MM-DD --motivo "…"`:**
   1. Llena la plantilla `docs/legal/aviso-de-privacidad-integral.md`.
-  2. Se niega si queda algún `{{…}}`.
+  2. Se niega si queda algún `{{…}}` o si la versión ya existe.
   3. Calcula la huella.
-  4. Como `rs_migrador`, inserta la versión con su texto y la hace vigente en `configuracion`.
-  5. Deja bitácora.
-- **Versión `2026-10`:** si existe sin texto, la primera publicación la completa en lugar de crear otra.
+  4. Como `rs_migrador`, en una transacción que bloquea la fila de `configuracion`: inserta la versión con su texto, la hace vigente y deja bitácora con actor (variable `PUBLICADO_POR`) y motivo.
+- **Versiones inmutables:** cada publicación es una versión nueva; nunca se edita una existente. La `2026-10` del Plan 1 queda como marcador sin texto.
 
 ## 4. Tareas
 
 | # | Responsable | Tarea |
 |---|---|---|
-| T0 | Claude | Contratos de §3 con firmas; `fast-check` (para el Plan 3) en `package.json`; navegación vacía |
+| T0 | Claude | Contratos compilables de §3 y del Plan 3 (`src/motor/tipos.ts`, `index.ts`) con firmas; `fast-check` en `package.json`; `AGENTS.md` con los responsables nuevos. Codex revisa T0 antes de trabajar en paralelo |
 | T1 | Claude | Migración `0003` (tablas, triggers, folios, permisos), repositorios, pruebas de integración (inmutabilidad de `registrada_en`, unicidades, folios concurrentes, permisos) |
-| T2 | Codex | Dominio de flota y de solicitudes con pruebas (cada `CodigoNoDisponible`, por vencer, días de operación, atraso, FIFO estable, cola con cada estado, folio) |
+| T2 | Codex | Dominio de flota y de solicitudes con pruebas (cada `CodigoNoDisponible`, obligatorio por entidad y faltantes sin renglón, por vencer, días de operación, atraso, FIFO estable, cola con cada estado, folio de más de 999). Etiquetas de privacidad que reflejen el consentimiento tácito de los contactos |
 | T3 | Claude | Consultas y acciones de flota, jornada, solicitudes, usuarios y configuración, con pruebas de permisos, conflictos, transacciones y bitácora |
 | T4 | Codex | Pantallas de despacho de §3.5 |
 | T5 | Claude | Pantallas de admin, aviso público, `publicar-aviso`, VPS (límites de memoria, `linux/amd64`, `sslip.io`, convivencia con el punto de venta en `docs/operacion.md`) |
@@ -208,8 +210,8 @@ avisoVigente(): Promise<{ version; texto; publicadoEn }>
 
 ## 5. Qué revisar con más cuidado
 
-- `registrada_en` y el folio no cambian por ninguna vía: ni acción, ni SQL directo de `rs_app`, ni reprogramación.
-- Dos altas de solicitud simultáneas el mismo día no repiten folio.
+- `registrada_en`, el folio, `registrada_por` y `cliente_id` no cambian por ninguna vía: ni acción, ni SQL directo de `rs_app`, ni reprogramación.
+- Dos altas de solicitud simultáneas el mismo día no repiten folio; un rollback no deja huecos visibles como error; el folio del día lo da la hora de Ciudad de México alrededor de la medianoche.
 - `asignarJornada` revalida la disponibilidad dentro de la transacción y no permite la misma unidad u operador dos veces el mismo día.
 - Cambiar el rol o desactivar a un usuario cierra sus sesiones (generación de credenciales).
 - `publicar-aviso` no publica con campos sin llenar; publicar invalida las aceptaciones anteriores (comportamiento ya acordado).

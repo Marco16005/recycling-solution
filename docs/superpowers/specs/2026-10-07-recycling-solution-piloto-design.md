@@ -207,7 +207,7 @@ Una solicitud tiene a lo sumo una asignación operativa vigente, garantizada por
 
    No tener hoy una unidad disponible de un tipo admitido no bloquea: la solicitud se **pospone** con ese motivo, porque depende de la flota del día y no de los datos del cliente.
 4. **FIFO global de admisión.** Las solicitudes elegibles se procesan por `registrada_en` y folio. Cada una se intenta insertar de forma factible en cualquier unidad compatible, sin mover a las ya admitidas. Una solicitud admitida nunca se desplaza por otra más reciente. Si una solicitud antigua no cabe junto con las que se admitieron antes que ella, se pospone con su motivo y el proceso continúa con las más recientes, que pueden caber (por ejemplo, por ser más pequeñas o estar en otra zona). Una carga mayor que la capacidad de cualquier unidad del catálogo es inviabilidad física: la solicitud se bloquea con ese motivo. La pospuesta conserva su hora de registro y pasa al frente de la cola del siguiente día de operación; con dos o más días de operación pospuesta se marca atrasada para que decida el despachador (§14, decisión 3).
-5. **Sin inanición.** Una solicitud pospuesta conserva su hora de registro y su `proxima_fecha_elegible` avanza al siguiente día hábil.
+5. **Sin pérdida de prioridad.** Una solicitud pospuesta conserva su hora de registro y su `proxima_fecha_elegible` avanza al siguiente día de operación, donde vuelve a estar al frente de la cola. Esto no garantiza que se atienda (una solicitud que nunca cabe se seguirá posponiendo); por eso se marca atrasada (decisión 3) para que decida el despachador.
 6. **El despachador decide.** El motor propone; nada llega al operador sin validación. Validar es una transacción que bloquea el plan y las jornadas que usa, comprueba su `version` y vuelve a verificar elegibilidad, disponibilidad y capacidad, y que ninguna de sus solicitudes tenga ya una asignación vigente por otro plan; si algo cambió, la validación se rechaza con el motivo. Prueba obligatoria: dos planes distintos con solicitudes en común validados al mismo tiempo; uno gana y el otro recibe el motivo.
 7. **Una unidad no disponible no recibe ruta.**
 8. **Ediciones concurrentes.** Guardar un cliente exige la `version` que se leyó; si cambió, se responde `conflicto` y nada se escribe.
@@ -218,10 +218,9 @@ Una solicitud tiene a lo sumo una asignación operativa vigente, garantizada por
 
 ```ts
 generarPlan(entrada: EntradaPlan): Plan
-reasignarPendientes(entrada: EntradaReruteo): Plan
 ```
 
-`EntradaPlan`: fecha, instante de planificación, solicitudes candidatas con los datos de su cliente, unidades disponibles desde el instante de planificación con su ubicación conocida o el patio, carga actual y viajes ya comprometidos, configuración y semilla.
+`EntradaPlan`: fecha, instante de planificación, solicitudes candidatas con los datos de su cliente, unidades con su ubicación, hora y carga al quedar libres (en el re-ruteo ya descuentan lo congelado), configuración y semilla. El contrato completo está en el Plan 3.
 
 `Plan`: rutas (unidad, viaje, paradas en orden con llegada estimada y espera), solicitudes pospuestas y bloqueadas con su motivo, y resumen con la comparación contra el método actual.
 
@@ -247,7 +246,7 @@ Modelo de traslado: `km = haversine × factor_circuidad`; `min = km ÷ velocidad
 
 ### Re-ruteo
 
-Recibe la instantánea original, el estado actual de cada ruta (paradas completadas, en sitio y tramo comprometido, que quedan congeladas) y las unidades disponibles desde ese instante. Solo reubica las paradas pendientes de la ruta afectada, en orden FIFO.
+Es `generarPlan` con unidades que ya descuentan lo congelado (paradas completadas, en sitio y tramo comprometido): cada unidad empieza donde y cuando termina lo congelado, con la carga que lleva. Solo recibe las solicitudes pendientes de la ruta afectada y las reubica en orden FIFO.
 
 ### Por qué se le llama inteligencia artificial
 
@@ -312,7 +311,7 @@ Cada indicador será una función pura en `src/indicadores` (Plan 6) con su prue
 |---|---|
 | K1 | Por recolección: espera = (`asignada_en − disponible_para_salir_en` de la ruta, 0 si se asignó antes) dividida entre las recolecciones del viaje; traslado = `llegada_en` de la parada menos `fin_servicio_en` de la parada anterior del viaje, o menos `salida_patio_en` si es la primera. Se reporta la media por recolección y el tamaño de la muestra. |
 | K2 | Mediana de `captura_fin_en − captura_inicio_en` de las solicitudes, contra una línea base cronometrada con el mismo inicio y fin, guardada en `configuracion.linea_base` con su fecha y tamaño de muestra. |
-| K3 | Paradas cuya **llegada** cae dentro de la ventana comprometida, entre paradas programadas; se reportan aparte las omitidas y las no atendidas. |
+| K3 | Paradas cuyo **inicio de servicio** cae dentro de la ventana comprometida (llegar antes y esperar cuenta como cumplida), entre paradas programadas; se reportan aparte las omitidas y las no atendidas. |
 | K4 | Km reales por odómetro contra el contrafactual guardado en la ruta para las mismas solicitudes atendidas; litros estimados con el rendimiento guardado en la ruta. El ahorro simulado se reporta por separado del observado. |
 | K5 | Clientes activos completos entre clientes activos, calculado sobre toda la cartera. Para ver su evolución, el Plan 6 guarda una instantánea diaria (fecha, activos, completos). |
 | K6 | Demora total `validado_en − generado_en` y trabajo activo `validado_en − revision_iniciada_en`; la meta de 5 min se compara con el trabajo activo. |
@@ -344,21 +343,21 @@ Casos obligatorios del Plan 1: rollback completo cuando falla la bitácora (clie
 
 ## 14. Decisiones del dueño del proyecto
 
-Actualizado el 2026-10-14 con lo que respondió el dueño. "Dueño" indica que la tomó él; "Claude" indica que el dueño la delegó y Claude la propuso, y que la confirmó Codex en la revisión del Plan 2.
+Actualizado el 2026-10-14 con lo que respondió el dueño. "Dueño" indica que la tomó él. "Claude y Codex" indica que el dueño la delegó: Claude la propuso y se ajustó en la revisión con Codex del 2026-10-14.
 
 | # | Tema | Decisión | Quién | Estado |
 |---|---|---|---|---|
-| 1 | Calendario y destino | VPS de Hostinger **compartido con un punto de venta**, sin dominio por ahora. HTTPS con un nombre gratuito que apunta a la IP del VPS (`<ip-con-guiones>.sslip.io`) y certificado público de Let's Encrypt emitido por Caddy, sin instalar nada en los teléfonos. Límites de memoria en Compose para no afectar al punto de venta. La fecha límite real sigue abierta | Dueño (destino); Claude (HTTPS) | Falta saber si el punto de venta ya ocupa los puertos 80 y 443 del VPS (ver `docs/operacion.md`, §9) |
-| 2 | Turno | 480 min (08:00 a 16:00), que incluye el regreso al patio y la descarga. Los descansos no se modelan en el piloto | Dueño | Resuelta |
-| 3 | FIFO cuando una solicitud antigua no cabe | El motor atiende a las más recientes que sí caben. La antigua **conserva su lugar en la fila**: pasa al día siguiente como la primera en la cola y el despachador la ve marcada como pospuesta con su motivo. Si lleva dos días hábiles o más pospuesta, se marca **atrasada** para que el despachador decida (por ejemplo, un viaje extra o pedir otra unidad) | Claude | Resuelta |
-| 4 | Ventanas | La ventana limita la **llegada** de la unidad, que es como se mide K3. El servicio puede terminar después del fin de la ventana | Claude | Resuelta |
-| 5 | Capacidad | Límite por **peso** (kg) de cada unidad. Si una solicitud no trae carga estimada, se usa la del cliente y, si tampoco hay, `configuracion.carga_por_omision_kg` (1000 kg) | Claude | Resuelta |
-| 6 | Documentos y privacidad | Catálogo de documentos en `docs/catalogo-de-documentos.md`. Un aviso pendiente bloquea la recolección. Cambiar la versión del aviso invalida las aceptaciones anteriores. Aviso de privacidad redactado en `docs/legal/` (pendiente de revisión por una persona abogada y de los datos de la empresa) | Dueño (pidió el aviso); Claude (contenido) | Resuelta, con revisión legal pendiente |
-| 7 | Indicadores | K2 mide desde que se abre el alta de solicitud hasta que se guarda. Combustible estimado con el rendimiento de cada unidad. Se supone que hoy se hace un viaje por cliente. Ambos supuestos se confirman con la empresa durante el piloto | Claude | Resuelta como supuesto |
-| 8 | Identidades | El dueño es el primer administrador. Los operadores entran con un correo interno que asigna el administrador (por ejemplo, `jperez@operadores.local`) y una contraseña que el administrador restablece si la olvidan | Claude | Resuelta |
-| 9 | Operación sin señal | La ruta del día queda guardada en el teléfono. Los eventos se guardan en cola y se envían al recuperar la señal, hasta 24 h después. Si mientras tanto la ruta cambió, el servidor rechaza los eventos de paradas que ya no le tocan y el teléfono pide llamar al despachador | Claude | Resuelta |
-| 10 | Retención | Clientes y aceptaciones: 5 años después de la última recolección. Bitácora: 5 años. Rutas y ubicaciones: 12 meses; después solo cifras agregadas sin identificar al operador | Claude | Propuesta para confirmar con la empresa |
-| 11 | HTTPS en red local | Ya no aplica: el sistema corre en un VPS público (decisión 1). `tls internal` queda solo como alternativa | Claude | Resuelta |
+| 1 | Calendario y destino | VPS de Hostinger **compartido con un punto de venta**, sin dominio por ahora. HTTPS con un nombre gratuito que apunta a la IP del VPS (`<ip-con-guiones>.sslip.io`) y certificado público de Let's Encrypt emitido por Caddy, sin instalar nada en los teléfonos. Límites de memoria en Compose para no afectar al punto de venta. La fecha límite real sigue abierta | Dueño (destino); Claude y Codex (HTTPS) | Condicionada a comprobar en el VPS: puertos 80 y 443, proxy existente, memoria y emisión y renovación del certificado (`docs/operacion.md`, §9) |
+| 2 | Turno | 480 min, confirmado por el dueño, incluidos el regreso al patio y la descarga. El horario 08:00 a 16:00 es una propuesta configurable (`configuracion.turno_inicio` y `turno_fin`). Los descansos no se modelan en el piloto | Dueño (duración); Claude y Codex (horario) | Resuelta |
+| 3 | FIFO cuando una solicitud antigua no cabe | El motor atiende a las más recientes que sí caben. La antigua **conserva su lugar en la fila**: pasa al siguiente día de operación como la primera en la cola, y el despachador la ve pospuesta con su motivo y su diagnóstico. Si su fecha solicitada quedó dos o más días de operación atrás, se marca **atrasada** para que el despachador decida (por ejemplo, un viaje extra u otra unidad). Las veces que se pospuso se guardan aparte | Claude y Codex | Resuelta |
+| 4 | Ventanas | La ventana limita el **inicio del servicio**: la unidad puede llegar antes y esperar a que abra, y el servicio puede terminar después del fin. K3 se mide igual | Claude y Codex | Resuelta |
+| 5 | Capacidad | Límite por **peso** (kg) de cada unidad. Si una solicitud no trae carga estimada, se usa la del cliente y, si tampoco hay, `configuracion.carga_por_omision_kg` (1000 kg, estimación visible para calibrar en el piloto). Una carga mayor que la capacidad de todas las unidades de los tipos que admite el cliente queda bloqueada | Claude y Codex | Resuelta |
+| 6 | Documentos y privacidad | Catálogo de documentos en `docs/catalogo-de-documentos.md`; cada unidad u operador puede ajustar qué documentos le aplican. Aviso de privacidad en `docs/legal/`, sin finalidades secundarias en el piloto. Para los contactos de clientes, el tratamiento se basa en consentimiento tácito; si lo revocan, el cliente queda bloqueado hasta que designe otro contacto. Cada publicación del aviso es una versión nueva e invalida la aceptación de las anteriores | Dueño (pidió el aviso); Claude y Codex (contenido) | Resuelta, con revisión legal pendiente |
+| 7 | Indicadores | K2 mide desde que se abre el alta de solicitud hasta que se guarda. Combustible estimado con el rendimiento de cada unidad. Se supone que hoy se hace un viaje por cliente. Ambos supuestos se confirman con la empresa durante el piloto | Claude y Codex | Resuelta como supuesto |
+| 8 | Identidades | El dueño es el primer administrador. Los operadores entran con un correo interno que asigna el administrador (por ejemplo, `jperez@operadores.local`) y una contraseña que el administrador restablece si la olvidan | Claude y Codex | Resuelta |
+| 9 | Operación sin señal | La ruta del día queda guardada en el teléfono. Los eventos se guardan en cola y se envían al recuperar la señal, hasta 24 h después. Si mientras tanto la ruta cambió, el servidor no aplica los eventos de paradas que ya no le tocan, pero los **guarda como rechazados** para que el despachador los concilie; el teléfono pide llamar al despachador | Claude y Codex | Resuelta |
+| 10 | Retención | Matriz propuesta por finalidad en `docs/legal/README.md` (inicio del cómputo, bloqueo, supresión y respaldos). Necesita asesoría legal antes de publicarse | Claude y Codex | Propuesta para confirmar |
+| 11 | HTTPS en red local | Ya no aplica: el sistema corre en un VPS público (decisión 1). `tls internal` queda solo como alternativa | Claude y Codex | Resuelta |
 
 ## 15. Colaboración Claude–Codex
 

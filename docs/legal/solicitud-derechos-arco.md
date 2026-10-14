@@ -16,7 +16,7 @@
 - [ ] Cancelación
 - [ ] Oposición
 - [ ] Revocación del consentimiento
-- [ ] Limitar el uso o la divulgación (no recibir encuestas o información comercial)
+- [ ] Limitar el uso o la divulgación (por ejemplo, contactar solo por llamada)
 
 **Descripción de los datos y de lo que solicita.** En una rectificación, indique el dato correcto:
 

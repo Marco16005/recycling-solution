@@ -6,11 +6,9 @@
 
 ---
 
-**{{RAZON_SOCIAL}}**, con domicilio en {{DOMICILIO}}, trata sus datos de identificación y contacto, y los de ubicación y horario de su establecimiento, para programar y realizar las recolecciones de material, comunicarse con usted sobre ellas y cumplir los requisitos de acceso a su establecimiento. Estas finalidades son necesarias para el servicio y no requieren su consentimiento. No tratamos datos sensibles.
+**{{RAZON_SOCIAL}}**, con domicilio en {{DOMICILIO}}, trata sus datos de identificación y contacto, y los de ubicación y horario de su establecimiento, **solo** para programar y realizar las recolecciones de material, comunicarse con usted sobre ellas y cumplir los requisitos de acceso a su establecimiento. No tratamos datos sensibles ni usamos sus datos para publicidad, promociones ni encuestas.
 
-Con su consentimiento tácito, también podremos enviarle encuestas de satisfacción e información sobre precios de compra de material. Si no lo desea, escriba a {{CORREO_PRIVACIDAD}}; su negativa no afecta el servicio.
-
-Puede ejercer sus derechos de acceso, rectificación, cancelación y oposición, revocar su consentimiento o limitar el uso de sus datos en {{CORREO_PRIVACIDAD}}.
+Si usted es contacto de un cliente, tratamos sus datos con su consentimiento tácito. Puede revocarlo, ejercer sus derechos de acceso, rectificación, cancelación y oposición o limitar el uso de sus datos escribiendo a {{CORREO_PRIVACIDAD}}.
 
 Consulte el aviso de privacidad integral en {{URL_AVISO}} o pídalo en nuestro domicilio.
 
@@ -18,4 +16,4 @@ Consulte el aviso de privacidad integral en {{URL_AVISO}} o pídalo en nuestro d
 
 ## Versión corta para mensaje de WhatsApp
 
-> {{NOMBRE_COMERCIAL}} usa sus datos de contacto y los de su establecimiento solo para programar y atender sus recolecciones. Si no desea recibir encuestas ni precios, o quiere ejercer sus derechos sobre sus datos, escriba a {{CORREO_PRIVACIDAD}}. Aviso completo: {{URL_AVISO}}
+> Aviso de privacidad de {{RAZON_SOCIAL}}, {{DOMICILIO}}: usamos sus datos de contacto y los de su establecimiento solo para programar y atender sus recolecciones; no los usamos para publicidad. Para ejercer sus derechos, revocar su consentimiento o limitar el uso de sus datos: {{CORREO_PRIVACIDAD}}. Aviso completo: {{URL_AVISO}}

@@ -5,15 +5,15 @@ Piloto de un asistente de logística para una recicladora de cartón. Lo desarro
 ## Leer antes de cambiar algo
 
 1. `docs/superpowers/specs/2026-10-07-recycling-solution-piloto-design.md` (revisión 2): qué debe hacer el sistema.
-2. `docs/superpowers/plans/2026-10-13-plan-1-v2-fundaciones-y-crm.md`: contratos (§3) y tareas con responsable (§4).
+2. El plan vigente en `docs/superpowers/plans/` (contratos y tareas con responsable). Plan 1: `2026-10-13-plan-1-v2-…`; Plan 2: `2026-10-14-plan-2-…`; Plan 3: `2026-10-14-plan-3-…`.
 3. `docs/guia-de-auditoria.md`: invariantes que siempre deben cumplirse.
 
 ## Responsables (especificación §15)
 
 | Responsable | Carpetas |
 |---|---|
-| Claude | Archivos raíz, `package*.json`, Docker y Compose, `infra/`, `src/datos`, `drizzle/`, `src/seguridad`, `src/acciones`, `src/consultas`, `src/components/sesion`, `src/components/ui`, `src/app/layout.tsx`, `src/app/page.tsx`, `src/app/entrar`, `src/app/sin-acceso`, `src/app/api`, `scripts/`, `e2e/ayudas` |
-| Codex | `src/dominio`, `src/app/despacho`, `src/components/clientes`, `e2e/*.spec.ts` funcionales del CRM |
+| Claude | Archivos raíz, `package*.json`, Docker y Compose, `infra/`, `src/datos`, `drizzle/`, `src/seguridad`, `src/acciones`, `src/consultas`, `src/components/sesion`, `src/components/ui`, `src/components/admin`, `src/app/layout.tsx`, `src/app/page.tsx`, `src/app/entrar`, `src/app/sin-acceso`, `src/app/admin`, `src/app/aviso-de-privacidad`, `src/app/api`, `scripts/` (salvo `simular.mts`), `docs/legal`, `e2e/ayudas`, `e2e/autenticacion.spec.ts`, `e2e/admin.spec.ts` |
+| Codex | `src/dominio`, `src/motor`, `src/app/despacho`, `src/components/clientes`, `src/components/flota`, `src/components/solicitudes`, `scripts/simular.mts`, `docs/simulacion/`, `e2e/*.spec.ts` funcionales (CRM, flota, solicitudes) |
 
 - No se editan archivos del otro. Si hace falta un cambio ahí, se pide.
 - Cambiar un contrato de §3 del plan requiere acuerdo de ambos y un commit que actualice el plan.

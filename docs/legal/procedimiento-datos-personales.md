@@ -8,7 +8,7 @@ Documento interno de **{{RAZON_SOCIAL}}**. Describe cómo cumple la empresa lo q
 - **Suplente:** {{NOMBRE_SUPLENTE}}.
 - **Funciones:**
   - Recibir y responder solicitudes ARCO, de revocación y de limitación.
-  - Llevar el registro de exclusión.
+  - Llevar el registro de limitaciones.
   - Coordinar la respuesta a vulneraciones.
   - Mantener vigente el aviso de privacidad.
   - Capacitar al personal.
@@ -31,12 +31,14 @@ Documento interno de **{{RAZON_SOCIAL}}**. Describe cómo cumple la empresa lo q
 - **Acceso:** exportar la ficha del cliente o los datos del operador y entregar una copia simple.
 - **Rectificación:** corregir la ficha. La bitácora registra qué campos cambiaron.
 - **Cancelación:** desactivar al cliente y bloquear sus datos durante el plazo de conservación; al terminar ese plazo, suprimirlos. Si hay obligaciones legales pendientes, aplicar el artículo 25.
-- **Oposición o limitación:** inscribir a la persona en el registro de exclusión para las finalidades secundarias.
-- **Revocación del aviso:** registrar el retiro en la sección "Aviso de privacidad" de la ficha. El historial se conserva y el cliente queda bloqueado para nuevas recolecciones mientras no haya una aceptación vigente.
+- **Oposición o limitación:** anotar la limitación en el registro de limitaciones (por ejemplo, contactar solo por llamada). Si es un contacto de cliente que se opone al tratamiento, se procede como en la revocación.
+- **Revocación de un contacto de cliente:** registrar el retiro en la sección "Aviso de privacidad" de la ficha. El historial se conserva. Pedir al cliente que designe otro contacto y darle a conocer el aviso. Mientras no lo haya, el cliente queda bloqueado para programar recolecciones.
 
-## 3. Registro de exclusión
+## 3. Registro de limitaciones
 
-Lista de personas que no quieren recibir encuestas ni información comercial. Contiene nombre, medio de contacto, fecha y finalidad excluida. Antes de cualquier envío comercial o encuesta, se revisa esta lista.
+Lista de personas que pidieron limitar el uso de sus datos; por ejemplo, ser contactadas solo por llamada. Contiene nombre, fecha y limitación. El despachador la consulta antes de contactar.
+
+En el piloto no hay finalidades secundarias (encuestas ni promociones). Si se agregan, requieren una versión nueva del aviso y el consentimiento de cada persona.
 
 ## 4. Vulneraciones de seguridad (artículo 19)
 
@@ -61,8 +63,8 @@ Lista de personas que no quieren recibir encuestas ni información comercial. Co
 
 | Tipo | Medidas |
 |---|---|
-| Administrativas | Confidencialidad firmada por todo el personal con acceso. Altas y bajas de usuarios el mismo día en que alguien entra o sale. Capacitación anual. |
-| Técnicas | Las que describe la especificación del sistema (§10):<br>• roles y permisos;<br>• contraseñas cifradas;<br>• límite de intentos de acceso;<br>• HTTPS;<br>• bitácora;<br>• base de datos con usuarios de privilegios mínimos;<br>• respaldos diarios y prueba de restauración. |
+| Administrativas | Confidencialidad firmada por todo el personal con acceso. Registro de entrega del aviso a operadores y usuarios. Acuerdos con los proveedores que alojan datos (hospedaje y respaldos). Altas y bajas de usuarios el mismo día en que alguien entra o sale. Capacitación anual. |
+| Técnicas | Las que describe la especificación del sistema (§10):<br>• roles y permisos;<br>• hash de contraseñas;<br>• límite de intentos de acceso;<br>• HTTPS;<br>• bitácora;<br>• base de datos con usuarios de privilegios mínimos;<br>• respaldos diarios y prueba de restauración. |
 | Físicas | Equipo de despacho con bloqueo de pantalla. Documentos en papel bajo llave. Respaldos fuera del servidor y protegidos. |
 
 ## 6. Confidencialidad (artículo 20)

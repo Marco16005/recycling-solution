@@ -43,7 +43,7 @@ Detalle en `2026-10-14-plan-2-flota-solicitudes-y-administracion.md` (amplía lo
 
 Detalle en `2026-10-14-plan-3-motor-de-ruteo.md`. Codex lo desarrolla en paralelo con el Plan 2.
 
-- `src/motor`: tipos `EntradaPlan` y `Plan`, modelo de traslado, filtro, orden FIFO, k-means++ con semilla, admisión FIFO global con inserción factible, viajes, validación final independiente, comparación contra el método actual, `reasignarPendientes` y modo simulación (especificación §8).
+- `src/motor`: tipos `EntradaPlan` y `Plan`, modelo de traslado, filtro, orden FIFO, k-means++ con semilla, admisión FIFO global con inserción factible, viajes, validación final independiente, comparación contra el método actual, re-ruteo con el mismo `generarPlan`, traza de decisiones y modo simulación (especificación §8 y Plan 3).
 - Datos semilla sintéticos: 30 clientes alrededor de El Marqués, 5 unidades, 40 solicitudes.
 - Aceptación: pasan las propiedades de la especificación §8 con fast-check (cada solicitud termina en una sola categoría con motivo; ninguna bloqueada se rutea; se respetan capacidad, turno y ventanas; ninguna admitida queda pospuesta mientras una más reciente se rutea, salvo inviabilidad física registrada; misma semilla, mismo plan) y los casos límite definidos; 60 solicitudes con 15 unidades se resuelven en menos de 1 s; la simulación produce el comparativo de kilómetros y minutos contra el método actual, que alimenta la Sección 8 del Documento Integrador.
 
