@@ -37,8 +37,12 @@ function segundosUtc(iso: string): number {
  * Con ventanas que limitan el inicio, empezar antes nunca perjudica una visita posterior.
  * No importa admisión, orden, zonas ni sus auxiliares.
  */
-export function validarPlan(entrada: EntradaPlan, plan: Plan): string[] {
+export function validarPlan(entrada: EntradaPlan, plan: Plan, opciones?: { ajustadoAMano: boolean }): string[] {
+  // El modo manual completo se implementa en P1; se conserva el oráculo del Plan 3.
   const errores: string[] = [];
+  if (!opciones?.ajustadoAMano && plan.pospuestas.some(s => s.motivo === "pospuesta_a_mano")) {
+    errores.push("Posposición manual en un plan automático");
+  }
   const p = entrada.parametros;
   const porId = new Map(entrada.solicitudes.map(s => [s.id, s]));
   const flota = [...entrada.unidades].sort((a, b) => texto(a.id, b.id));

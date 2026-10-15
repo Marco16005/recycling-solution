@@ -4,6 +4,19 @@ import { entrada, solicitud, unidad } from "./ejemplos.test-datos";
 import type { Plan } from "./tipos";
 
 describe("Validador independiente ante planes manipulados", () => {
+  it("con opciones false conserva la validación automática", () => {
+    const e = entrada();
+    const p = generarPlan(e);
+    expect(validarPlan(e, p, { ajustadoAMano: false })).toEqual([]);
+    p.resumen.ruteadas++;
+    expect(validarPlan(e, p, { ajustadoAMano: false })).toEqual(validarPlan(e, p));
+  });
+  it.each([undefined, { ajustadoAMano: false }])("rechaza pospuesta_a_mano en modo automático con %j", opciones => {
+    const e = entrada([solicitud("s")], []);
+    const p = generarPlan(e);
+    p.pospuestas[0].motivo = "pospuesta_a_mano";
+    expect(validarPlan(e, p, opciones)).toContain("Posposición manual en un plan automático");
+  });
   it.each([false, true])("detecta posposición falsa con viaje existente=%s", existente => {
     const anteriores = existente ? [solicitud("a")] : [];
     const e = entrada([...anteriores, solicitud("b")]);
