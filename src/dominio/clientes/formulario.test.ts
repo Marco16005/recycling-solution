@@ -25,3 +25,18 @@ describe("valores del formulario de cliente", () => {
     expect(clienteSchema.safeParse(entrada).success).toBe(true);
   });
 });
+
+it("copia los tipos del catálogo y normaliza documentos antiguos sin mutar la ficha", () => {
+  const documento = { nombre: "Documento sintético", obligatorio: true, estado: "vigente" as const, venceEl: null };
+  const cliente: ClienteGuardado = {
+    ...clienteNuevo(), id: "00000000-0000-4000-8000-000000000001", version: 1,
+    nombre: "Cliente sintético", privacidad: null,
+    documentos: [documento, { ...documento, tipoDocumentoId: "contrato_servicio" }],
+  };
+  const entrada = aEntrada(cliente);
+  expect(entrada.documentos.map((d) => d.tipoDocumentoId)).toEqual([null, "contrato_servicio"]);
+  expect(cliente.documentos[0]).not.toHaveProperty("tipoDocumentoId");
+  expect(entrada.documentos[1]).not.toBe(cliente.documentos[1]);
+  expect(clienteSchema.parse(entrada)).toEqual(entrada);
+  expect(clienteNuevo().documentos).toEqual([]);
+});

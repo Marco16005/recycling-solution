@@ -3,13 +3,15 @@ import type { EntradaPlan, Plan, RutaPlan, SolicitudMotor, UnidadMotor, ViajePla
 
 /** Comparación estructural sin depender del orden de las claves de un objeto. */
 function iguales(a: unknown, b: unknown): boolean {
-  if (typeof a === "number" && typeof b === "number") return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= 1e-8;
+  if (typeof a === "number" && typeof b === "number")
+    return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= 1e-8;
   if (a === b) return true;
   if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
   if (Array.isArray(a) !== Array.isArray(b)) return false;
   const x = a as Record<string, unknown>;
   const y = b as Record<string, unknown>;
-  return Object.keys(x).length === Object.keys(y).length && Object.keys(x).every(k => Object.hasOwn(y, k) && iguales(x[k], y[k]));
+  return Object.keys(x).length === Object.keys(y).length
+    && Object.keys(x).every(k => Object.hasOwn(y, k) && iguales(x[k], y[k]));
 }
 
 const texto = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
@@ -25,7 +27,8 @@ function segundosUtc(iso: string): number {
   const enEra = anio - era * 400;
   const dias = era * 146097 + enEra * 365 + Math.floor(enEra / 4) - Math.floor(enEra / 100)
     + Math.floor((153 * (mes + (mes > 2 ? -3 : 9)) + 2) / 5) + Number(dd) - 1;
-  const desfase = zona === "Z" ? 0 : (zona[0] === "-" ? -1 : 1) * (Number(zona.slice(1, 3)) * 3600 + Number(zona.slice(4)) * 60);
+  const desfase = zona === "Z" ? 0
+    : (zona[0] === "-" ? -1 : 1) * (Number(zona.slice(1, 3)) * 3600 + Number(zona.slice(4)) * 60);
   return dias * 86400 + Number(hh) * 3600 + Number(mi) * 60 + Number(ss) - desfase;
 }
 
@@ -43,7 +46,8 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan): string[] {
   if (porId.size !== entrada.solicitudes.length) errores.push("Entrada con solicitudes repetidas");
   if (unidades.size !== flota.length) errores.push("Entrada con unidades repetidas");
   if (plan.versionMotor !== "1.0.0") errores.push("Versión de motor desconocida");
-  const bloqueada = (s: SolicitudMotor) => s.cargaKg > s.tiposUnidadAdmitidos.reduce((max, t) => Math.max(max, p.capacidadMaximaPorTipoKg[t]), 0);
+  const bloqueada = (s: SolicitudMotor) => s.cargaKg
+    > s.tiposUnidadAdmitidos.reduce((max, t) => Math.max(max, p.capacidadMaximaPorTipoKg[t]), 0);
 
   function reconstruir(u: UnidadMotor, secuencias: string[][]): RutaPlan | undefined {
     let disponible = Math.max(entrada.instanteMin, p.turnoInicioMin, u.libreDesdeMin);
@@ -66,7 +70,8 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan): string[] {
         for (const ventana of s.ventanas) {
           const candidato = Math.max(llegada, ventana.inicioMin);
           if (candidato <= ventana.finMin && (candidato < inicio || (candidato === inicio && (!ventanaElegida
-            || ventana.inicioMin < ventanaElegida.inicioMin || (ventana.inicioMin === ventanaElegida.inicioMin && ventana.finMin < ventanaElegida.finMin))))) {
+            || ventana.inicioMin < ventanaElegida.inicioMin
+            || (ventana.inicioMin === ventanaElegida.inicioMin && ventana.finMin < ventanaElegida.finMin))))) {
             inicio = candidato;
             ventanaElegida = ventana;
           }
@@ -74,7 +79,8 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan): string[] {
         if (!ventanaElegida) return;
         disponible = inicio + s.tiempoServicioMin;
         v.paradas.push({ solicitudId: id, secuencia: v.paradas.length + 1, kmDesdeAnterior: distancia,
-          llegadaMin: llegada, esperaMin: inicio - llegada, inicioServicioMin: inicio, finServicioMin: disponible, ventana: { ...ventanaElegida } });
+          llegadaMin: llegada, esperaMin: inicio - llegada, inicioServicioMin: inicio, finServicioMin: disponible,
+          ventana: { ...ventanaElegida } });
         v.km += distancia;
         lugar = s.ubicacion;
       }
@@ -119,7 +125,8 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan): string[] {
     if (!s) { errores.push(`Solicitud desconocida en traza: ${decision.solicitudId}`); continue; }
     if (fifo[i]?.id !== s.id) errores.push(`Orden FIFO incorrecto en decisión ${i + 1}`);
     if (decision.resultado === "bloqueada") {
-      if (!bloqueada(s) || decision.motivo !== "carga_mayor_a_capacidad_compatible") errores.push(`Bloqueo injustificado: ${s.id}`);
+      if (!bloqueada(s) || decision.motivo !== "carga_mayor_a_capacidad_compatible")
+        errores.push(`Bloqueo injustificado: ${s.id}`);
       bloqueadas.push({ solicitudId: s.id, motivo: decision.motivo });
       continue;
     }
@@ -132,7 +139,8 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan): string[] {
       else estado = estado.map((anterior, j) => j === indice ? ruta : anterior);
     } else {
       const compatibles = flota.filter(u => s.tiposUnidadAdmitidos.includes(u.tipo));
-      const motivo = !flota.length ? "sin_unidades_disponibles" : !compatibles.length ? "sin_unidad_compatible" : "sin_cupo";
+      const motivo = !flota.length ? "sin_unidades_disponibles"
+        : !compatibles.length ? "sin_unidad_compatible" : "sin_cupo";
       if (decision.motivo !== motivo) errores.push(`Motivo de posposición incorrecto: ${s.id}`);
       let factible = false;
       for (const ruta of estado) {
@@ -147,17 +155,22 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan): string[] {
       if (factible) errores.push(`FIFO: ${s.id} fue pospuesta teniendo una inserción factible`);
       const d = decision.diagnostico;
       if (!d || Object.values(d).some(n => !Number.isInteger(n) || n < 0)
-        || (motivo === "sin_cupo" && d.capacidad + d.ventana + d.finDeTurno <= 0)) errores.push(`Diagnóstico inválido: ${s.id}`);
+        || (motivo === "sin_cupo" && d.capacidad + d.ventana + d.finDeTurno <= 0))
+        errores.push(`Diagnóstico inválido: ${s.id}`);
       pospuestas.push({ solicitudId: s.id, motivo: decision.motivo, diagnostico: motivo === "sin_cupo" ? d : null });
     }
   }
-  if (!iguales(estado, plan.rutas)) errores.push("Las rutas finales no coinciden con la reconstrucción factible de la traza (horarios, ventanas, capacidad o secuencias)");
+  if (!iguales(estado, plan.rutas)) errores.push(
+    "Las rutas finales no coinciden con la reconstrucción factible de la traza "
+    + "(horarios, ventanas, capacidad o secuencias)"
+  );
   if (!iguales(pospuestas, plan.pospuestas)) errores.push("Pospuestas inconsistentes con la traza");
   if (!iguales(bloqueadas, plan.bloqueadas)) errores.push("Bloqueadas inconsistentes con la traza");
 
   const apariciones = new Map<string, number>();
   const contar = (id: string) => apariciones.set(id, (apariciones.get(id) ?? 0) + 1);
-  const resumen: Plan["resumen"] = { ruteadas: 0, pospuestas: plan.pospuestas.length, bloqueadas: plan.bloqueadas.length,
+  const resumen: Plan["resumen"] = {
+    ruteadas: 0, pospuestas: plan.pospuestas.length, bloqueadas: plan.bloqueadas.length,
     km: 0, minutosTraslado: 0, kmMetodoActual: 0, minutosTrasladoMetodoActual: 0 };
   const rutasVistas = new Set<string>();
   for (const ruta of plan.rutas) {
@@ -172,7 +185,9 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan): string[] {
         resumen.ruteadas++;
         const s = porId.get(parada.solicitudId);
         if (!s) continue;
-        resumen.minutosTraslado += minutosDeTraslado(distanciaKm(origen, s.ubicacion, p.factorCircuidad), p.velocidadKmh);
+        resumen.minutosTraslado += minutosDeTraslado(
+          distanciaKm(origen, s.ubicacion, p.factorCircuidad), p.velocidadKmh
+        );
         origen = s.ubicacion;
         const km = distanciaKm(p.patio, s.ubicacion, p.factorCircuidad);
         resumen.kmMetodoActual += 2 * km;
