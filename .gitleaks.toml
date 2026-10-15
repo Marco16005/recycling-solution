@@ -7,3 +7,8 @@ useDefault = true
 description = "Secretos sintéticos de pruebas"
 regexTarget = "match"
 regexes = ['''secreto-de-pruebas?(-e2e)?-de-al-menos-32-caracteres''']
+
+[[allowlists]]
+description = "Contraseña equivocada a propósito en la comprobación del límite de intentos (docs/operacion.md §9)"
+regexTarget = "match"
+regexes = ['''clave-equivocada-123''']
