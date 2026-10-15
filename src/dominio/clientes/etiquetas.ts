@@ -75,4 +75,6 @@ export const ETIQUETA_ESTADO_SOLICITUD: Record<EstadoSolicitud, string> = {
   cancelada: "Cancelada",
   atendida: "Atendida",
   no_atendida: "No atendida",
+  programada: "Programada",
+  en_ruta: "En ruta",
 };

@@ -3,8 +3,7 @@ import type { MotivoBloqueo } from "../clientes/habilitacion";
 export const CANALES = ["telefono", "whatsapp", "correo", "presencial", "otro"] as const;
 export type Canal = (typeof CANALES)[number];
 
-/** programada y en_ruta los agrega el Plan 4. */
-export const ESTADOS_SOLICITUD = ["pendiente", "cancelada", "atendida", "no_atendida"] as const;
+export const ESTADOS_SOLICITUD = ["pendiente", "cancelada", "atendida", "no_atendida", "programada", "en_ruta"] as const;
 export type EstadoSolicitud = (typeof ESTADOS_SOLICITUD)[number];
 
 /** Fechas "AAAA-MM-DD" (calendario de Ciudad de México). registradaEn es inmutable y es la llave FIFO. */
@@ -34,8 +33,8 @@ export interface SolicitudEntrada {
   capturaInicioEn: Date | null;
 }
 
-/** lista: se puede planear hoy. bloqueada: algo del cliente lo impide. futura: aún no es su fecha. cerrada: cancelada, atendida o no atendida. */
-export type EstadoEnCola = "lista" | "bloqueada" | "futura" | "cerrada";
+/** lista: se puede planear hoy. bloqueada: algo del cliente lo impide. futura: aún no es su fecha. programada: asignada o en ruta. cerrada: cancelada, atendida o no atendida. */
+export type EstadoEnCola = "lista" | "bloqueada" | "futura" | "cerrada" | "programada";
 
 export interface ElementoCola {
   solicitud: SolicitudGuardada;

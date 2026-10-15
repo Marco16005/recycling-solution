@@ -57,6 +57,7 @@ export function colaDelDia(
   return ordenFifo(solicitudes).map((solicitud): ElementoCola => {
     const atraso = diasDeAtraso(solicitud, hoy, diasOperacion);
     const base = { solicitud, diasDeAtraso: atraso, atrasada: false, motivos: [] };
+    if (solicitud.estado === "programada" || solicitud.estado === "en_ruta") return { ...base, estado: "programada" };
     if (solicitud.estado !== "pendiente") return { ...base, estado: "cerrada" };
     if (solicitud.proximaFechaElegible > hoy) return { ...base, estado: "futura" };
     const cliente = clientes.get(solicitud.clienteId);
