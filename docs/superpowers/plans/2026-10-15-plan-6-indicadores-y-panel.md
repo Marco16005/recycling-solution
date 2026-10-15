@@ -100,8 +100,8 @@ panel(ctx, desde: unknown, hasta: unknown): Promise<Resultado<VistaPanel>>
 | I0 | Ambos | Contratos compilables de §3 y migración `0007` |
 | I1 | Claude (reasignado el 2026-10-15: Codex sin cuota; Codex lo revisa) | `src/indicadores`, con valores calculados a mano. Casos borde: viaje sin completadas, datos faltantes, anterior no atendida, re-ruteo con viaje congelado, asignación antes de la disponibilidad (espera 0), llegar antes y esperar dentro de la ventana, y servicio iniciado antes de que abra |
 | I2 | Claude | Extracción a `RecoleccionMedida` y `ViajeMedido` (una consulta por rango, en una instantánea), conteos de K3, instantánea de K5 y su script, línea base de K2 y CSV con su permiso, con pruebas de integración |
-| I3 | Codex | Panel con tarjetas contra la línea base, tendencia, muestras, rango y botón de CSV. Tablas accesibles, no solo gráficas |
-| I4 | Codex escribe, Claude ejecuta | e2e del día sintético, con los valores esperados en el panel y el CSV |
+| I3 | Claude (reasignado el 2026-10-15; Codex lo revisa) | Panel con tarjetas contra la línea base, tendencia, muestras, rango y botón de CSV. Tablas accesibles, no solo gráficas |
+| I4 | Claude (reasignado el 2026-10-15; Codex lo revisa y amplía con un día operado) | e2e del día sintético, con los valores esperados en el panel y el CSV |
 | I5 | Ambos | Revisión cruzada, `verificar-todo.sh` y trazabilidad (§16) |
 
 ## 5. Respuesta a la revisión de Codex (2026-10-15)
