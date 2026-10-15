@@ -147,7 +147,9 @@ COMPOSE_PROFILES=caddy
 
 ### Modo B: el punto de venta ya usa 80 y 443 con su proxy
 
-Dejar `COMPOSE_PROFILES` vacío. La aplicación queda solo en `127.0.0.1:3001` (`PUERTO_WEB_LOCAL`) y el proxy existente le envía el tráfico de su nombre. Ejemplo para nginx (el proxy debe pasar la IP real del cliente, que usa el límite de intentos de entrada):
+Dejar `COMPOSE_PROFILES` vacío. La aplicación queda solo en `127.0.0.1:3001` (`PUERTO_WEB_LOCAL`) y el proxy existente le envía el tráfico de su nombre.
+
+**Importante para la seguridad:** el límite de 5 intentos de entrada por minuto se cuenta por la IP que llega en `X-Forwarded-For`. El proxy debe **reemplazar** ese encabezado con la IP real del cliente, nunca agregarla al que trae la petición. Con `$proxy_add_x_forwarded_for`, un atacante podría inventar una IP distinta en cada intento y saltarse el límite. Ejemplo correcto para nginx:
 
 ```nginx
 server {
@@ -155,14 +157,27 @@ server {
     location / {
         proxy_pass http://127.0.0.1:3001;
         proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # Reemplaza (no agrega) la IP del cliente: el límite de intentos depende de ella.
+        proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
     # El certificado lo emite el mismo proxy, por ejemplo: sudo certbot --nginx -d 203-0-113-25.sslip.io
 }
 ```
 
-Si el proxy existente es Caddy, basta con un bloque `203-0-113-25.sslip.io { reverse_proxy 127.0.0.1:3001 }`. Antes de tocar el proxy del punto de venta, respaldar su configuración y coordinar con quien lo administra.
+Si el proxy existente es Caddy, basta con un bloque `203-0-113-25.sslip.io { reverse_proxy 127.0.0.1:3001 }`: Caddy ignora el `X-Forwarded-For` de los clientes y pone la IP real, salvo que tenga configurado `trusted_proxies`. Antes de tocar el proxy del punto de venta, respaldar su configuración y coordinar con quien lo administra.
+
+**Comprobación obligatoria** en cualquiera de los dos modos: seis intentos de entrada con una IP falsa distinta en cada uno. El sexto debe responder `429`:
+
+```bash
+for i in 1 2 3 4 5 6; do
+  curl -s -o /dev/null -w "%{http_code} " -X POST https://203-0-113-25.sslip.io/api/auth/sign-in/email \
+    -H 'content-type: application/json' -H 'origin: https://203-0-113-25.sslip.io' \
+    -H "X-Forwarded-For: 10.0.0.$i" -d '{"email":"nadie@ejemplo.mx","password":"clave-equivocada-123"}'
+done; echo   # esperado: 401 401 401 401 401 429
+```
+
+Si los seis responden `401`, el proxy está pasando la IP falsa: corregir su configuración antes de abrir el sistema. Comprobado el 2026-10-15 con el modo A (Caddy): `401 401 401 401 401 429`. La aplicación misma escucha solo en `127.0.0.1`, así que desde fuera del servidor no se puede llegar a ella sin pasar por el proxy.
 
 ### Construir la imagen sin cargar el VPS
 
