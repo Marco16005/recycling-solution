@@ -38,7 +38,7 @@ function segundosUtc(iso: string): number {
  * No importa admisión, orden, zonas ni sus auxiliares.
  */
 export function validarPlan(entrada: EntradaPlan, plan: Plan, opciones?: { ajustadoAMano: boolean }): string[] {
-  // El modo manual completo se implementa en P1; se conserva el oráculo del Plan 3.
+  const manual = opciones?.ajustadoAMano === true;
   const errores: string[] = [];
   if (!opciones?.ajustadoAMano && plan.pospuestas.some(s => s.motivo === "pospuesta_a_mano")) {
     errores.push("Posposición manual en un plan automático");
@@ -100,76 +100,123 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan, opciones?: { ajust
     return { unidadId: u.id, viajes };
   }
 
-  // La reconstrucción inicia con las descargas obligatorias, incluso sin decisiones.
-  let estado: RutaPlan[] = flota.map(u => {
-    const ruta = reconstruir(u, u.cargaActualKg > 0 ? [[]] : []);
-    if (!ruta) errores.push(`Estado inicial inviable de ${u.id}`);
-    return ruta ?? { unidadId: u.id, viajes: [] };
-  });
-  const fifo = [...entrada.solicitudes].sort((a, b) => segundosUtc(a.registradaEn) - segundosUtc(b.registradaEn)
-    || texto(a.folio, b.folio) || texto(a.id, b.id));
-  if (fifo.some(s => !Number.isFinite(segundosUtc(s.registradaEn)))) errores.push("Registro ISO inválido");
-  if (plan.traza.length !== fifo.length) errores.push("La traza no tiene una decisión por solicitud");
-  const pospuestas: Plan["pospuestas"] = [];
-  const bloqueadas: Plan["bloqueadas"] = [];
-
-  function insertar(ruta: RutaPlan, s: SolicitudMotor, viaje: number, posicion: number): RutaPlan | undefined {
-    const u = unidades.get(ruta.unidadId);
-    if (!u || !s.tiposUnidadAdmitidos.includes(u.tipo)) return;
-    const listas = ruta.viajes.map(v => v.paradas.map(parada => parada.solicitudId));
-    if (!Number.isInteger(viaje) || viaje < 0 || viaje > listas.length) return;
-    if (viaje === listas.length) listas.push([]);
-    if (!Number.isInteger(posicion) || posicion < 0 || posicion > listas[viaje].length) return;
-    listas[viaje] = [...listas[viaje].slice(0, posicion), s.id, ...listas[viaje].slice(posicion)];
-    return reconstruir(u, listas);
-  }
-
-  for (const [i, decision] of plan.traza.entries()) {
-    const s = porId.get(decision.solicitudId);
-    if (!s) { errores.push(`Solicitud desconocida en traza: ${decision.solicitudId}`); continue; }
-    if (fifo[i]?.id !== s.id) errores.push(`Orden FIFO incorrecto en decisión ${i + 1}`);
-    if (decision.resultado === "bloqueada") {
-      if (!bloqueada(s) || decision.motivo !== "carga_mayor_a_capacidad_compatible")
-        errores.push(`Bloqueo injustificado: ${s.id}`);
-      bloqueadas.push({ solicitudId: s.id, motivo: decision.motivo });
-      continue;
+  if (entrada.solicitudes.some(s => !Number.isFinite(segundosUtc(s.registradaEn)))) errores.push("Registro ISO inválido");
+  if (manual) {
+    const fechaValida = (fecha: string) => {
+      const ms = Date.parse(`${fecha}T00:00:00Z`);
+      return /^\d{4}-\d{2}-\d{2}$/.test(fecha) && Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === fecha;
+    };
+    if (!fechaValida(entrada.fecha)) errores.push("Fecha del plan inválida");
+    for (const s of entrada.solicitudes) {
+      const partes = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)(Z|[+-]\d{2}:\d{2})$/.exec(s.registradaEn);
+      if (!partes || !fechaValida(partes[1]) || Number(partes[2]) > 23 || Number(partes[3]) > 59
+        || Number(partes[4]) >= 60 || (partes[5] !== "Z" && (Number(partes[5].slice(1, 3)) > 23 || Number(partes[5].slice(4)) > 59)))
+        errores.push(`Registro ISO inválido: ${s.id}`);
     }
-    if (bloqueada(s)) errores.push(`Solicitud físicamente bloqueada sin bloqueo: ${s.id}`);
-    if (!iguales(decision.rutasAntes, estado)) errores.push(`La traza altera rutas anteriores a ${s.id}`);
-    if (decision.resultado === "admitida") {
-      const indice = estado.findIndex(r => r.unidadId === decision.unidadId);
-      const ruta = indice < 0 ? undefined : insertar(estado[indice], s, decision.viaje - 1, decision.secuencia - 1);
-      if (!ruta) errores.push(`Admisión no factible: ${s.id}`);
-      else estado = estado.map((anterior, j) => j === indice ? ruta : anterior);
-    } else {
-      const compatibles = flota.filter(u => s.tiposUnidadAdmitidos.includes(u.tipo));
-      const motivo = !flota.length ? "sin_unidades_disponibles"
-        : !compatibles.length ? "sin_unidad_compatible" : "sin_cupo";
-      if (decision.motivo !== motivo) errores.push(`Motivo de posposición incorrecto: ${s.id}`);
-      let factible = false;
-      for (const ruta of estado) {
-        for (let v = 0; v <= ruta.viajes.length && !factible; v++) {
-          const longitud = ruta.viajes[v]?.paradas.length ?? 0;
-          for (let lugar = 0; lugar <= longitud; lugar++) {
-            if (insertar(ruta, s, v, lugar)) { factible = true; break; }
-          }
-        }
-        if (factible) break;
+    for (const item of plan.bloqueadas) {
+      const s = porId.get(item.solicitudId);
+      if (!s || !bloqueada(s) || item.motivo !== "carga_mayor_a_capacidad_compatible")
+        errores.push(`Bloqueo injustificado: ${item.solicitudId}`);
+    }
+    for (const item of plan.pospuestas) {
+      const s = porId.get(item.solicitudId);
+      if (!s || bloqueada(s)) {
+        errores.push(`Pospuesta desconocida o físicamente bloqueada: ${item.solicitudId}`);
+        continue;
       }
-      if (factible) errores.push(`FIFO: ${s.id} fue pospuesta teniendo una inserción factible`);
-      const d = decision.diagnostico;
-      if (!d || Object.values(d).some(n => !Number.isInteger(n) || n < 0)
-        || (motivo === "sin_cupo" && d.capacidad + d.ventana + d.finDeTurno <= 0))
-        errores.push(`Diagnóstico inválido: ${s.id}`);
-      pospuestas.push({ solicitudId: s.id, motivo: decision.motivo, diagnostico: motivo === "sin_cupo" ? d : null });
+      const compatibles = flota.some(u => s.tiposUnidadAdmitidos.includes(u.tipo));
+      switch (item.motivo) {
+        case "sin_unidades_disponibles":
+          if (flota.length) errores.push(`Hay unidades disponibles: ${s.id}`);
+          break;
+        case "sin_unidad_compatible":
+          if (!flota.length || compatibles) errores.push(`Motivo de compatibilidad incorrecto: ${s.id}`);
+          break;
+        case "pospuesta_a_mano": break;
+        case "sin_cupo": {
+          const d = item.diagnostico;
+          const campos = ["capacidad", "ventana", "finDeTurno", "afectaAOtra"] as const;
+          if (!d || Object.keys(d).length !== campos.length
+            || campos.some(c => !Number.isInteger(d[c]) || d[c] < 0)
+            || d.capacidad + d.ventana + d.finDeTurno <= 0)
+            errores.push(`Diagnóstico inválido: ${s.id}`);
+          break;
+        }
+        default: errores.push(`Motivo de posposición incorrecto: ${s.id}`);
+      }
+      if (item.motivo !== "sin_cupo" && item.diagnostico !== null) errores.push(`Diagnóstico debe ser null: ${s.id}`);
     }
+  } else {
+    // La reconstrucción inicia con las descargas obligatorias, incluso sin decisiones.
+    let estado: RutaPlan[] = flota.map(u => {
+      const ruta = reconstruir(u, u.cargaActualKg > 0 ? [[]] : []);
+      if (!ruta) errores.push(`Estado inicial inviable de ${u.id}`);
+      return ruta ?? { unidadId: u.id, viajes: [] };
+    });
+    const fifo = [...entrada.solicitudes].sort((a, b) => segundosUtc(a.registradaEn) - segundosUtc(b.registradaEn)
+      || texto(a.folio, b.folio) || texto(a.id, b.id));
+    if (plan.traza.length !== fifo.length) errores.push("La traza no tiene una decisión por solicitud");
+    const pospuestas: Plan["pospuestas"] = [];
+    const bloqueadas: Plan["bloqueadas"] = [];
+
+    function insertar(ruta: RutaPlan, s: SolicitudMotor, viaje: number, posicion: number): RutaPlan | undefined {
+      const u = unidades.get(ruta.unidadId);
+      if (!u || !s.tiposUnidadAdmitidos.includes(u.tipo)) return;
+      const listas = ruta.viajes.map(v => v.paradas.map(parada => parada.solicitudId));
+      if (!Number.isInteger(viaje) || viaje < 0 || viaje > listas.length) return;
+      if (viaje === listas.length) listas.push([]);
+      if (!Number.isInteger(posicion) || posicion < 0 || posicion > listas[viaje].length) return;
+      listas[viaje] = [...listas[viaje].slice(0, posicion), s.id, ...listas[viaje].slice(posicion)];
+      return reconstruir(u, listas);
+    }
+
+    for (const [i, decision] of plan.traza.entries()) {
+      const s = porId.get(decision.solicitudId);
+      if (!s) { errores.push(`Solicitud desconocida en traza: ${decision.solicitudId}`); continue; }
+      if (fifo[i]?.id !== s.id) errores.push(`Orden FIFO incorrecto en decisión ${i + 1}`);
+      if (decision.resultado === "bloqueada") {
+        if (!bloqueada(s) || decision.motivo !== "carga_mayor_a_capacidad_compatible")
+          errores.push(`Bloqueo injustificado: ${s.id}`);
+        bloqueadas.push({ solicitudId: s.id, motivo: decision.motivo });
+        continue;
+      }
+      if (bloqueada(s)) errores.push(`Solicitud físicamente bloqueada sin bloqueo: ${s.id}`);
+      if (!iguales(decision.rutasAntes, estado)) errores.push(`La traza altera rutas anteriores a ${s.id}`);
+      if (decision.resultado === "admitida") {
+        const indice = estado.findIndex(r => r.unidadId === decision.unidadId);
+        const ruta = indice < 0 ? undefined : insertar(estado[indice], s, decision.viaje - 1, decision.secuencia - 1);
+        if (!ruta) errores.push(`Admisión no factible: ${s.id}`);
+        else estado = estado.map((anterior, j) => j === indice ? ruta : anterior);
+      } else {
+        const compatibles = flota.filter(u => s.tiposUnidadAdmitidos.includes(u.tipo));
+        const motivo = !flota.length ? "sin_unidades_disponibles"
+          : !compatibles.length ? "sin_unidad_compatible" : "sin_cupo";
+        if (decision.motivo !== motivo) errores.push(`Motivo de posposición incorrecto: ${s.id}`);
+        let factible = false;
+        for (const ruta of estado) {
+          for (let v = 0; v <= ruta.viajes.length && !factible; v++) {
+            const longitud = ruta.viajes[v]?.paradas.length ?? 0;
+            for (let lugar = 0; lugar <= longitud; lugar++) {
+              if (insertar(ruta, s, v, lugar)) { factible = true; break; }
+            }
+          }
+          if (factible) break;
+        }
+        if (factible) errores.push(`FIFO: ${s.id} fue pospuesta teniendo una inserción factible`);
+        const d = decision.diagnostico;
+        if (!d || Object.values(d).some(n => !Number.isInteger(n) || n < 0)
+          || (motivo === "sin_cupo" && d.capacidad + d.ventana + d.finDeTurno <= 0))
+          errores.push(`Diagnóstico inválido: ${s.id}`);
+        pospuestas.push({ solicitudId: s.id, motivo: decision.motivo, diagnostico: motivo === "sin_cupo" ? d : null });
+      }
+    }
+    if (!iguales(estado, plan.rutas)) errores.push(
+      "Las rutas finales no coinciden con la reconstrucción factible de la traza "
+      + "(horarios, ventanas, capacidad o secuencias)"
+    );
+    if (!iguales(pospuestas, plan.pospuestas)) errores.push("Pospuestas inconsistentes con la traza");
+    if (!iguales(bloqueadas, plan.bloqueadas)) errores.push("Bloqueadas inconsistentes con la traza");
   }
-  if (!iguales(estado, plan.rutas)) errores.push(
-    "Las rutas finales no coinciden con la reconstrucción factible de la traza "
-    + "(horarios, ventanas, capacidad o secuencias)"
-  );
-  if (!iguales(pospuestas, plan.pospuestas)) errores.push("Pospuestas inconsistentes con la traza");
-  if (!iguales(bloqueadas, plan.bloqueadas)) errores.push("Bloqueadas inconsistentes con la traza");
 
   const apariciones = new Map<string, number>();
   const contar = (id: string) => apariciones.set(id, (apariciones.get(id) ?? 0) + 1);
@@ -181,6 +228,10 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan, opciones?: { ajust
     const u = unidades.get(ruta.unidadId);
     if (!u || rutasVistas.has(ruta.unidadId)) errores.push(`Unidad desconocida o repetida: ${ruta.unidadId}`);
     rutasVistas.add(ruta.unidadId);
+    if (manual && u) {
+      const reconstruida = reconstruir(u, ruta.viajes.map(v => v.paradas.map(s => s.solicitudId)));
+      if (!reconstruida || !iguales(reconstruida, ruta)) errores.push(`Ruta final no factible o inconsistente: ${ruta.unidadId}`);
+    }
     let origen = u?.ubicacionInicial ?? p.patio;
     for (const viaje of ruta.viajes) {
       resumen.km += viaje.km;
@@ -200,6 +251,9 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan, opciones?: { ajust
       resumen.minutosTraslado += minutosDeTraslado(distanciaKm(origen, p.patio, p.factorCircuidad), p.velocidadKmh);
       origen = p.patio;
     }
+  }
+  if (manual) for (const id of unidades.keys()) {
+    if (!rutasVistas.has(id)) errores.push(`Falta la ruta de la unidad: ${id}`);
   }
   for (const item of [...plan.pospuestas, ...plan.bloqueadas]) contar(item.solicitudId);
   for (const id of porId.keys()) if (apariciones.get(id) !== 1) errores.push(`Partición incorrecta: ${id}`);
