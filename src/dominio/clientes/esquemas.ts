@@ -24,6 +24,7 @@ export const ventanaSchema = z
   });
 
 export const documentoSchema = z.object({
+  tipoDocumentoId: z.string().trim().min(1, "Selecciona un tipo o usa nombre libre").nullable().default(null),
   nombre: z.string().trim().min(1, "Escribe el nombre del documento").max(120),
   obligatorio: z.boolean(),
   estado: z.enum(ESTADOS_DOCUMENTO),
@@ -69,7 +70,8 @@ export const clienteSchema = z
     }
   });
 
-export type ClienteEntrada = z.infer<typeof clienteSchema>;
+/** La entrada admite documentos anteriores sin tipo; el esquema siempre devuelve tipoDocumentoId, incluso null. */
+export type ClienteEntrada = z.input<typeof clienteSchema>;
 
 /**
  * Movimiento del aviso de privacidad que captura el despachador.

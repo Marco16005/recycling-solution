@@ -14,6 +14,13 @@ export const PERMISOS = {
   "clientes.editar": ["despachador"],
   "clientes.importar": ["despachador"],
   "usuarios.gestionar": [],
+  "flota.ver": ["despachador", "gerencia"],
+  "flota.editar": ["despachador"],
+  "jornada.gestionar": ["despachador"],
+  "solicitudes.ver": ["despachador", "gerencia"],
+  "solicitudes.registrar": ["despachador"],
+  "solicitudes.cancelar": ["despachador"],
+  "configuracion.editar": [],
 } as const satisfies Record<string, readonly Rol[]>;
 
 export type Permiso = keyof typeof PERMISOS;

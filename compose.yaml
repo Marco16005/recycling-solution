@@ -24,6 +24,10 @@ services:
   migrate:
     build: { context: ., target: dev }
     command: ["npm", "run", "migrar"]
+    # Los datos AVISO_* y PUBLICADO_POR los usa scripts/publicar-aviso.mts, que corre en este servicio.
+    env_file:
+      - path: .env
+        required: false
     environment:
       MIGRADOR_DATABASE_URL: postgres://rs_migrador:${RS_MIGRADOR_PASSWORD:-}@db:5432/recycling
     depends_on:

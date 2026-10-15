@@ -20,7 +20,7 @@ describe("repositorio de clientes", () => {
     const leido = await leerCliente(bd, id);
     expect(leido).toMatchObject({ id, version: 1, nombre: "Cartonera del Bajío", privacidad: null });
     expect(leido?.ventanas).toEqual([{ diaSemana: 1, horaInicio: "08:00", horaFin: "12:00" }]);
-    expect(leido?.documentos).toEqual([{ nombre: "SUA vigente", obligatorio: true, estado: "vigente", venceEl: "2026-12-31" }]);
+    expect(leido?.documentos).toEqual([{ nombre: "SUA vigente", obligatorio: true, estado: "vigente", venceEl: "2026-12-31", tipoDocumentoId: null }]);
   });
 
   it("actualiza solo con la versión esperada y sube la versión", async () => {

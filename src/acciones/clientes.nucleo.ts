@@ -4,6 +4,7 @@ import {
   actualizarClienteSiVersion, bloquearCliente, insertarCliente, leerCliente, tomarCandadoDeNombres,
 } from "@/datos/clientes";
 import { leerConfiguracion } from "@/datos/configuracion";
+import { leerCatalogo } from "@/datos/flota";
 import { insertarMovimientoPrivacidad, ultimoMovimientoPrivacidad } from "@/datos/privacidad";
 import { clienteSchema, erroresPorCampo, privacidadSchema } from "@/dominio/clientes/esquemas";
 import { aEntrada } from "@/dominio/clientes/formulario";
@@ -44,6 +45,14 @@ export async function guardarCliente(
   return ctx.bd.transaction(async (tx): Promise<Resultado<{ id: string; version: number }>> => {
     // Toda alta o edición puede cambiar un nombre: espera a cualquier importación en curso (y la detiene mientras dura).
     await tomarCandadoDeNombres(tx);
+    const tiposValidos = new Set((await leerCatalogo(tx, "cliente")).map((t) => t.id));
+    const ajenos = datos.documentos.flatMap((d) => {
+      const tipo = (d as { tipoDocumentoId?: string | null }).tipoDocumentoId;
+      return tipo && !tiposValidos.has(tipo) ? [tipo] : [];
+    });
+    if (ajenos.length > 0) {
+      return { ok: false, error: "invalido", campos: { documentos: [`Tipos de documento que no aplican a clientes: ${ajenos.join(", ")}`] } };
+    }
     if (id === null) {
       const nuevo = await insertarCliente(tx, datos, ctx.ahora);
       await registrarEvento(tx, { usuarioId, entidad: "cliente", entidadId: nuevo.id, accion: "crear", campos: camposCambiados(null, datos) });

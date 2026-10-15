@@ -2,13 +2,15 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { UsuarioSesion, Rol } from "@/seguridad/permisos";
 import type { BD } from "../bd";
-import { user, usuarios } from "../esquema";
+import { operadores, user, usuarios } from "../esquema";
 
 /** Usuario sintético con su identidad mínima (sin credencial), para probar acciones y consultas. */
 export async function usuarioDePrueba(bd: BD, rol: Rol, activo = true): Promise<UsuarioSesion> {
   const authUserId = randomUUID();
   await bd.insert(user).values({ id: authUserId, name: `Prueba ${rol}`, email: `${authUserId}@prueba.local`, emailVerified: true });
-  const [fila] = await bd.insert(usuarios).values({ authUserId, nombre: `Prueba ${rol}`, rol, activo }).returning();
+  const operadorId =
+    rol === "operador" ? (await bd.insert(operadores).values({ nombre: `Prueba ${rol}` }).returning({ id: operadores.id }))[0].id : null;
+  const [fila] = await bd.insert(usuarios).values({ authUserId, nombre: `Prueba ${rol}`, rol, activo, operadorId }).returning();
   return { id: fila.id, nombre: fila.nombre, rol: fila.rol, activo: fila.activo };
 }
 

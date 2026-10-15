@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { sql } from "drizzle-orm";
@@ -48,6 +48,55 @@ describe("migraciones en Postgres real", () => {
     await expect(migrar(base.urlMigrador, raiz)).rejects.toThrow(/no coincide con su archivo/);
     const tabla = await base.bd.execute(sql`SELECT to_regclass('public.prueba_pendiente') IS NOT NULL AS existe`);
     expect(filasDe(tabla)).toEqual([{ existe: false }]);
+  });
+
+  it("una base del Plan 1 con usuarios operadores migra a la versión actual sin perder identidades ni duplicar fichas", async () => {
+    base = await crearBasePostgres({ migrar: false });
+    // Copia del repositorio que llega solo hasta la última migración del Plan 1 (0002), sin los permisos posteriores.
+    const raiz = mkdtempSync(path.join(tmpdir(), "plan1-"));
+    cpSync("drizzle", path.join(raiz, "drizzle"), { recursive: true });
+    const rutaJournal = path.join(raiz, "drizzle/meta/_journal.json");
+    const copia = JSON.parse(readFileSync(rutaJournal, "utf8")) as { entries: { tag: string }[] };
+    copia.entries = copia.entries.slice(0, copia.entries.findIndex((e) => e.tag === "0002_generacion_credenciales") + 1);
+    writeFileSync(rutaJournal, JSON.stringify(copia));
+    mkdirSync(path.join(raiz, "infra/db"), { recursive: true });
+    writeFileSync(path.join(raiz, "infra/db/permisos.sql"), "SELECT 1;");
+    expect(await migrar(base.urlMigrador, raiz)).toEqual({ aplicadas: 3 });
+
+    const personas = [
+      { id: "a1", nombre: "Ana Operadora", rol: "operador", activo: true },
+      { id: "b2", nombre: "Beto Inactivo", rol: "operador", activo: false },
+      { id: "c3", nombre: "Caro Despacho", rol: "despachador", activo: true },
+    ];
+    for (const p of personas) {
+      await base.comoAdmin(`
+        INSERT INTO "user" (id, name, email, email_verified) VALUES ('auth-${p.id}', '${p.nombre}', '${p.id}@plan1.local', true);
+        INSERT INTO account (id, account_id, provider_id, user_id, password, updated_at)
+          VALUES ('cuenta-${p.id}', 'auth-${p.id}', 'credential', 'auth-${p.id}', 'hash-sintetico', now());
+        INSERT INTO usuarios (auth_user_id, nombre, rol, activo) VALUES ('auth-${p.id}', '${p.nombre}', '${p.rol}', ${p.activo});`);
+    }
+    await base.comoAdmin(`INSERT INTO session (id, expires_at, token, updated_at, user_id)
+      VALUES ('sesion-a1', now() + interval '1 day', 'token-sintetico-a1', now(), 'auth-a1')`);
+
+    expect(await migrar(base.urlMigrador)).toEqual({ aplicadas: journal.entries.length });
+    expect(await migrar(base.urlMigrador)).toEqual({ aplicadas: journal.entries.length });
+
+    const ligados = filasDe<{ auth_user_id: string; rol: string; operador: string | null }>(
+      await base.bd.execute(sql`
+        SELECT u.auth_user_id, u.rol, o.nombre AS operador
+        FROM usuarios u LEFT JOIN operadores o ON o.id = u.operador_id ORDER BY u.auth_user_id`),
+    );
+    expect(ligados).toEqual([
+      { auth_user_id: "auth-a1", rol: "operador", operador: "Ana Operadora" },
+      { auth_user_id: "auth-b2", rol: "operador", operador: "Beto Inactivo" },
+      { auth_user_id: "auth-c3", rol: "despachador", operador: null },
+    ]);
+    const conteos = filasDe(
+      await base.bd.execute(sql`
+        SELECT (SELECT count(*)::int FROM operadores) AS operadores, (SELECT count(*)::int FROM "user") AS identidades,
+               (SELECT count(*)::int FROM account) AS cuentas, (SELECT count(*)::int FROM session) AS sesiones`),
+    );
+    expect(conteos).toEqual([{ operadores: 2, identidades: 3, cuentas: 3, sesiones: 1 }]);
   });
 
   it("detecta una migración aplicada que ya no coincide con su archivo", async () => {

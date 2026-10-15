@@ -40,9 +40,15 @@ describe("permisos del rol de la aplicación (rs_app)", () => {
     expect(await errorDe(base.bd.execute(sql.raw(`DELETE FROM ${tabla}`)))).toMatch(/permission denied/);
   });
 
-  it("no puede cambiar la configuración ni agregar otra fila", async () => {
-    expect(await errorDe(base.bd.execute(sql`UPDATE configuracion SET velocidad_kmh = 40`))).toMatch(/permission denied/);
+  it("puede editar la configuración (Plan 2) pero no agregar ni borrar filas", async () => {
+    expect(await errorDe(base.bd.execute(sql`UPDATE configuracion SET velocidad_kmh = 40`))).toBe("sin error");
     expect(await errorDe(base.bd.execute(sql`INSERT INTO configuracion (id) VALUES (2)`))).toMatch(/permission denied/);
+    expect(await errorDe(base.bd.execute(sql`DELETE FROM configuracion`))).toMatch(/permission denied/);
+  });
+
+  it("no puede modificar el catálogo de documentos ni publicar avisos", async () => {
+    expect(await errorDe(base.bd.execute(sql`UPDATE tipos_documento SET nombre = 'x'`))).toMatch(/permission denied/);
+    expect(await errorDe(base.bd.execute(sql`INSERT INTO avisos_privacidad (version, descripcion) VALUES ('x', 'x')`))).toMatch(/permission denied/);
   });
 
   it("la fila única de configuración no admite otra, ni siquiera para el dueño", async () => {

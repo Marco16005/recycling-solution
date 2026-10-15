@@ -1,0 +1,53 @@
+import { z } from "zod";
+import { registrarEvento } from "@/datos/bitacora";
+import { actualizarConfiguracionSiVersion, leerConfiguracionCompleta } from "@/datos/configuracion";
+import { erroresPorCampo } from "@/dominio/clientes/esquemas";
+import { permitir } from "./autorizacion";
+import { camposDistintos } from "./cambios";
+import type { Contexto, Resultado } from "./tipos";
+import { invalido, versionSchema } from "./validacion";
+
+const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
+/** Misma caja que los clientes: el patio está en México. */
+const MEXICO = { latMin: 14.5, latMax: 32.8, lngMin: -118.5, lngMax: -86.5 };
+
+const configuracionSchema = z
+  .object({
+    patioLat: z.number().min(MEXICO.latMin, "Latitud fuera de México").max(MEXICO.latMax, "Latitud fuera de México").nullable(),
+    patioLng: z.number().min(MEXICO.lngMin, "Longitud fuera de México").max(MEXICO.lngMax, "Longitud fuera de México").nullable(),
+    turnoInicio: z.string().regex(HORA, "Usa el formato HH:MM"),
+    turnoFin: z.string().regex(HORA, "Usa el formato HH:MM"),
+    velocidadKmh: z.number().min(5).max(120),
+    factorCircuidad: z.number().min(1).max(3),
+    descargaMin: z.number().int().min(0).max(240),
+    cargaPorOmisionKg: z.number().int().min(1).max(60000),
+    diasOperacion: z.array(z.number().int().min(0).max(6)).min(1, "Elige al menos un día de operación").max(7),
+    diasParaAtrasada: z.number().int().min(1).max(30),
+  })
+  .refine((c) => (c.patioLat === null) === (c.patioLng === null), { path: ["patioLat"], message: "Latitud y longitud se capturan juntas" })
+  .refine((c) => c.turnoInicio < c.turnoFin, { path: ["turnoFin"], message: "El turno debe terminar después de empezar" })
+  .refine((c) => new Set(c.diasOperacion).size === c.diasOperacion.length, { path: ["diasOperacion"], message: "Días repetidos" });
+
+const CAMPOS = [
+  "patioLat", "patioLng", "turnoInicio", "turnoFin", "velocidadKmh", "factorCircuidad", "descargaMin", "cargaPorOmisionKg",
+  "diasOperacion", "diasParaAtrasada",
+] as const;
+
+/** Permiso configuracion.editar. entrada: ConfiguracionVista sin version, versionAvisoPrivacidad ni estiloMapaUrl. */
+export async function guardarConfiguracion(ctx: Contexto, versionEsperada: unknown, entrada: unknown): Promise<Resultado<{ version: number }>> {
+  const permiso = permitir(ctx, "configuracion.editar");
+  if (!permiso.ok) return permiso;
+  const version = versionSchema.safeParse(versionEsperada);
+  if (!version.success) return invalido({ _: ["Falta la versión de la configuración"] });
+  const validado = configuracionSchema.safeParse(entrada);
+  if (!validado.success) return invalido(erroresPorCampo(validado.error));
+  const datos = { ...validado.data, diasOperacion: [...validado.data.diasOperacion].sort((a, b) => a - b) };
+
+  return ctx.bd.transaction(async (tx): Promise<Resultado<{ version: number }>> => {
+    const antes = await leerConfiguracionCompleta(tx);
+    const nueva = await actualizarConfiguracionSiVersion(tx, version.data, datos, ctx.ahora);
+    if (nueva === null) return { ok: false, error: "conflicto" };
+    await registrarEvento(tx, { usuarioId: permiso.usuario.id, entidad: "configuracion", entidadId: null, accion: "actualizar", campos: camposDistintos(antes, datos, CAMPOS) });
+    return { ok: true, valor: { version: nueva } };
+  });
+}

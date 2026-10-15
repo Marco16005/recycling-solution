@@ -63,7 +63,7 @@ async function crearClienteCompleto(page: Page, nombre: string) {
   await privacidad.getByLabel("Movimiento", { exact: true }).selectOption("aceptado");
   await privacidad.getByLabel("Medio de registro", { exact: true }).selectOption("papel");
   await privacidad.getByRole("button", { name: "Registrar movimiento", exact: true }).click();
-  await expect(privacidad.getByText("Aceptado", { exact: true })).toBeVisible();
+  await expect(privacidad.getByText("Aviso dado a conocer sin oposición", { exact: true })).toBeVisible();
   return url;
 }
 
@@ -314,4 +314,31 @@ test("K5 conserva porcentaje y clientes activos al filtrar y limpiar la búsqued
   await expect(page).toHaveURL((url) => url.pathname === RUTA_CLIENTES && !url.searchParams.has("q"));
   await expect(porcentaje).toHaveText(porcentajeGlobal);
   await expect(totales).toHaveText(totalesGlobales);
+});
+
+test("documentos: catálogo y nombre libre persisten al guardar y volver a abrir", async ({ page }) => {
+  await entrarComo(page, "despachador");
+  const nombre = nombreUnico("Catálogo cliente E2E");
+  await abrirAlta(page, nombre);
+  const ficha = formularioCliente(page);
+  await ficha.getByRole("button", { name: "Agregar documento", exact: true }).click();
+  const tipo = ficha.getByLabel("Tipo (catálogo) · documento 1", { exact: true });
+  const documento = ficha.getByLabel("Nombre · documento 1", { exact: true });
+  await tipo.selectOption("contrato_servicio");
+  const nombreCatalogo = (await tipo.locator("option:checked").innerText()).trim();
+  await expect(documento).toHaveValue(nombreCatalogo);
+  await expect(documento).toHaveAttribute("readonly", "");
+  const url = await guardarAlta(page, nombre);
+  await page.goto(url);
+  await expect(tipo).toHaveValue("contrato_servicio");
+  await expect(documento).toHaveValue(nombreCatalogo);
+
+  await tipo.selectOption("");
+  await expect(documento).toBeEditable();
+  await documento.fill("Requisito libre sintético E2E");
+  await ficha.getByRole("button", { name: "Guardar cliente", exact: true }).click();
+  await expect(ficha.getByRole("status")).toHaveText("Cliente guardado.");
+  await page.reload();
+  await expect(tipo).toHaveValue("");
+  await expect(documento).toHaveValue("Requisito libre sintético E2E");
 });

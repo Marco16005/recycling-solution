@@ -13,5 +13,11 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO rs_app;
 -- Historial de solo inserción.
 REVOKE UPDATE, DELETE ON bitacora, aceptaciones_privacidad, importaciones FROM rs_app;
 
--- Catálogos que en el Plan 1 la aplicación solo lee.
-REVOKE INSERT, UPDATE, DELETE ON configuracion, avisos_privacidad FROM rs_app;
+-- Configuración: el administrador la edita (fila única: sin altas ni bajas).
+REVOKE INSERT, DELETE ON configuracion FROM rs_app;
+
+-- Catálogos que la aplicación solo lee. Las versiones del aviso las publica scripts/publicar-aviso.mts como rs_migrador.
+REVOKE INSERT, UPDATE, DELETE ON avisos_privacidad, tipos_documento FROM rs_app;
+
+-- Las solicitudes se cancelan, nunca se borran; los folios tampoco.
+REVOKE DELETE ON solicitudes, folios_dia FROM rs_app;

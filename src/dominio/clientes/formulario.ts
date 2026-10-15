@@ -39,6 +39,6 @@ export function aEntrada(cliente: ClienteGuardado): ClienteEntrada {
     cargaEstimadaKg: cliente.cargaEstimadaKg,
     activo: cliente.activo,
     ventanas: cliente.ventanas,
-    documentos: cliente.documentos,
+    documentos: cliente.documentos.map((d) => ({ ...d, tipoDocumentoId: d.tipoDocumentoId ?? null })),
   };
 }

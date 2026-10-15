@@ -16,7 +16,9 @@ export const clienteValido: ClienteEntrada = {
   cargaEstimadaKg: 1800,
   activo: true,
   ventanas: [{ diaSemana: 1, horaInicio: "08:00", horaFin: "12:00" }],
-  documentos: [{ nombre: "SUA vigente", obligatorio: true, estado: "vigente", venceEl: "2026-12-31" }],
+  documentos: [{
+    tipoDocumentoId: null, nombre: "SUA vigente", obligatorio: true, estado: "vigente", venceEl: "2026-12-31",
+  }],
 };
 
 function errores(entrada: unknown) {
@@ -114,5 +116,34 @@ describe("privacidadSchema", () => {
     { accion: "otra" }, { medio: "mensaje" },
   ])("rechaza el movimiento inválido %j", (cambios) => {
     expect(privacidadSchema.safeParse({ ...entrada, ...cambios }).success).toBe(false);
+  });
+});
+
+describe("tipo de documento del catálogo", () => {
+  const documento = { nombre: "Documento sintético", obligatorio: true, estado: "vigente", venceEl: null };
+
+  it.each([undefined, null])("normaliza %s a null para documentos libres", (tipoDocumentoId) => {
+    expect(documentoSchema.parse({ ...documento, tipoDocumentoId }).tipoDocumentoId).toBeNull();
+    expect(documentoSchema.parse(documento).tipoDocumentoId).toBeNull();
+  });
+
+  it("acepta identificadores de texto y recorta espacios sin exigir UUID", () => {
+    expect(documentoSchema.parse({ ...documento, tipoDocumentoId: " contrato_servicio " }).tipoDocumentoId)
+      .toBe("contrato_servicio");
+  });
+
+  it.each(["", "   ", 123, false, {}, []].map((tipoDocumentoId) => ({ tipoDocumentoId })))(
+    "rechaza tipo inválido %j", ({ tipoDocumentoId }) => {
+      const resultado = documentoSchema.safeParse({ ...documento, tipoDocumentoId });
+      expect(resultado.success).toBe(false);
+      if (!resultado.success) expect(resultado.error.issues[0].path).toEqual(["tipoDocumentoId"]);
+    },
+  );
+
+  it("conserva el tipo al validar la ficha completa", () => {
+    const resultado = clienteSchema.parse({
+      ...clienteValido, documentos: [{ ...documento, tipoDocumentoId: "contrato_servicio" }],
+    });
+    expect(resultado.documentos[0].tipoDocumentoId).toBe("contrato_servicio");
   });
 });

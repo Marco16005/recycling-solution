@@ -53,11 +53,12 @@ export function Campo({
   );
 }
 
-export function ResumenErrores({ errores }: { errores: Errores }) {
+export function ResumenErrores({ errores, pendiente = false }: { errores: Errores; pendiente?: boolean }) {
   const resumen = useRef<HTMLDivElement>(null);
   const hayErrores = Object.keys(errores).length > 0;
   useEffect(() => {
-    if (!hayErrores) return;
+    // Los errores pueden llegar antes de que la transición habilite los campos del formulario.
+    if (!hayErrores || pendiente) return;
     const formulario = resumen.current?.closest("form");
     const campo =
       formulario?.querySelector<HTMLElement>(
@@ -65,7 +66,7 @@ export function ResumenErrores({ errores }: { errores: Errores }) {
           'select[aria-invalid="true"]:not(:disabled), textarea[aria-invalid="true"]:not(:disabled)',
       ) ?? formulario?.querySelector<HTMLElement>('[aria-invalid="true"][tabindex]');
     (campo ?? resumen.current)?.focus();
-  }, [errores, hayErrores]);
+  }, [errores, hayErrores, pendiente]);
   if (!hayErrores) return null;
   return (
     <div

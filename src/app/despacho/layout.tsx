@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { usuarioDeLaSesion } from "@/consultas/sesion";
 import { BotonSalir } from "@/components/sesion/boton-salir";
+import { NavegacionDespacho } from "./navegacion";
 
 async function SesionDespacho() {
   const usuario = await usuarioDeLaSesion();
@@ -44,6 +45,9 @@ export default function DespachoLayout({ children }: { children: React.ReactNode
             <SesionDespacho />
           </Suspense>
         </div>
+        <Suspense fallback={<p className="px-4 py-2 text-sm">Cargando navegación…</p>}>
+          <NavegacionDespacho />
+        </Suspense>
       </header>
       <main id="contenido" className="mx-auto max-w-6xl px-4 py-8 sm:px-8 sm:py-10">
         {children}

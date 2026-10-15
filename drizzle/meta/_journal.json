@@ -22,6 +22,20 @@
       "when": 1791990798519,
       "tag": "0002_generacion_credenciales",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792007957786,
+      "tag": "0003_flota_y_solicitudes",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792007958203,
+      "tag": "0004_catalogo_e_inmutabilidad",
+      "breakpoints": true
     }
   ]
 }

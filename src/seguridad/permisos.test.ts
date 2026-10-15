@@ -9,6 +9,13 @@ const ESPERADO: Record<Permiso, Rol[]> = {
   "clientes.editar": ["admin", "despachador"],
   "clientes.importar": ["admin", "despachador"],
   "usuarios.gestionar": ["admin"],
+  "flota.ver": ["admin", "despachador", "gerencia"],
+  "flota.editar": ["admin", "despachador"],
+  "jornada.gestionar": ["admin", "despachador"],
+  "solicitudes.ver": ["admin", "despachador", "gerencia"],
+  "solicitudes.registrar": ["admin", "despachador"],
+  "solicitudes.cancelar": ["admin", "despachador"],
+  "configuracion.editar": ["admin"],
 };
 
 describe("matriz de permisos", () => {

@@ -39,7 +39,7 @@ docker compose run --rm bootstrap npm run desactivar-usuario -- --correo ana@emp
 docker compose run --rm bootstrap npm run restablecer-clave -- --correo ana@empresa.mx
 ```
 
-Roles: `admin`, `despachador`, `operador`, `gerencia`. Si no se da `CLAVE_NUEVA` (`-e CLAVE_NUEVA=…`), el script genera una contraseña y la muestra una sola vez: entregarla en persona. Desactivar y restablecer cierran todas las sesiones del usuario. Todo queda en la bitácora con la acción `…_por_script`.
+Roles: `admin`, `despachador`, `operador`, `gerencia`. Si no se da `CLAVE_NUEVA` (`-e CLAVE_NUEVA=…`), el script genera una contraseña y la muestra una sola vez: entregarla en persona. Desactivar y restablecer cierran todas las sesiones del usuario. El script no desactiva al último administrador activo. Todo queda en la bitácora con la acción `…_por_script`.
 
 ## 3. Respaldo
 
@@ -114,3 +114,90 @@ scripts/verificar-todo.sh
 ```
 
 Construye las imágenes y corre tipos, lint, pruebas de unidad, integración con Postgres desechable, punta a punta contra la imagen de producción, la prueba de respaldo y restauración, y la búsqueda de secretos. No toca los datos de operación.
+
+## 9. Piloto en el VPS de Hostinger compartido con el punto de venta
+
+Decisión 1 de la especificación §14. Antes de instalar, comprobar:
+
+| Qué | Cómo | Para qué |
+|---|---|---|
+| Docker y Compose | `docker compose version` (2.24 o posterior) | Todo corre en contenedores |
+| Arquitectura | `uname -m` (normalmente `x86_64`) | La imagen debe ser `linux/amd64` |
+| Memoria libre | `free -h` | El piloto usa como máximo unos 1.2 GB (límites en `compose.prod.yaml`: 512 MB la aplicación, 512 MB la base y 128 MB Caddy) |
+| Puertos 80 y 443 | `sudo ss -ltnp \| grep -E ':(80\|443) '` | Decide el modo de HTTPS (abajo) |
+
+### Nombre sin dominio propio
+
+`sslip.io` resuelve cualquier nombre con la IP incrustada: para la IP `203.0.113.25`, el nombre `203-0-113-25.sslip.io` apunta al VPS. Con ese nombre se obtiene un certificado público de Let's Encrypt sin comprar un dominio. En `.env`:
+
+```
+DOMINIO=203-0-113-25.sslip.io
+BETTER_AUTH_URL=https://203-0-113-25.sslip.io
+```
+
+Cuando haya dominio propio, solo cambian esas dos líneas. Riesgo conocido: si `sslip.io` dejara de funcionar, el sistema queda inaccesible por nombre hasta tener un dominio; por eso conviene comprar uno antes de terminar el piloto.
+
+### Modo A: los puertos 80 y 443 están libres
+
+```
+COMPOSE_PROFILES=caddy
+```
+
+`docker compose up -d` levanta también Caddy, que obtiene y renueva el certificado solo. Comprobar: `curl -I https://203-0-113-25.sslip.io/entrar` responde `200`.
+
+### Modo B: el punto de venta ya usa 80 y 443 con su proxy
+
+Dejar `COMPOSE_PROFILES` vacío. La aplicación queda solo en `127.0.0.1:3001` (`PUERTO_WEB_LOCAL`) y el proxy existente le envía el tráfico de su nombre.
+
+**Importante para la seguridad:** el límite de 5 intentos de entrada por minuto se cuenta por la IP que llega en `X-Forwarded-For`. El proxy debe **reemplazar** ese encabezado con la IP real del cliente, nunca agregarla al que trae la petición. Con `$proxy_add_x_forwarded_for`, un atacante podría inventar una IP distinta en cada intento y saltarse el límite. Ejemplo correcto para nginx:
+
+```nginx
+server {
+    server_name 203-0-113-25.sslip.io;
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        # Reemplaza (no agrega) la IP del cliente: el límite de intentos depende de ella.
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    # El certificado lo emite el mismo proxy, por ejemplo: sudo certbot --nginx -d 203-0-113-25.sslip.io
+}
+```
+
+Si el proxy existente es Caddy, basta con un bloque `203-0-113-25.sslip.io { reverse_proxy 127.0.0.1:3001 }`: Caddy ignora el `X-Forwarded-For` de los clientes y pone la IP real, salvo que tenga configurado `trusted_proxies`. Antes de tocar el proxy del punto de venta, respaldar su configuración y coordinar con quien lo administra.
+
+**Comprobación obligatoria** en cualquiera de los dos modos: seis intentos de entrada con una IP falsa distinta en cada uno. El sexto debe responder `429`:
+
+```bash
+for i in 1 2 3 4 5 6; do
+  curl -s -o /dev/null -w "%{http_code} " -X POST https://203-0-113-25.sslip.io/api/auth/sign-in/email \
+    -H 'content-type: application/json' -H 'origin: https://203-0-113-25.sslip.io' \
+    -H "X-Forwarded-For: 10.0.0.$i" -d '{"email":"nadie@ejemplo.mx","password":"clave-equivocada-123"}'
+done; echo   # esperado: 401 401 401 401 401 429
+```
+
+Si los seis responden `401`, el proxy está pasando la IP falsa: corregir su configuración antes de abrir el sistema. Comprobado el 2026-10-15 con el modo A (Caddy): `401 401 401 401 401 429`. La aplicación misma escucha solo en `127.0.0.1`, así que desde fuera del servidor no se puede llegar a ella sin pasar por el proxy.
+
+### Construir la imagen sin cargar el VPS
+
+Compilar la aplicación consume más memoria de la que conviene usar en un servidor compartido. Se puede construir en otra computadora para `linux/amd64` y copiar las imágenes:
+
+```bash
+# En la computadora de desarrollo, con el mismo .env de producción (COMPOSE_FILE=compose.yaml:compose.prod.yaml):
+DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose build
+docker save recycling-solution-web recycling-solution-migrate recycling-solution-bootstrap | gzip | ssh usuario@vps 'gunzip | docker load'
+
+# En el VPS:
+docker compose up -d --no-build
+```
+
+### Respaldo diario
+
+En el VPS, con `crontab -e` (a las 17:00, al cierre del turno):
+
+```
+0 17 * * * cd /ruta/recycling-solution && docker compose --profile respaldo run --rm respaldo >> respaldos/respaldo.log 2>&1
+```
+
+Copiar la carpeta `respaldos/` fuera del VPS al menos una vez por semana (otra computadora o almacenamiento externo).

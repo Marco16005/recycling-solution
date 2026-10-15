@@ -20,12 +20,16 @@ export interface Ventana {
   horaFin: string;
 }
 
-/** venceEl: fecha "AAAA-MM-DD" o null si no vence. */
+/**
+ * venceEl: fecha "AAAA-MM-DD" o null si no vence.
+ * tipoDocumentoId: tipo del catálogo de clientes, o null/ausente si el nombre es libre (documentoSchema lo normaliza a null).
+ */
 export interface DocumentoCliente {
   nombre: string;
   obligatorio: boolean;
   estado: EstadoDocumento;
   venceEl: string | null;
+  tipoDocumentoId?: string | null;
 }
 
 /** Último movimiento registrado del aviso de privacidad. id: el del renglón; sirve para detectar conflictos. */

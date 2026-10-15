@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { FormularioEntrar } from "./formulario-entrar";
 
 export default function Entrar() {
@@ -8,6 +9,9 @@ export default function Entrar() {
         <p className="text-sm text-muted-foreground">Entra con la cuenta que te dio el administrador.</p>
       </div>
       <FormularioEntrar />
+      <Link href="/aviso-de-privacidad" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
+        Aviso de privacidad
+      </Link>
     </main>
   );
 }

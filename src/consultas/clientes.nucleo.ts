@@ -1,15 +1,18 @@
 import { z } from "zod";
 import { permitir } from "@/acciones/autorizacion";
 import type { Contexto, Resultado } from "@/acciones/tipos";
-import type { BD, Tx } from "@/datos/bd";
 import { leerCartera, leerCliente } from "@/datos/clientes";
 import { leerConfiguracion } from "@/datos/configuracion";
+import { leerCatalogo } from "@/datos/flota";
+import type { TipoDocumento } from "@/dominio/flota/tipos";
 import { faltantesDeCliente, resumenK5, type Faltante, type ResumenK5 } from "@/dominio/clientes/completitud";
 import { nombreNormalizado } from "@/dominio/clientes/csv";
 import { motivosDeBloqueoCliente, type MotivoBloqueo } from "@/dominio/clientes/habilitacion";
 import type { ClienteGuardado, TipoResiduo } from "@/dominio/clientes/tipos";
 import { fechaEnMexico } from "@/dominio/tiempo";
 import { puede } from "@/seguridad/permisos";
+import { leerInstantanea } from "./instantanea";
+import { estiloMapaUrl } from "./mapa";
 
 export interface ClienteResumen {
   id: string;
@@ -31,6 +34,8 @@ export interface ListadoClientes {
 }
 
 export interface FichaCliente {
+  /** Catálogo de documentos de clientes, para elegir el tipo de cada documento. */
+  catalogoDocumentos: TipoDocumento[];
   cliente: ClienteGuardado;
   faltantes: Faltante[];
   motivosHoy: MotivoBloqueo[];
@@ -43,18 +48,13 @@ export interface FichaCliente {
 export interface ContextoAlta {
   estiloMapaUrl: string;
   versionAvisoVigente: string;
+  catalogoDocumentos: TipoDocumento[];
 }
 
-const ESTILO_MAPA_POR_OMISION = "https://tiles.openfreemap.org/styles/liberty";
-const estiloMapaUrl = () => process.env.MAPA_ESTILO_URL || ESTILO_MAPA_POR_OMISION;
 
 const filtroSchema = z.object({ texto: z.string().max(100).optional() });
 const idSchema = z.uuid();
 
-/** Lectura coherente de cliente, hijos y configuración: una sola instantánea de solo lectura. */
-function leerInstantanea<T>(bd: BD, lectura: (tx: Tx) => Promise<T>): Promise<T> {
-  return bd.transaction(lectura, { isolationLevel: "repeatable read", accessMode: "read only" });
-}
 
 /** Permiso clientes.ver. filtro: { texto?: string }; la búsqueda ignora mayúsculas, acentos y signos. */
 export async function listarClientes(ctx: Contexto, filtro: unknown): Promise<Resultado<ListadoClientes>> {
@@ -101,14 +101,16 @@ export async function obtenerFicha(ctx: Contexto, id: unknown): Promise<Resultad
   const valido = idSchema.safeParse(id);
   if (!valido.success) return { ok: false, error: "no_encontrado" };
 
-  const { version, cliente } = await leerInstantanea(ctx.bd, async (tx) => ({
+  const { version, cliente, catalogoDocumentos } = await leerInstantanea(ctx.bd, async (tx) => ({
     version: (await leerConfiguracion(tx)).versionAvisoPrivacidad,
     cliente: await leerCliente(tx, valido.data),
+    catalogoDocumentos: await leerCatalogo(tx, "cliente"),
   }));
   if (cliente === null) return { ok: false, error: "no_encontrado" };
   return {
     ok: true,
     valor: {
+      catalogoDocumentos,
       cliente,
       faltantes: faltantesDeCliente(cliente, version),
       motivosHoy: motivosDeBloqueoCliente(cliente, fechaEnMexico(ctx.ahora), version),
@@ -123,6 +125,12 @@ export async function obtenerFicha(ctx: Contexto, id: unknown): Promise<Resultad
 export async function obtenerContextoAlta(ctx: Contexto): Promise<Resultado<ContextoAlta>> {
   const permiso = permitir(ctx, "clientes.editar");
   if (!permiso.ok) return permiso;
-  const { versionAvisoPrivacidad } = await leerConfiguracion(ctx.bd);
-  return { ok: true, valor: { estiloMapaUrl: estiloMapaUrl(), versionAvisoVigente: versionAvisoPrivacidad } };
+  return leerInstantanea(ctx.bd, async (tx) => ({
+    ok: true as const,
+    valor: {
+      estiloMapaUrl: estiloMapaUrl(),
+      versionAvisoVigente: (await leerConfiguracion(tx)).versionAvisoPrivacidad,
+      catalogoDocumentos: await leerCatalogo(tx, "cliente"),
+    },
+  }));
 }

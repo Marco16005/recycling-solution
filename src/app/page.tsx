@@ -7,6 +7,7 @@ async function Redireccion(): Promise<null> {
   const usuario = await usuarioDeLaSesion();
   if (usuario === null) redirect("/entrar");
   if (usuario.rol === "operador") redirect("/sin-acceso");
+  if (usuario.rol === "admin") redirect("/admin/usuarios");
   redirect("/despacho/clientes");
 }
 
