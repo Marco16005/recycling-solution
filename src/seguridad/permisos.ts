@@ -24,6 +24,10 @@ export const PERMISOS = {
   "planes.ver": ["despachador", "gerencia"],
   "planes.generar": ["despachador"],
   "planes.validar": ["despachador"],
+  "ruta.operar": ["operador"],
+  "operacion.ver": ["despachador", "gerencia"],
+  "operacion.conciliar": ["despachador"],
+  "incidentes.resolver": ["despachador"],
 } as const satisfies Record<string, readonly Rol[]>;
 
 export type Permiso = keyof typeof PERMISOS;

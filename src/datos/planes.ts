@@ -29,13 +29,20 @@ export async function tomarCandadoDeCatalogoFlota(tx: Tx, modo: "compartido" | "
   else await tx.execute(sql`SELECT pg_advisory_xact_lock(${CANDADO_CATALOGO_FLOTA})`);
 }
 
+/** Restricciones de un plan de re-ruteo: jornadas que dejaron de estar disponibles, viajes conservados y paradas congeladas. */
+export interface RestriccionesReruteo { jornadasNoDisponibles: string[]; admitidas: Record<string, string[][]>; congeladas: string[] }
+
 /** Un ajuste manual con su autor y su hora (planes.ajustes). */
 export interface AjusteRegistrado { ajuste: AjusteManual; por: string; en: string }
 
 export interface PlanGuardado {
   id: string;
   fecha: string;
-  estado: "propuesto" | "validado" | "descartado";
+  estado: "propuesto" | "validado" | "descartado" | "reemplazado";
+  tipo: "inicial" | "re_ruteo";
+  planBaseId: string | null;
+  /** Solo en un re-ruteo (Plan 5, §2). */
+  restricciones: RestriccionesReruteo | null;
   version: number;
   generadoEn: Date;
   generadoPor: string;
@@ -57,6 +64,9 @@ function comoPlan(f: typeof planes.$inferSelect): PlanGuardado {
     id: f.id,
     fecha: f.fecha,
     estado: f.estado,
+    tipo: f.tipo,
+    planBaseId: f.planBaseId,
+    restricciones: f.restricciones as RestriccionesReruteo | null,
     version: f.version,
     generadoEn: f.generadoEn,
     generadoPor: f.generadoPor,

@@ -20,9 +20,17 @@ export const origenDocumentoEnum = pgEnum("origen_documento", ["ley", "contrato"
 export const canalSolicitudEnum = pgEnum("canal_solicitud", ["telefono", "whatsapp", "correo", "presencial", "otro"]);
 /** programada: tiene parada vigente en un plan validado; en_ruta: su unidad ya salió (Plan 5). */
 export const estadoSolicitudEnum = pgEnum("estado_solicitud", ["pendiente", "cancelada", "atendida", "no_atendida", "programada", "en_ruta"]);
-export const estadoPlanEnum = pgEnum("estado_plan", ["propuesto", "validado", "descartado"]);
+export const estadoPlanEnum = pgEnum("estado_plan", ["propuesto", "validado", "descartado", "reemplazado"]);
+/** inicial: el plan del día; re_ruteo: reemplaza a un validado de la misma fecha (Plan 5). */
+export const tipoPlanEnum = pgEnum("tipo_plan", ["inicial", "re_ruteo"]);
 export const resultadoMotorEnum = pgEnum("resultado_motor", ["ok", "error", "tiempo_agotado"]);
-export const estadoParadaEnum = pgEnum("estado_parada", ["pendiente", "en_sitio", "completada", "omitida", "no_atendida"]);
+export const estadoParadaEnum = pgEnum("estado_parada", ["pendiente", "en_sitio", "completada", "omitida", "no_atendida", "en_servicio", "reasignada"]);
+export const tipoEventoOperadorEnum = pgEnum("tipo_evento_operador", [
+  "check_in", "salida_patio", "llegada", "inicio_servicio", "fin_servicio", "no_atendida", "regreso_patio", "fin_descarga", "check_out",
+]);
+export const resultadoEventoEnum = pgEnum("resultado_evento", ["aplicado", "rechazado"]);
+export const tipoIncidenteEnum = pgEnum("tipo_incidente", ["averia", "retraso", "cierre_vial", "cliente_no_disponible", "otro"]);
+export const accionIncidenteEnum = pgEnum("accion_incidente", ["continuar", "cancelar", "re_ruteo"]);
 
 const marcas = {
   creadoEn: timestamp("creado_en", { withTimezone: true }).notNull().defaultNow(),
@@ -296,6 +304,8 @@ export const jornadas = pgTable(
     checkOutEn: timestamp("check_out_en", { withTimezone: true }),
     notas: text("notas"),
     version: integer("version").notNull().default(1),
+    /** Sube con cada evento aplicado y cada cancelación por incidente: el re-ruteo la compara (Plan 5). */
+    versionOperacion: integer("version_operacion").notNull().default(0),
     ...marcas,
   },
   (t) => [
@@ -372,6 +382,11 @@ export const planes = pgTable(
     resultado: jsonb("resultado").$type<Plan>().notNull(),
     /** Ajustes manuales en orden, con autor y hora. Vacío: el plan es el del motor. */
     ajustes: jsonb("ajustes").notNull().default(sql`'[]'::jsonb`),
+    tipo: tipoPlanEnum("tipo").notNull().default("inicial"),
+    /** En un re-ruteo, el validado que reemplaza. */
+    planBaseId: uuid("plan_base_id").references((): AnyPgColumn => planes.id),
+    /** En un re-ruteo: { jornadasNoDisponibles, admitidas, congeladas } (Plan 5, §2). */
+    restricciones: jsonb("restricciones"),
     ...marcas,
   },
   (t) => [
@@ -385,6 +400,7 @@ export const planes = pgTable(
     ),
     check("planes_descartado", sql`(${t.estado} = 'descartado') = (${t.descartadoEn} IS NOT NULL)`),
     check("planes_ajustes", sql`jsonb_typeof(${t.ajustes}) = 'array'`),
+    check("planes_re_ruteo", sql`(${t.tipo} = 're_ruteo') = (${t.planBaseId} IS NOT NULL AND ${t.restricciones} IS NOT NULL)`),
   ],
 );
 
@@ -477,6 +493,9 @@ export const paradas = pgTable(
     kmContrafactual: doublePrecision("km_contrafactual").notNull(),
     vigente: boolean("vigente").notNull().default(true),
     estado: estadoParadaEnum("estado").notNull().default("pendiente"),
+    motivoNoAtendida: text("motivo_no_atendida"),
+    /** Cuándo se cerró (fin de servicio o no atendida): el traslado a la siguiente se mide desde aquí (Plan 6, K1). */
+    cierreEn: timestamp("cierre_en", { withTimezone: true }),
     llegadaEn: timestamp("llegada_en", { withTimezone: true }),
     inicioServicioEn: timestamp("inicio_servicio_en", { withTimezone: true }),
     finServicioEn: timestamp("fin_servicio_en", { withTimezone: true }),
@@ -492,5 +511,73 @@ export const paradas = pgTable(
     check("paradas_espera", sql`${t.esperaMin} >= 0`),
     check("paradas_carga", sql`${t.cargaKg} >= 0`),
     check("paradas_km", sql`${t.kmDesdeAnterior} >= 0 AND ${t.kmContrafactual} >= 0`),
+    check("paradas_no_atendida", sql`(${t.estado} = 'no_atendida') = (${t.motivoNoAtendida} IS NOT NULL) AND (${t.motivoNoAtendida} IS NULL OR length(${t.motivoNoAtendida}) <= 200)`),
+  ],
+);
+
+// ---------- Plan 5: operación (docs/superpowers/plans/2026-10-15-plan-5-operador-incidentes-y-reruteo.md §2)
+
+/**
+ * Cada evento que manda el teléfono, aplicado o rechazado (decisión 9: los rechazados se guardan para conciliarlos).
+ * rs_app solo inserta y llena las columnas de conciliación.
+ */
+export const eventosOperador = pgTable(
+  "eventos_operador",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Lo genera el teléfono: hace idempotente el reintento. */
+    eventoId: uuid("evento_id").notNull().unique(),
+    jornadaId: uuid("jornada_id").notNull().references(() => jornadas.id, { onDelete: "restrict" }),
+    rutaId: uuid("ruta_id").references(() => rutas.id, { onDelete: "restrict" }),
+    paradaId: uuid("parada_id").references(() => paradas.id, { onDelete: "restrict" }),
+    tipo: tipoEventoOperadorEnum("tipo").notNull(),
+    ocurridoEn: timestamp("ocurrido_en", { withTimezone: true }).notNull(),
+    recibidoEn: timestamp("recibido_en", { withTimezone: true }).notNull(),
+    versionRuta: integer("version_ruta"),
+    odometroKm: doublePrecision("odometro_km"),
+    motivo: text("motivo"),
+    /** SHA-256 del contenido canónico (jornada incluida): el mismo evento_id con otro contenido es un conflicto. */
+    huella: text("huella").notNull(),
+    usuarioId: uuid("usuario_id").notNull().references(() => usuarios.id),
+    resultado: resultadoEventoEnum("resultado").notNull(),
+    motivoRechazo: text("motivo_rechazo"),
+    conciliadoEn: timestamp("conciliado_en", { withTimezone: true }),
+    conciliadoPor: uuid("conciliado_por").references(() => usuarios.id),
+    notaConciliacion: text("nota_conciliacion"),
+  },
+  (t) => [
+    index("eventos_operador_jornada_idx").on(t.jornadaId, t.ocurridoEn),
+    check("eventos_operador_rechazo", sql`(${t.resultado} = 'rechazado') = (${t.motivoRechazo} IS NOT NULL)`),
+    check("eventos_operador_textos", sql`(${t.motivo} IS NULL OR length(${t.motivo}) <= 200) AND (${t.notaConciliacion} IS NULL OR length(${t.notaConciliacion}) <= 300) AND (${t.motivoRechazo} IS NULL OR length(${t.motivoRechazo}) <= 300)`),
+    check("eventos_operador_conciliacion", sql`(${t.conciliadoEn} IS NULL) = (${t.conciliadoPor} IS NULL)`),
+    check("eventos_operador_odometro", sql`${t.odometroKm} IS NULL OR ${t.odometroKm} >= 0`),
+  ],
+);
+
+/** Incidentes que reporta el operador y resuelve el despachador. */
+export const incidentes = pgTable(
+  "incidentes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventoId: uuid("evento_id").notNull().unique(),
+    huella: text("huella").notNull(),
+    jornadaId: uuid("jornada_id").notNull().references(() => jornadas.id, { onDelete: "restrict" }),
+    paradaId: uuid("parada_id").references(() => paradas.id, { onDelete: "restrict" }),
+    tipo: tipoIncidenteEnum("tipo").notNull(),
+    /** Breve; la pantalla pide no escribir datos personales. */
+    descripcion: text("descripcion").notNull(),
+    reportadoEn: timestamp("reportado_en", { withTimezone: true }).notNull(),
+    reportadoPor: uuid("reportado_por").notNull().references(() => usuarios.id),
+    resueltoEn: timestamp("resuelto_en", { withTimezone: true }),
+    resueltoPor: uuid("resuelto_por").references(() => usuarios.id),
+    accion: accionIncidenteEnum("accion"),
+    version: integer("version").notNull().default(1),
+    ...marcas,
+  },
+  (t) => [
+    index("incidentes_jornada_idx").on(t.jornadaId),
+    check("incidentes_descripcion", sql`length(${t.descripcion}) BETWEEN 1 AND 300`),
+    check("incidentes_resuelto", sql`(${t.resueltoEn} IS NULL) = (${t.resueltoPor} IS NULL) AND (${t.resueltoEn} IS NULL) = (${t.accion} IS NULL)`),
+    check("incidentes_version", sql`${t.version} >= 1`),
   ],
 );

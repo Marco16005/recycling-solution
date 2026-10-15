@@ -26,3 +26,8 @@ REVOKE DELETE ON solicitudes, folios_dia FROM rs_app;
 -- retira con vigente = false, nunca se borran.
 REVOKE UPDATE, DELETE ON ejecuciones_motor FROM rs_app;
 REVOKE DELETE ON planes, rutas, paradas FROM rs_app;
+
+-- Plan 5: los eventos del operador son historial (aplicados y rechazados); solo se llenan las columnas de conciliación.
+REVOKE UPDATE, DELETE ON eventos_operador FROM rs_app;
+GRANT UPDATE (conciliado_en, conciliado_por, nota_conciliacion) ON eventos_operador TO rs_app;
+REVOKE DELETE ON incidentes FROM rs_app;
