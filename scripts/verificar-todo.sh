@@ -34,6 +34,8 @@ echo "== 4/5 Respaldo y restauración (con la aplicación encendida, con conexi�
 scripts/probar-restauracion.sh
 
 echo "== 5/5 Búsqueda de secretos en el historial (gitleaks; no detecta datos personales)"
-docker run --rm -v "$PWD:/repo:ro" zricethezav/gitleaks:v8.30.1 detect --source /repo --no-banner --redact
+# Se escanea el repositorio principal con todas sus ramas: desde un worktree, .git es un archivo que apunta fuera del montaje.
+PRINCIPAL=$(dirname "$(cd "$(git rev-parse --git-common-dir)" && pwd)")
+docker run --rm -v "$PRINCIPAL:/repo:ro" zricethezav/gitleaks:v8.30.1 detect --source /repo --log-opts=--all --no-banner --redact
 
 echo "Verificación completa: todo en verde."

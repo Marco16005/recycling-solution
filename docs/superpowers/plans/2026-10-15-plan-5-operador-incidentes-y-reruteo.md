@@ -1,128 +1,142 @@
 # Plan 5 — Aplicación del operador, incidentes y re-ruteo
 
-- **Fecha:** 2026-10-15. **Revisión:** 1 (borrador para revisión de Codex).
-- **Especificación:** §5 (pasos 5 y 6 del flujo), §6 (`eventos_operador`, `incidentes`, campos reales de `rutas` y `paradas`), §7 reglas 5 a 7, §8 (re-ruteo), §9 (Mi ruta), §10 (privacidad), §11 (K1, K3, K4).
-- **Base:** `claude/plan-4` (Plan 4 terminado).
-- **Ejecutan:** Claude (datos, acciones, consultas) y Codex (dominio de eventos, motor, pantallas, e2e). Reparto en §6.
+- **Fecha:** 2026-10-15.
+- **Revisión:** 2. Incorpora los 10 hallazgos de Codex sobre el borrador; las respuestas están en §9.
+- **Especificación:**
+  - §5, pasos 5 y 6;
+  - §6: `eventos_operador`, `incidentes` y los campos reales de rutas y paradas;
+  - §7, reglas 4 a 7;
+  - §8: re-ruteo;
+  - §10;
+  - §11: K1, K3 y K4;
+  - §14: decisión 9 (operación sin señal).
+- **Base:** `main` con el Plan 4.
+- **Ejecutan:** Claude (datos, acciones, consultas, service worker) y Codex (máquina de eventos, motor, pantallas y e2e). Reparto en §7.
 
 ## 1. Objetivo y aceptación
 
-1. **Mi ruta.** El operador entra desde su teléfono a `/operador` y ve su jornada del día: la unidad y, por viaje, sus paradas en orden, con:
-   - cliente, dirección, notas de acceso y ventana;
-   - horas estimadas y carga estimada;
-   - un enlace `geo:` para abrir la ubicación en el mapa del teléfono, sin que la aplicación consulte servicios externos.
-2. **Eventos.** El operador registra los eventos de su jornada. Cada evento lleva un `evento_id` generado en el teléfono, la hora en que ocurrió y la versión de la ruta que vio.
+1. **Mi ruta.** `/operador` muestra en el teléfono del operador su jornada: unidad, viajes y paradas en orden. De cada parada da:
+   - cliente, dirección y notas de acceso;
+   - ventana, hora estimada y carga estimada;
+   - un enlace `geo:` que abre el mapa del teléfono, sin que la aplicación consulte servicios externos.
+2. **Eventos.** Cada evento lleva un `evento_id` generado en el teléfono, la jornada, la hora en que ocurrió y la versión de ruta que vio el operador. La tabla de transiciones está en §4.
 
-   | Evento | Cuándo | Captura |
+   | Botón | Evento | Captura |
    |---|---|---|
-   | Llegada al patio | `check_in` | — |
-   | Salida del patio | `salida_patio`, por viaje | Odómetro |
-   | Llegada a la parada | `llegada` | — |
-   | Inicio del servicio | `inicio_servicio` | — |
-   | Fin del servicio | `fin_servicio` | — |
-   | No atendida | `no_atendida` | Motivo |
-   | Regreso al patio | `regreso_patio`, por viaje | Odómetro |
-   | Fin de la descarga | `fin_descarga`, por viaje | — |
-   | Salida de la jornada | `check_out` | — |
-3. **Idempotencia.** Un evento repetido (mismo `evento_id` y mismo contenido) no se duplica y responde lo mismo que la primera vez. El mismo `evento_id` con otro contenido responde `conflicto`.
-4. **Transiciones.** Las transiciones inválidas se rechazan con el motivo; por ejemplo, terminar una parada sin haber llegado, salir del patio sin `check_in` o un odómetro menor que el anterior.
-5. **Alcance del operador.** Un operador solo ve y modifica las rutas de **su** jornada (`jornadas.operador_id = usuarios.operador_id`). Un evento sobre una ruta ajena responde `no_encontrado`.
-6. **Mala señal.** La ruta del día queda guardada en el teléfono y se muestra sin conexión. Los eventos se encolan en el teléfono y se reintentan en orden. La cola sobrevive a recargar la página, y la pantalla muestra cuántos eventos faltan por enviar. Al primer rechazo, la cola se detiene y muestra el motivo.
-7. **Incidentes.** El operador reporta un incidente (`averia` \| `retraso` \| `cierre_vial` \| `cliente_no_disponible` \| `otro`), con descripción breve y, si quiere, la parada. El despachador ve los incidentes abiertos en el plan del día y los resuelve con una acción: `continuar`, `cancelar` (la solicitud de esa parada) o `re_ruteo`.
-8. **Re-ruteo.** Sobre el plan validado de hoy, el despachador elige las jornadas que dejan de estar disponibles desde ahora, por ejemplo por avería, y pide una propuesta de re-ruteo. La propuesta:
-   - **no toca** paradas completadas, no atendidas, en sitio ni el tramo comprometido;
-   - **conserva**, en su unidad y en su orden, las paradas pendientes de las unidades disponibles, que solo pueden recibir inserciones;
-   - **reubica en FIFO** las pendientes de las jornadas no disponibles y las solicitudes listas nuevas del día.
+   | "Llegué al patio" | `check_in` | — |
+   | "Salgo del patio" | `salida_patio` (por viaje) | odómetro |
+   | "Llegué" | `llegada` | — |
+   | "Empiezo" | `inicio_servicio` | — |
+   | "Terminé" | `fin_servicio` | — |
+   | "No se pudo atender" | `no_atendida` | motivo |
+   | "Regresé al patio" | `regreso_patio` (por viaje) | odómetro |
+   | "Terminé de descargar" | `fin_descarga` (por viaje) | — |
+   | "Termino jornada" | `check_out` | — |
 
-   Se revisa, se ajusta y se valida como el plan del día. Al validarla, el plan anterior queda `reemplazado` y el nuevo, `validado`.
-9. **Captura para indicadores (K1, K3, K4).** Se llenan:
-   - en rutas: `salida_patio_en`, `regreso_patio_en`, `descarga_fin_en` y los odómetros;
-   - en paradas: `llegada_en`, `inicio_servicio_en`, `fin_servicio_en` y `estado`.
+3. **Idempotencia.** Un evento repetido (mismo `evento_id` y misma huella) no se aplica dos veces. Responde el **resultado original** (aplicado, o rechazado con su motivo) con el estado actual de la jornada. El mismo `evento_id` con otra huella responde `conflicto` (`evento_distinto`). Dos envíos simultáneos del mismo evento producen una sola aplicación.
+4. **Transiciones.** Las transiciones inválidas se rechazan con el motivo. Por ejemplo:
+   - terminar sin haber llegado;
+   - llegar a una parada que no es la siguiente;
+   - repetir la salida del mismo viaje;
+   - cualquier evento después de `check_out`;
+   - un odómetro menor que el anterior.
+5. **Alcance.** Un operador solo ve y opera su jornada (`jornadas.operador_id = usuarios.operador_id`). La autorización va antes de cualquier búsqueda, también la de un evento repetido.
+6. **Sin señal** (decisión 9).
+   - La pantalla `/operador` y la última ruta cargada se abren sin conexión, también al recargar o reabrir el navegador: un service worker guarda la pantalla y `localStorage` guarda la ruta, por usuario y jornada.
+   - Los eventos se encolan y se envían en orden al volver la señal, hasta 24 horas después.
+   - Un evento que el servidor no puede aplicar se **guarda como rechazado**, con su motivo, para que el despachador lo concilie. El teléfono lo saca de la cola, muestra "Llama al despachador" y sigue con los demás.
+   - Al cerrar sesión se borra lo guardado en el teléfono.
+7. **Incidentes.** El operador reporta `averia`, `retraso`, `cierre_vial`, `cliente_no_disponible` u `otro`, con una descripción breve y, si quiere, la parada; es idempotente. El despachador los ve en el plan validado y los resuelve:
+   - `continuar`;
+   - `cancelar`: la solicitud de una parada **pendiente**;
+   - `re_ruteo`.
+8. **Re-ruteo** (§4). Sobre el plan validado de hoy, el despachador elige las jornadas que dejan de estar disponibles y genera una propuesta, que **no toca**:
+   - lo completado y lo no atendido;
+   - la parada en sitio o en servicio;
+   - el **viaje en curso completo** de cada unidad disponible.
 
-   Las solicitudes pasan a `en_ruta` al salir su viaje y a `atendida` al terminar su servicio.
+   Conserva en su unidad, como restricción, los viajes futuros de las unidades disponibles. Reubica en orden FIFO lo pendiente de las jornadas no disponibles y las solicitudes listas nuevas. Se revisa, se ajusta y se valida. Al validarla, el plan base queda `reemplazado`.
+9. **Captura (K1, K3 y K4).**
+   - Rutas: `salida_patio_en`, `regreso_patio_en`, `descarga_fin_en` y odómetros. `disponible_para_salir_en` del viaje siguiente pasa a ser la descarga real.
+   - Paradas: `llegada_en`, `inicio_servicio_en`, `fin_servicio_en`, `estado` y `motivo_no_atendida`.
+   - Solicitudes:
+     - pasan a `en_ruta` al salir su viaje y a `atendida` al terminar el servicio;
+     - al quedar no atendidas, vuelven a `pendiente` para el siguiente día de operación y se libera su parada.
 10. **Verificación.** `scripts/verificar-todo.sh` en verde, con:
-   - pruebas de propiedades de la máquina de eventos;
-   - pruebas de integración de idempotencia y concurrencia (el mismo evento enviado dos veces a la vez, un evento mientras se valida un re-ruteo);
-   - e2e en tamaño de teléfono: jornada completa, un evento repetido, un evento inválido y la cola sin conexión que se envía al volver la señal, más un incidente con re-ruteo.
+   - propiedades de la máquina de eventos;
+   - integración de idempotencia simultánea, evento contra re-ruteo y cancelación por incidente contra evento;
+   - e2e en tamaño de teléfono: jornada completa, evento repetido, evento inválido, sin conexión con recarga y envío posterior, e incidente con re-ruteo.
 
 ## 2. Modelo de datos (Claude, migración `0006`)
 
 | Tabla | Cambio |
 |---|---|
-| `eventos_operador` (nueva) | `id`, `evento_id` uuid **único**, `jornada_id`, `ruta_id` (null en `check_in`/`check_out`), `parada_id` (null salvo eventos de parada), `tipo`, `ocurrido_en` (reloj del teléfono), `recibido_en` (servidor), `version_ruta` (null si no hay ruta), `odometro_km` (salida y regreso), `motivo` (≤ 200, solo `no_atendida`), `huella` (SHA-256 del contenido canónico, para detectar el mismo `evento_id` con otro contenido), `usuario_id`. Solo inserción |
-| `incidentes` (nueva) | `id`, `evento_id` uuid único (idempotencia desde el teléfono), `jornada_id`, `ruta_id` y `parada_id` (opcionales), `tipo`, `descripcion` (≤ 300; la pantalla pide no escribir datos personales), `reportado_en`, `reportado_por`, `resuelto_en`, `resuelto_por`, `accion` (`continuar` \| `cancelar` \| `re_ruteo`), `version`. Sin DELETE |
-| `planes` | `tipo` (`inicial` \| `re_ruteo`, por omisión `inicial`), `plan_base_id` (el validado que reemplaza; obligatorio si `re_ruteo`), `estado` agrega `reemplazado`. Siguen los índices: un `validado` y un `propuesto` por fecha |
-| `rutas` | `continua_ruta_id` (null, o la ruta del plan anterior cuyo viaje físico continúa: el viaje en curso de una unidad que se re-rutea) |
-| `paradas` | `estado` agrega `reasignada` (la parada pasó a otra ruta en un re-ruteo; `vigente = false`). `motivo_no_atendida` (≤ 200) |
-| `jornadas` | Ya tiene `check_in_en` y `check_out_en` (Plan 2) |
+| `eventos_operador` (nueva) | `id`, `evento_id` uuid único, `jornada_id`, `ruta_id` y `parada_id` (según el tipo), `tipo`, `ocurrido_en`, `recibido_en`, `version_ruta`, `odometro_km`, `motivo` (≤ 200), `huella` (SHA-256 del contenido canónico, jornada incluida), `usuario_id`, `resultado` (`aplicado` \| `rechazado`), `motivo_rechazo`, `conciliado_en`, `conciliado_por`, `nota_conciliacion` (≤ 300). `rs_app`: INSERT, y UPDATE solo de las columnas de conciliación (con `GRANT UPDATE (…)`), sin DELETE |
+| `incidentes` (nueva) | `id`, `evento_id` uuid único, `huella`, `jornada_id`, `parada_id` (opcional), `tipo`, `descripcion` (≤ 300), `reportado_en`, `reportado_por`, `resuelto_en`, `resuelto_por`, `accion`, `version`. Sin DELETE |
+| `jornadas` | `version_operacion` (entero; sube con cada evento aplicado y con cada cancelación por incidente). El re-ruteo la compara |
+| `planes` | `tipo` (`inicial` \| `re_ruteo`), `plan_base_id`, `restricciones` (jsonb: `{ jornadasNoDisponibles: string[]; admitidas: Record<jornadaId, string[][]>; congeladas: string[] }`). `estado` agrega `reemplazado` |
+| `paradas` | `estado` agrega `en_servicio` y `reasignada`. `motivo_no_atendida` (≤ 200). `omitida` ya existe y se usa para la parada que deja de hacerse (pospuesta o cancelada por re-ruteo o incidente) |
+| `solicitudes` | Sin cambios de esquema |
 
-**Versiones y frescura.**
-
-- `rutas.version` cambia solo por un re-ruteo: es la versión **estructural** que manda el teléfono, para que uno desactualizado reciba `conflicto` y recargue.
-- Los eventos no cambian `rutas.version`. Si la cambiaran, los eventos encolados sin señal fallarían todos.
-- Para detectar que la operación avanzó mientras se revisaba un re-ruteo, `versiones` del plan de re-ruteo guarda el **número de eventos por jornada** al generar.
+`rutas.version` es la versión estructural: solo la cambia un re-ruteo, que retira paradas de esa ruta. Los eventos no la cambian, porque si lo hicieran los encolados sin señal fallarían.
 
 ## 3. Contratos
 
 ### 3.1 Dominio de la operación (Codex, `src/dominio/operacion/`)
 
 ```ts
-export type TipoEvento =
-  | "check_in" | "salida_patio" | "llegada" | "inicio_servicio" | "fin_servicio" | "no_atendida"
+export type TipoEvento = "check_in" | "salida_patio" | "llegada" | "inicio_servicio" | "fin_servicio" | "no_atendida"
   | "regreso_patio" | "fin_descarga" | "check_out";
-export type EstadoParadaOperacion = "pendiente" | "en_sitio" | "en_servicio" | "completada" | "no_atendida" | "reasignada";
+export type EstadoParada = "pendiente" | "en_sitio" | "en_servicio" | "completada" | "no_atendida" | "reasignada" | "omitida";
 
-/** Estado actual de una jornada, armado por la acción desde la base (con todo bloqueado). */
+export interface ParadaOperacion { paradaId: string; solicitudId: string; secuencia: number; estado: EstadoParada; vigente: boolean }
+export interface ViajeOperacion {
+  rutaId: string; numero: number; version: number;
+  salidaPatioEn: string | null; regresoPatioEn: string | null; descargaFinEn: string | null;
+  odometroInicioKm: number | null; paradas: ParadaOperacion[];          // en secuencia
+}
+/** Estado de una jornada en todos los planes validados o reemplazados de su fecha, armado con todo bloqueado. */
 export interface EstadoJornada {
-  fecha: string; checkIn: boolean; checkOut: boolean; ultimoOcurridoEn: string | null; ultimoOdometroKm: number | null;
-  viajes: {
-    rutaId: string; version: number; numero: number; continua: boolean;  // continua: el viaje físico ya salió en otra ruta
-    salida: boolean; regreso: boolean; descarga: boolean;
-    paradas: { paradaId: string; secuencia: number; estado: EstadoParadaOperacion }[];
-  }[];
+  jornadaId: string; fecha: string; checkInEn: string | null; checkOutEn: string | null;
+  ultimoOcurridoEn: string | null; ultimoOdometroKm: number | null; viajes: ViajeOperacion[]; // en orden de salida planeada
 }
 export interface EventoEntrada {
-  eventoId: string; tipo: TipoEvento; ocurridoEn: string; rutaId: string | null; paradaId: string | null;
-  versionRuta: number | null; odometroKm: number | null; motivo: string | null;
+  eventoId: string; jornadaId: string; tipo: TipoEvento; ocurridoEn: string;
+  rutaId: string | null; paradaId: string | null; versionRuta: number | null; odometroKm: number | null; motivo: string | null;
 }
 export type Efecto =
   | { tipo: "jornada"; campo: "check_in_en" | "check_out_en" }
   | { tipo: "ruta"; rutaId: string; campo: "salida_patio_en" | "regreso_patio_en" | "descarga_fin_en"; odometroKm?: number }
-  | { tipo: "parada"; paradaId: string; estado: EstadoParadaOperacion; campo: "llegada_en" | "inicio_servicio_en" | "fin_servicio_en" | null; motivo?: string }
-  | { tipo: "solicitudes_en_ruta"; rutaId: string }
-  | { tipo: "solicitud_atendida"; paradaId: string }
-  | { tipo: "solicitud_no_atendida"; paradaId: string };
+  | { tipo: "disponibilidad_siguiente"; rutaId: string }                 // el viaje siguiente queda disponible con la descarga real
+  | { tipo: "parada"; paradaId: string; estado: EstadoParada; campo: "llegada_en" | "inicio_servicio_en" | "fin_servicio_en" | null; motivo?: string; liberar?: boolean }
+  | { tipo: "solicitudes"; rutaId: string; estado: "en_ruta" }
+  | { tipo: "solicitud"; paradaId: string; estado: "atendida" | "pendiente_siguiente_dia" };
 
-/** Pura. recibidoEn: hora del servidor. Las reglas están en §4. */
+/** Pura. recibidoEn: hora del servidor. */
 export function aplicarEvento(estado: EstadoJornada, evento: EventoEntrada, recibidoEn: string):
-  | { ok: true; efectos: Efecto[] }
-  | { ok: false; motivo: string };
+  | { ok: true; efectos: Efecto[] } | { ok: false; motivo: string };
+export function huellaEvento(evento: EventoEntrada): string;          // canónica: claves ordenadas, sin recibidoEn
 
-/** Huella canónica del contenido del evento (sin recibidoEn), para la idempotencia. */
-export function huellaEvento(evento: EventoEntrada): string;
-
-/** Frontera de lo congelado para el re-ruteo (§4, Re-ruteo). */
-export function congeladoDeJornada(estado: EstadoJornada, plan: /* rutas del plan vigente con paradas */ unknown): {
-  congeladas: string[];        // paradaIds que no se tocan
-  comprometida: string | null; // la siguiente pendiente del viaje en curso, si el viaje salió y no hay parada en sitio
-  pendientes: string[][];      // por viaje, en orden: lo que se conserva en la unidad (o se reubica si la jornada no está disponible)
-};
+/** Frontera del re-ruteo (§4). disponible: si la jornada sigue disponible. ahora: minutos en Ciudad de México. */
+export function fronteraDeReruteo(estado: EstadoJornada, disponible: boolean, ahoraMin: number, plan: { viajes: { rutaId: string; finDescargaMin: number; salidaMin: number }[] }):
+  | { ok: true; congeladas: string[]; viajeEnCurso: string | null; libreDesdeMin: number; admitidas: string[][]; aReubicar: string[] }
+  | { ok: false; motivo: string };                                     // p. ej., jornada no disponible con parada en sitio
 ```
 
-### 3.2 Motor (Codex): admitidas previas
+### 3.2 Motor (Codex): admitidas como restricción
 
 ```ts
-/**
- * admitidas: por unidad, viajes con solicitudes ya admitidas, en su orden. Se admiten antes de la cola FIFO,
- * no se quitan ni se reordenan entre sí y pueden recibir inserciones. Sus solicitudes vienen en entrada.solicitudes.
- * Si no son factibles tal cual, generarPlan lanza ErrorAdmitidas con la unidad y la causa.
- * El primer viaje de una unidad con cargaActualKg > 0 continúa el viaje en curso (Plan 3, UnidadMotor).
- */
-export function generarPlan(entrada: EntradaPlan, opciones?: { admitidas?: Record<string, string[][]> }): Plan;
+export interface RestriccionesPlan { admitidas: Record<string, string[][]> }   // por unidad: viajes con solicitudes ya admitidas, en su orden
+export function generarPlan(entrada: EntradaPlan, restricciones?: RestriccionesPlan): Plan;
+export function ajustarPlan(entrada: EntradaPlan, plan: Plan, ajuste: AjusteManual, restricciones?: RestriccionesPlan): ResultadoAjuste;
+export function validarPlan(entrada: EntradaPlan, plan: Plan, opciones?: { ajustadoAMano?: boolean; restricciones?: RestriccionesPlan }): string[];
 ```
 
-- La traza registra las admitidas previas como decisiones `admitida` con `previa: true`.
-- `validarPlan` las excluye de la propiedad FIFO, pero comprueba que conservan su unidad y su orden relativo.
+- Las admitidas se admiten antes de la cola FIFO. No se quitan, no cambian de unidad ni de viaje, y conservan su orden relativo. Pueden recibir inserciones.
+- Si no son factibles tal cual, `generarPlan` lanza `ErrorAdmitidas`, con la unidad y la causa.
+- `ajustarPlan` rechaza mover o posponer una admitida (`entrada_invalida`).
+- `validarPlan` comprueba las restricciones de forma independiente; la traza no es su propia autoridad. FIFO solo se exige entre las no admitidas.
+- Todas las unidades del re-ruteo empiezan en el patio y sin carga, con `libreDesdeMin` al terminar su viaje en curso. Por eso valen sin cambios `recalcularRuta` y la regla "solo plan inicial" de los ajustes.
 
 ### 3.3 Acciones y consultas (Claude)
 
@@ -130,164 +144,168 @@ export function generarPlan(entrada: EntradaPlan, opciones?: { admitidas?: Recor
 |---|---|
 | `ruta.operar` | operador (solo su jornada) |
 | `operacion.ver` | despachador, gerencia |
+| `operacion.conciliar` | despachador |
 | `incidentes.resolver` | despachador |
 | re-ruteo | `planes.generar` y `planes.validar` |
 
 ```ts
 // src/consultas/operador.nucleo.ts — ruta.operar
-export interface VistaMiRuta {
-  fecha: string; jornadaId: string | null; unidad: UnidadResumen | null; estado: EstadoJornada | null;
-  viajes: { rutaId; version; numero; salidaEstimada; regresoEstimado; paradas: {
-    paradaId; secuencia; folio; cliente: { nombre; direccion; notasAcceso; lat; lng }; ventana; llegadaEstimada; cargaKg; estado;
-  }[] }[];
-  incidentesAbiertos: { id; tipo; reportadoEn }[];
-}
-miRuta(ctx): Promise<Resultado<VistaMiRuta>>       // hoy en Ciudad de México
-
+miRuta(ctx, jornadaId?: unknown): Promise<Resultado<VistaMiRuta>>  // sin jornadaId: la de hoy; con id: una de las últimas 24 h, propia
 // src/acciones/operador.nucleo.ts — ruta.operar
-registrarEventoOperador(ctx, evento: unknown /* EventoEntrada */): Promise<Resultado<{ estado: EstadoJornada; repetido: boolean }>>
-reportarIncidente(ctx, entrada: unknown /* { eventoId, tipo, descripcion, paradaId? } */): Promise<Resultado<{ id: string; repetido: boolean }>>
-
+registrarEventoOperador(ctx, evento: unknown): Promise<Resultado<{ resultado: "aplicado" | "rechazado"; motivo: string | null; repetido: boolean; estado: EstadoJornada }>>
+reportarIncidente(ctx, entrada: unknown /* { eventoId, jornadaId, tipo, descripcion, paradaId? } */): Promise<Resultado<{ id: string; repetido: boolean }>>
 // src/acciones/operacion.nucleo.ts
-resolverIncidente(ctx, id, versionEsperada, entrada: unknown /* { accion } */): Promise<Resultado<{ version: number }>>   // incidentes.resolver
-generarReruteo(ctx, fecha, entrada: unknown /* { jornadasNoDisponibles: string[] } */): Promise<Resultado<{ planId: string }>> // planes.generar
-// validar un re-ruteo: validarPlanDelDia (Plan 4), que reconoce plan.tipo = "re_ruteo" (§4)
-
+conciliarEvento(ctx, eventoId, entrada /* { nota } */)                      // operacion.conciliar
+resolverIncidente(ctx, id, versionEsperada, entrada /* { accion } */)       // incidentes.resolver
+generarReruteo(ctx, planBaseId, versionEsperada, entrada /* { jornadasNoDisponibles } */): Promise<Resultado<{ planId: string }>>
+// validar el re-ruteo: validarPlanDelDia, con una rama propia para plan.tipo = "re_ruteo" (§4)
 // src/consultas/operacion.nucleo.ts — operacion.ver
-seguimiento(ctx, fecha): Promise<Resultado<{ porJornada: { jornadaId; operador; placa; avance: { completadas; pendientes; noAtendidas }; ultimoEvento: { tipo; en } | null }[]; incidentesAbiertos: {...}[] }>>
+seguimiento(ctx, fecha): Promise<Resultado<{ porJornada: …; incidentesAbiertos: …; eventosRechazados: … }>>
 ```
 
-`CodigoConflicto` agrega `evento_distinto` (mismo `evento_id`, otro contenido), `ruta_cambiada` (versión de ruta vieja) y `operacion_avanzo` (cambiaron los eventos de una jornada mientras se revisaba el re-ruteo).
+`obtenerPlan(ctx, fecha, planId?)` acepta un plan específico (para revisar una propuesta de re-ruteo junto al validado) y agrega `reruteoPropuesto: { planId } | null` y `congeladas: string[]`.
+
+`CodigoConflicto` agrega `evento_distinto`, `ruta_cambiada` y `operacion_avanzo`.
+
+**Registrar un evento.** En una transacción, en este orden:
+
+1. autorizar con `ruta.operar` y la jornada propia;
+2. tomar el candado de la fecha y bloquear la jornada (`FOR UPDATE`);
+3. **releer el `evento_id`**: si ya existe con la misma huella, se responde su resultado original; con otra huella, `evento_distinto`;
+4. bloquear rutas, paradas y solicitudes de la jornada;
+5. `aplicarEvento`:
+   - si se aplica, efectos, evento `aplicado`, `version_operacion + 1` y bitácora;
+   - si se rechaza, evento `rechazado` con su motivo, sin efectos, y bitácora.
+
+La violación del índice único de un envío simultáneo se traduce fuera de la transacción: el envío vuelve a leer y responde `repetido`.
 
 ## 4. Reglas
 
-### Eventos (`aplicarEvento`)
+### Máquina de eventos (`aplicarEvento`)
 
-- **Orden y hora.**
-  - `ocurrido_en` debe estar en la fecha de la jornada (Ciudad de México);
-  - no puede ser anterior al último evento de la jornada ni más de 2 minutos posterior a `recibido_en`.
-- **`check_in`:** una vez y antes de todo. **`check_out`:** cuando no queda ningún viaje con salida sin descarga y no hay paradas en sitio.
-- **`salida_patio`:**
-  - requiere `check_in`, que el viaje anterior esté descargado y que el viaje no sea una continuación;
-  - el odómetro debe ser mayor o igual que el último de la unidad;
-  - las solicitudes del viaje pasan a `en_ruta`.
-- **`llegada`:**
-  - a cualquier parada `pendiente` del viaje que ya salió (el operador puede cambiar el orden);
-  - solo si no hay otra parada en sitio o en servicio.
-- **Servicio:**
-  - `inicio_servicio` requiere `en_sitio`;
-  - `fin_servicio` requiere `en_servicio` y deja la parada `completada` y la solicitud `atendida`.
-- **`no_atendida`:**
-  - desde `pendiente` o `en_sitio`, con motivo;
-  - la solicitud vuelve a `pendiente` para el siguiente día de operación, con una posposición más y su `registrada_en` original (decisión a confirmar con Codex: §8.1).
-- **`regreso_patio`:** requiere todas las paradas del viaje cerradas (`completada`, `no_atendida` o `reasignada`) y un odómetro mayor o igual que el de salida. **`fin_descarga`:** requiere `regreso_patio`.
-- **Paradas y rutas no vigentes:** un evento sobre una parada no vigente, o con `version_ruta` vieja, responde `conflicto` (`ruta_cambiada`).
+Es exhaustiva. Cualquier evento que no esté en la tabla se rechaza.
 
-### Registrar un evento (acción)
+| Evento | Requiere | Efecto |
+|---|---|---|
+| `check_in` | Sin `check_in` previo | Jornada `check_in_en` |
+| `salida_patio` (viaje v) | `check_in`, sin `check_out`, v sin salida, el viaje anterior con `descarga_fin_en`, v con paradas vigentes, odómetro ≥ último | Ruta `salida_patio_en` y odómetro; solicitudes del viaje `en_ruta` |
+| `llegada` (parada p) | El viaje de p salió y no regresó; p `pendiente` y vigente; p es la **primera pendiente en secuencia** de su viaje; ninguna otra en sitio o en servicio | p `en_sitio`, `llegada_en` |
+| `inicio_servicio` | p `en_sitio` | p `en_servicio`, `inicio_servicio_en` |
+| `fin_servicio` | p `en_servicio` | p `completada`, `fin_servicio_en`; solicitud `atendida` |
+| `no_atendida` | El viaje salió; p es la primera pendiente o está en sitio; motivo | p `no_atendida`, motivo, `vigente = false`; solicitud `pendiente` para el siguiente día de operación (con una posposición más y su registro original) |
+| `regreso_patio` (v) | v salió y no regresó; todas sus paradas cerradas (`completada`, `no_atendida`, `reasignada` u `omitida`); odómetro ≥ el de salida | Ruta `regreso_patio_en` y odómetro |
+| `fin_descarga` (v) | v regresó, sin descarga | Ruta `descarga_fin_en`; el viaje siguiente queda con `disponible_para_salir_en` igual a esta hora |
+| `check_out` | `check_in`; ningún viaje con salida y sin descarga; ninguna parada vigente pendiente, en sitio o en servicio | Jornada `check_out_en`. Después, nada |
 
-1. Validar la entrada con Zod.
-2. Buscar el `evento_id`:
-   - si ya existe con la misma huella, responder el estado actual con `repetido: true`;
-   - si existe con otra huella, `conflicto` (`evento_distinto`).
-3. Abrir la transacción:
-   1. candado de la fecha;
-   2. jornada `FOR UPDATE`, comprobando que es del operador;
-   3. rutas y paradas vigentes;
-   4. armar el `EstadoJornada` y llamar a `aplicarEvento`;
-   5. aplicar los efectos e insertar el evento y la bitácora.
-4. Si dos envíos simultáneos del mismo evento chocan en el índice único, el perdedor relee y responde `repetido` (o `evento_distinto`).
+- **Hora.** `ocurrido_en` cae en la fecha de la jornada (Ciudad de México). No es anterior al último evento aplicado de la jornada ni más de 2 minutos posterior a `recibido_en`. El evento se recibe a lo sumo 24 horas después de ocurrir.
+- **Vigencia.** Un evento sobre una parada no vigente, o con `version_ruta` distinta de la actual, se rechaza con el motivo "La ruta cambió: llama al despachador".
+- **Orden.** El operador sigue la secuencia. Para saltar una parada la marca "No se pudo atender", o el despachador re-rutea. Así, el tramo comprometido es siempre la primera pendiente del viaje en curso, y K1 usa la parada anterior en la secuencia, que es también la anterior en el tiempo.
 
-### Re-ruteo
+### Re-ruteo (`generarReruteo`)
 
-**Qué se congela por jornada:**
+1. Se toma el plan base validado de hoy, en su versión, y las `jornadasNoDisponibles`.
+2. **Jornadas disponibles**, por `fronteraDeReruteo`:
+   - el viaje en curso, si ya salió y no se ha descargado, se congela **completo**, incluidas sus pendientes;
+   - `libreDesdeMin` es el fin de descarga planeado de ese viaje más el retraso acumulado (hora real del último evento menos su hora planeada), y nunca antes de ahora. Sin viaje en curso, es ahora;
+   - los viajes futuros, que no han salido, pasan como `admitidas`.
+3. **Jornadas no disponibles:**
+   - se congela solo lo completado y lo no atendido;
+   - si tienen una parada en sitio o en servicio, la acción responde `invalido`: el operador debe cerrarla primero;
+   - todo lo demás vigente se reubica.
+4. **Solicitudes:** las admitidas, las por reubicar y las `lista` de hoy sin parada vigente.
+5. `generarPlan(entrada, { admitidas })` con unidades en el patio, sin carga y desde `libreDesdeMin`. Se guarda como `propuesto`, tipo `re_ruteo`, con:
+   - `plan_base_id`;
+   - `restricciones` (`jornadasNoDisponibles`, `admitidas` y `congeladas`);
+   - `versiones`, con la versión del plan base y `version_operacion` de cada jornada.
 
-- paradas `completada`, `no_atendida` y `reasignada`;
-- la parada en sitio o en servicio;
-- si el viaje en curso ya salió y no hay parada en sitio, la siguiente pendiente en secuencia (el **tramo comprometido**).
+**Validar un re-ruteo** es una rama propia de `validarPlanDelDia`:
 
-**Unidades disponibles.** Cada una entra al motor así:
-
-- **ubicación inicial:** la última parada congelada del viaje en curso, o el patio si no hay viaje en curso;
-- **libre desde:** el fin estimado de lo congelado, recalculado desde el último evento real y nunca antes de ahora;
-- **carga:** la carga de las paradas congeladas del viaje en curso.
-
-Sus pendientes no congeladas van como `admitidas`. El primer arreglo es la continuación del viaje en curso; si existe, la ruta nueva lleva `continua_ruta_id`.
-
-**Jornadas no disponibles.**
-
-- Sus pendientes no congeladas van como solicitudes a reubicar en FIFO.
-- No se permite re-rutear una jornada no disponible con una parada en sitio: el despachador pide primero al operador cerrarla (`fin_servicio` o `no_atendida`).
-- También entran las solicitudes `lista` del día que no están en ninguna parada vigente.
-
-**Guardado.** Se guarda como plan `propuesto` de tipo `re_ruteo`, con `plan_base_id` y `versiones`, que incluyen los eventos por jornada. Se ajusta igual que en el Plan 4.
-
-**Validación.** Es la del Plan 4, más:
-
-- comprobar que el número de eventos por jornada no cambió (`operacion_avanzo`);
-- marcar `reemplazado` el plan base;
-- dejar `vigente = false` y estado `reasignada` en las paradas reubicadas del plan base;
-- subir la `version` de las rutas base que pierden paradas;
-- insertar las rutas nuevas (con `continua_ruta_id` donde aplica) y sus paradas vigentes;
-- las paradas congeladas siguen vigentes en el plan base.
+1. **Bloqueos:** los mismos que en el Plan 4, más el plan base y las paradas vigentes del base.
+2. **Frescura:**
+   - el plan base sigue `validado` y en su versión;
+   - ninguna `version_operacion` cambió (`operacion_avanzo`).
+3. **Solicitudes:**
+   - las ya programadas solo se aceptan si su parada vigente es del plan base y no está congelada;
+   - las nuevas deben estar `pendiente`, sin parada vigente y elegibles.
+4. **Escrituras**, en este orden:
+   1. retirar en el plan base las paradas pendientes no congeladas: `vigente = false`, con estado `reasignada` si quedan ruteadas en el nuevo, u `omitida` si quedan pospuestas;
+   2. subir la `version` de las rutas base que pierden paradas;
+   3. insertar las rutas y paradas nuevas;
+   4. pasar a `programada` las solicitudes nuevas ruteadas, y las pospuestas al siguiente día;
+   5. marcar el plan base `reemplazado` y el nuevo `validado`;
+   6. bitácora.
+5. **Lo que se conserva:** las congeladas siguen vigentes en el plan base, y los viajes en curso no cambian.
 
 ### Incidentes
 
-- Reportar es idempotente por `evento_id`.
-- Resolver exige la versión:
-  - `cancelar` cancela la solicitud de la parada con el motivo "Cancelada por incidente" y deja la parada `reasignada`, sin vigencia;
-  - `re_ruteo` solo marca la acción: el despachador genera el re-ruteo aparte.
+- **Reportar:** idempotente por `evento_id` y huella. Sube `version_operacion`.
+- **Resolver con `cancelar`:**
+  - solo para una parada vigente `pendiente`;
+  - toma el candado de la fecha y bloquea la jornada, como los eventos;
+  - cancela la solicitud ("Cancelada por incidente"), deja la parada `omitida` sin vigencia y sube `version_operacion`.
+- **Resolver con `re_ruteo`:** solo registra la acción.
 
 ### Privacidad
 
-- No se captura la ubicación GPS del teléfono. El piloto no la necesita, porque K1, K3 y K4 salen de horas y odómetros (minimización, LFPDPPP art. 6 y 11).
-- Si en el futuro se capturara, antes habría que actualizar el aviso del operador.
-- Sigue vigente que un operador sin aviso entregado no está disponible (Plan 2).
+No se captura la ubicación del teléfono, porque K1, K3 y K4 salen de horas y odómetros (minimización). Esto actualiza el texto de la especificación §10. Si se agregara, sería solo en los eventos que marque el operador y con su aviso.
 
-## 5. Pantallas (Codex)
+## 5. Pantallas (Codex) y service worker (Claude)
 
-### `/operador` (teléfono)
+- **`/operador`:**
+  - un solo botón principal según el estado, grande, con confirmación para el odómetro y para "No se pudo atender";
+  - indicador de conexión y de eventos por enviar, y lista de rechazados ("Llama al despachador");
+  - reportar incidente.
+  - La cola y la ruta van en `localStorage` con clave `rs-operador:<usuarioId>:<jornadaId>`. Se envían en orden, al volver la señal y cada 30 segundos.
+- **Service worker (Claude, `public/sw-operador.js`, alcance `/operador`):**
+  - red primero para la navegación de `/operador`, con respaldo en caché;
+  - caché para `/_next/static`.
+  - Se registra solo en `/operador`. Al cerrar sesión se borran su caché y las claves `rs-operador:` del teléfono.
+  - El e2e lo habilita sobre `http://web:3000` con `--unsafely-treat-insecure-origin-as-secure`.
+- **Plan del día (despacho)** validado, con sondeo cada 30 segundos:
+  - seguimiento por unidad, incidentes abiertos y eventos rechazados por conciliar;
+  - **Re-rutear**: elegir jornadas, generar y revisar la propuesta en `?plan=<id>`, con las congeladas en solo lectura;
+  - ajustar y validar.
 
-- Encabezado con la fecha y la unidad. Indicador de conexión y de eventos pendientes de enviar.
-- Botones grandes, de uno en uno, según el estado: "Llegué al patio", "Salgo del patio" (pide odómetro), "Llegué", "Empiezo", "Terminé", "No se pudo atender" (pide motivo), "Regresé al patio" (pide odómetro), "Terminé de descargar" y "Termino jornada".
-- Lista de paradas del viaje con ventana, notas de acceso y enlace `geo:`.
-- Reportar incidente.
-- **Sin conexión:**
-  - la última `VistaMiRuta` se guarda en `localStorage` y la cola de eventos también;
-  - se reintenta al volver la señal (`online`) y cada 30 segundos, en orden;
-  - un rechazo detiene la cola y muestra el motivo con la opción de descartar ese evento;
-  - el `evento_id` se genera con `crypto.getRandomValues`, que funciona sin HTTPS en la red local (ya existe `generarOperacionId`).
+## 6. Qué revisar con más cuidado
 
-### Plan del día (despacho)
+- **Idempotencia:** un reintento simultáneo nunca aplica dos veces un evento.
+- **Rechazos:** un rechazo nunca se pierde; queda en la base para conciliarse.
+- **Lo congelado:** el re-ruteo nunca toca lo congelado ni reordena o cambia de unidad las admitidas. Una validación de re-ruteo con eventos nuevos en medio se rechaza.
+- **Sin conexión:** la pantalla abre sin conexión después de recargar.
+- **Odómetros:** son monótonos por unidad, y `disponible_para_salir_en` se actualiza con la descarga real.
 
-En planes validados:
-
-- **Seguimiento por unidad:** avance y último evento, con sondeo cada 30 segundos;
-- **incidentes abiertos** con sus acciones;
-- **Re-rutear:** elegir las jornadas no disponibles, generar, revisar las partes congeladas en solo lectura, ajustar y validar.
-
-## 6. Tareas
+## 7. Tareas
 
 | # | Responsable | Tarea |
 |---|---|---|
-| R0a | Codex | Contratos compilables de §3.1 y §3.2 (funciones nuevas pendientes; `generarPlan` amplía su firma sin cambiar su comportamiento) |
-| R0b | Claude | Migración `0006`, permisos, códigos de conflicto, firmas de §3.3 pendientes y pruebas de integración de índices y permisos |
-| R1 | Codex | Máquina de eventos y `congeladoDeJornada`, con pruebas de propiedades: ninguna secuencia aceptada deja dos paradas en sitio, una completada sin llegada o un odómetro decreciente |
-| R2 | Codex | `admitidas` en el motor y en `validarPlan`, con pruebas de propiedades: las admitidas conservan unidad y orden, y FIFO se respeta entre las demás |
-| R3 | Claude | Acciones y consultas de §3.3 y la validación de re-ruteo. Pruebas: idempotencia (secuencial y simultánea), huella distinta, operador ajeno, versión de ruta vieja, cada transición inválida, efectos en solicitudes, incidente y cancelar, re-ruteo con jornada averiada, operación que avanza durante la revisión, continuidad de viaje y K1/K3/K4 capturados |
+| R0a | Codex | Contratos compilables de §3.1 y §3.2 (pendientes solo las funciones nuevas; las firmas ampliadas conservan su comportamiento) |
+| R0b | Claude | Migración `0006`, permisos (incluido el `GRANT UPDATE` por columna), códigos de conflicto, firmas de §3.3 pendientes y pruebas de esquema |
+| R1 | Codex | `aplicarEvento`, `huellaEvento` y `fronteraDeReruteo`, con propiedades: ninguna secuencia aceptada deja dos paradas en sitio, una completada sin llegada, un odómetro decreciente ni eventos después de `check_out` |
+| R2 | Codex | Restricciones `admitidas` en `generarPlan`, `ajustarPlan` y `validarPlan`, con propiedades: conservan unidad, viaje y orden, y FIFO se cumple entre las demás |
+| R3 | Claude | Acciones y consultas, rama de validación de re-ruteo y service worker. Pruebas: idempotencia secuencial y simultánea, huella distinta, operador ajeno (también al repetir), rechazos guardados y conciliados, cada efecto, cancelación por incidente contra evento, re-ruteo con avería y con viaje en curso, operación que avanza, y K1, K3 y K4 capturados |
 | R4 | Codex | Pantallas de §5 |
-| R5 | Codex escribe, Claude ejecuta | e2e en tamaño de teléfono de §1.10 (`context.setOffline` para la cola) |
+| R5 | Codex escribe, Claude ejecuta | e2e de §1.10 en tamaño de teléfono |
 | R6 | Ambos | Revisión cruzada y `verificar-todo.sh` sobre el mismo commit |
 
-## 7. Qué revisar con más cuidado
+## 8. Cambios de texto en la especificación (en el commit de este plan)
 
-- Un reintento sin señal nunca duplica un evento ni lo aplica dos veces, incluso con dos envíos simultáneos.
-- El re-ruteo no mueve nada congelado ni reordena las admitidas.
-- Un viaje físico partido en dos rutas (`continua_ruta_id`) conserva sus odómetros para K4.
-- Las horas del teléfono pueden estar mal: la regla de `ocurrido_en` (§4) y su prueba.
-- La cola del teléfono no pierde eventos al recargar ni al cerrar la pestaña.
+- **§8 Re-ruteo.** El viaje en curso de cada unidad disponible se congela completo. Las pendientes de las demás unidades disponibles se conservan como restricción (`admitidas`). Se reubican en FIFO las de las jornadas no disponibles y las solicitudes listas nuevas.
+- **§10.** En el piloto no se captura la ubicación del operador.
 
-## 8. Decisiones para revisar con Codex
+## 9. Respuesta a la revisión de Codex (2026-10-15)
 
-1. **Parada no atendida.** La solicitud vuelve a `pendiente` para el siguiente día de operación, conservando su lugar FIFO, y el despachador puede cancelarla. La alternativa es cerrarla como `no_atendida` y que el despachador la vuelva a registrar.
-2. **Orden de las paradas.** El operador puede llegar a cualquier pendiente del viaje en curso. K1 usa la parada anterior **en el tiempo**, no en la secuencia planeada.
-3. **Congelar el viaje en curso.** Se conserva en su unidad todo lo pendiente de las unidades disponibles (como `admitidas`); solo se reubica lo de las jornadas no disponibles y lo nuevo. Esto cumple "sin mover a las ya admitidas" (§7.4) con el contrato de `UnidadMotor` del Plan 3.
+| # | Hallazgo | Decisión |
+|---|---|---|
+| 1 | Idempotencia antes de autorizar; carrera antes del índice | Autorizar primero; releer `evento_id` con la jornada bloqueada; resultado original guardado (§3.3) |
+| 2 | Cola atrasada y rechazos | `jornadaId` en el evento y en la huella; recepción hasta 24 h; rechazos guardados y conciliables; almacenamiento por usuario y jornada que se borra al salir (§1.6, §2) |
+| 3 | Máquina incompleta | Tabla exhaustiva con terminalidad, repetidos, `no_atendida` solo con el viaje en curso y `check_out` sin pendientes; `en_servicio` en el enum (§4) |
+| 4 | Frontera congelada con orden libre | Orden restringido a la secuencia; las jornadas no disponibles no congelan pendientes; contrato tipado (§3.1, §4) |
+| 5 | Carga y continuidad física | No se parten viajes: el viaje en curso se congela completo y las unidades re-ruteadas empiezan en el patio sin carga; sin `continua_ruta_id` (§4) |
+| 6 | `admitidas` persistidas | `planes.restricciones` y comprobación independiente en `validarPlan` y `ajustarPlan` (§3.2) |
+| 7 | Validación de re-ruteo | Rama propia con reglas para las ya programadas y orden de escrituras (§4) |
+| 8 | Incidentes y frescura | `version_operacion` sube con eventos e incidentes; cancelar solo pendientes, con los mismos bloqueos (§4) |
+| 9 | Continuaciones e indicadores | Eliminadas al no partir viajes; disponibilidad del viaje siguiente con la descarga real (§4) |
+| 10 | Propuesta oculta y carga sin conexión | `obtenerPlan` por `planId`; service worker para `/operador` (§3.3, §5) |
+| §8.1 | Parada no atendida | Se libera (`vigente = false`) y la solicitud vuelve a `pendiente` |
+| §8.2 | Orden real | Sustituido por orden restringido |
+| §8.3 | Solicitudes nuevas en el re-ruteo y GPS | Documentados en §8 de este plan |

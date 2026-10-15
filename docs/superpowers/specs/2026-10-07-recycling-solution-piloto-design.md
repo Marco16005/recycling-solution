@@ -246,7 +246,7 @@ Modelo de traslado: `km = haversine × factor_circuidad`; `min = km ÷ velocidad
 
 ### Re-ruteo
 
-Es `generarPlan` con unidades que ya descuentan lo congelado (paradas completadas, en sitio y tramo comprometido): cada unidad empieza donde y cuando termina lo congelado, con la carga que lleva. Solo recibe las solicitudes pendientes de la ruta afectada y las reubica en orden FIFO.
+Es `generarPlan` con restricciones (Plan 5, §4). No toca lo completado, lo no atendido ni la parada en sitio, y el viaje en curso de cada unidad disponible se congela completo (incluye el tramo comprometido): la unidad vuelve a entrar al motor en el patio, sin carga, al terminar ese viaje. Los viajes futuros de las unidades disponibles se conservan en su unidad y en su orden como `admitidas` (pueden recibir inserciones). Se reubican en orden FIFO las pendientes de las jornadas que dejan de estar disponibles y las solicitudes listas nuevas del día.
 
 ### Por qué se le llama inteligencia artificial
 
@@ -299,7 +299,7 @@ Dos roles creados por el script de inicio de `db`: `rs_migrador`, dueño del esq
 - Datos personales mínimos: nombre y teléfono de contacto.
 - Historial de aceptación del aviso en `aceptaciones_privacidad`; retirar la aceptación no borra el historial.
 - La bitácora registra qué campos cambiaron, no sus valores.
-- La ubicación del operador solo se capturará en los eventos que él marque (Plan 5), con su propio aviso de privacidad.
+- En el piloto no se captura la ubicación del operador: los indicadores salen de horas y odómetros (minimización; Plan 5, §4). Si se agregara, sería solo en los eventos que él marque y con su propio aviso de privacidad.
 - El repositorio solo contiene datos sintéticos.
 - Retención: la bitácora y el historial de privacidad se conservan mientras dure el piloto; el plazo posterior y el borrado o anonimización los decide el dueño (§14, decisión 10).
 
