@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { FilaUsuario, ListadoUsuarios } from "@/consultas/usuarios";
 import { ROLES, type Rol } from "@/seguridad/permisos";
+import { useHidratado } from "./hidratado";
 
 const ETIQUETA_ROL: Record<Rol, string> = {
   admin: "Administrador",
@@ -39,7 +40,9 @@ function mensajes(r: Fallo, irAEntrar: () => void): string[] {
 
 export function TablaUsuarios({ usuarios, operadoresSinUsuario, usuarioActualId }: ListadoUsuarios) {
   const router = useRouter();
-  const [pendiente, iniciar] = useTransition();
+  const hidratado = useHidratado();
+  const [enCurso, iniciar] = useTransition();
+  const pendiente = enCurso || !hidratado;
   const [errores, setErrores] = useState<string[]>([]);
   const [clave, setClave] = useState<{ correo: string; clave: string } | null>(null);
   const [nuevo, setNuevo] = useState<{ correo: string; nombre: string; rol: Rol; operadorId: string }>({
@@ -113,7 +116,7 @@ export function TablaUsuarios({ usuarios, operadoresSinUsuario, usuarioActualId 
           </div>
         ) : <div />}
         <div className="sm:col-span-5">
-          <Button type="submit" disabled={pendiente}>{pendiente ? "Guardando…" : "Crear usuario"}</Button>
+          <Button type="submit" disabled={pendiente}>{enCurso ? "Guardando…" : "Crear usuario"}</Button>
         </div>
       </form>
 

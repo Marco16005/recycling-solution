@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { ConfiguracionVista } from "@/consultas/configuracion";
 import { DIAS_SEMANA } from "@/dominio/clientes/etiquetas";
+import { useHidratado } from "./hidratado";
 
 const SelectorUbicacion = dynamic(() => import("@/components/clientes/selector-ubicacion").then((m) => m.SelectorUbicacion), {
   ssr: false,
@@ -27,11 +28,15 @@ const CAMPOS_NUMERICOS: { campo: keyof Valores; titulo: string; paso: string }[]
 
 export function FormularioConfiguracion({ configuracion }: { configuracion: ConfiguracionVista }) {
   const router = useRouter();
-  const [pendiente, iniciar] = useTransition();
+  const hidratado = useHidratado();
+  const [enCurso, iniciar] = useTransition();
+  const pendiente = enCurso || !hidratado;
   const [errores, setErrores] = useState<Record<string, string[]>>({});
   const [mensaje, setMensaje] = useState("");
-  const { version, versionAvisoPrivacidad, estiloMapaUrl, ...inicial } = configuracion;
+  const { version: versionInicial, versionAvisoPrivacidad, estiloMapaUrl, ...inicial } = configuracion;
   const [valores, setValores] = useState<Valores>(inicial);
+  // La versión avanza con cada guardado propio; el formulario no se reinicia, así el mensaje sigue visible.
+  const [version, setVersion] = useState(versionInicial);
 
   const cambiar = <K extends keyof Valores>(campo: K, valor: Valores[K]) => {
     setValores((v) => ({ ...v, [campo]: valor }));
@@ -44,6 +49,7 @@ export function FormularioConfiguracion({ configuracion }: { configuracion: Conf
     iniciar(async () => {
       const r = await guardarConfiguracionAccion(version, valores);
       if (r.ok) {
+        setVersion(r.valor.version);
         setMensaje("Configuración guardada.");
         router.refresh();
         return;
@@ -153,7 +159,7 @@ export function FormularioConfiguracion({ configuracion }: { configuracion: Conf
         Versión vigente del aviso de privacidad: <strong>{versionAvisoPrivacidad}</strong>. Se cambia publicando una versión nueva con
         <code className="mx-1">publicar-aviso</code>(ver docs/operacion.md).
       </p>
-      <Button type="submit" disabled={pendiente}>{pendiente ? "Guardando…" : "Guardar configuración"}</Button>
+      <Button type="submit" disabled={pendiente}>{enCurso ? "Guardando…" : "Guardar configuración"}</Button>
     </form>
   );
 }

@@ -6,7 +6,7 @@ import { obtenerConfiguracionConsulta } from "@/consultas/configuracion";
 async function Configuracion() {
   const r = await obtenerConfiguracionConsulta();
   if (!r.ok) return <p role="alert">{mensajesDeFallo(r).join(" ")}</p>;
-  return <FormularioConfiguracion key={r.valor.version} configuracion={r.valor} />;
+  return <FormularioConfiguracion configuracion={r.valor} />;
 }
 
 export default function PaginaConfiguracion() {

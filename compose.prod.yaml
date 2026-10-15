@@ -1,7 +1,13 @@
-# Producción: imagen runner detrás de Caddy con HTTPS. Datos en el volumen db_datos (respaldar con el perfil respaldo).
+# Producción: imagen runner con HTTPS. Datos en el volumen db_datos (respaldar con el perfil respaldo).
+# Dos modos (docs/operacion.md, §9):
+#   - con Caddy propio: COMPOSE_PROFILES=caddy (usa los puertos 80 y 443 del servidor);
+#   - detrás de un proxy que ya existe (p. ej. el del punto de venta): sin perfil; ese proxy envía el tráfico a
+#     127.0.0.1:${PUERTO_WEB_LOCAL} (solo accesible desde el propio servidor).
+# Los límites de memoria evitan que el piloto le quite recursos al otro sistema del servidor.
 services:
   db:
     restart: unless-stopped
+    mem_limit: ${LIMITE_MEMORIA_DB:-512m}
 
   web:
     build: { context: ., target: runner }
@@ -10,13 +16,18 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Falta BETTER_AUTH_SECRET en .env}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Falta BETTER_AUTH_URL en .env}
       MAPA_ESTILO_URL: ${MAPA_ESTILO_URL:-https://tiles.openfreemap.org/styles/liberty}
+    ports:
+      - "127.0.0.1:${PUERTO_WEB_LOCAL:-3001}:3000"
     depends_on:
       migrate: { condition: service_completed_successfully }
       bootstrap: { condition: service_completed_successfully }
     restart: unless-stopped
+    mem_limit: ${LIMITE_MEMORIA_WEB:-512m}
 
   proxy:
     image: caddy:2.11.6-alpine
+    profiles: ["caddy"]
+    mem_limit: 128m
     ports:
       - "${PUERTO_HTTP:-80}:80"
       - "${PUERTO_HTTPS:-443}:443"
