@@ -96,7 +96,10 @@ export async function obtenerPlan(ctx: Contexto, fecha: unknown): Promise<Result
   });
 
   const { plan, config } = datos;
-  const patio = config.patioLat !== null && config.patioLng !== null ? { lat: config.patioLat, lng: config.patioLng } : null;
+  // Con plan, el patio y las ubicaciones son los de su instantánea: kilómetros y horas se calcularon con ellos.
+  const patio = plan
+    ? plan.entrada.parametros.patio
+    : config.patioLat !== null && config.patioLng !== null ? { lat: config.patioLat, lng: config.patioLng } : null;
   const puedeGenerar = puede(permiso.usuario, "planes.generar");
   const base = {
     fecha: dia, patio, estiloMapaUrl: estiloMapaUrl(), puedeGenerar,
@@ -135,9 +138,10 @@ export async function obtenerPlan(ctx: Contexto, fecha: unknown): Promise<Result
         cargaKg: v.cargaKg, capacidadKg: capacidad.get(ruta.unidadId) ?? 0, km: v.km,
         paradas: v.paradas.map((p) => {
           const c = clienteDe(p.solicitudId);
+          const { ubicacion } = solicitudes.get(p.solicitudId)!;
           return {
             solicitudId: p.solicitudId, folio: folio(p.solicitudId), secuencia: p.secuencia,
-            cliente: { id: c.id, nombre: c.nombre, lat: c.lat ?? 0, lng: c.lng ?? 0, direccion: c.direccion },
+            cliente: { id: c.id, nombre: c.nombre, lat: ubicacion.lat, lng: ubicacion.lng, direccion: c.direccion },
             ventana: { inicio: hhmm(p.ventana.inicioMin), fin: hhmm(p.ventana.finMin) },
             llegada: hhmm(p.llegadaMin), inicio: hhmm(p.inicioServicioMin), fin: hhmm(p.finServicioMin),
             esperaMin: p.esperaMin, cargaKg: solicitudes.get(p.solicitudId)!.cargaKg, kmDesdeAnterior: p.kmDesdeAnterior,

@@ -8,10 +8,11 @@ import { tomarCandadoDeCatalogoFlota, tomarCandadoDeFecha } from "@/datos/planes
 import { insertarMovimientoPrivacidad } from "@/datos/privacidad";
 import { AHORA_PLAN, clienteHabilitado, FECHA_PLAN, jornadaDisponible, ponerPatio, solicitudPendiente } from "@/datos/pruebas/escenario-plan";
 import { crearBasePostgres, filasDe, type BasePostgres } from "@/datos/pruebas/postgres-prueba";
-import { operadorDePrueba } from "@/datos/pruebas/flota-ejemplo";
+import { operadorDePrueba, unidadDePrueba } from "@/datos/pruebas/flota-ejemplo";
 import { insertarOperador } from "@/datos/flota";
 import { usuarioDePrueba } from "@/datos/pruebas/usuarios-prueba";
 import type { UsuarioSesion } from "@/seguridad/permisos";
+import { guardarUnidad } from "./flota.nucleo";
 import { asignarJornada } from "./jornada.nucleo";
 import { generarPlanDelDia, iniciarRevision, validarPlanDelDia } from "./plan.nucleo";
 import { cancelarSolicitud } from "./solicitudes.nucleo";
@@ -199,6 +200,23 @@ describe("plan del día con Postgres real (concurrencia)", () => {
     await edicion.terminada;
     expect(await validacion.resultado).toMatchObject({ ok: false, error: "conflicto", motivo: { codigo: "capacidades_cambiaron" } });
     expect(await base.bd.select().from(paradas)).toEqual([]);
+  });
+
+  it("dar de alta o editar una unidad (acción real) espera a que termine una validación en curso", async () => {
+    const { unidadId } = await jornadaDisponible(base.bd, D2, "DOS002");
+    // Una validación en curso tiene el candado del catálogo en modo compartido.
+    const validacion = retenida(base, (tx) => tomarCandadoDeCatalogoFlota(tx, "compartido"));
+    await validacion.lista;
+    const [u] = await base.bd.select({ version: unidades.version }).from(unidades).where(eq(unidades.id, unidadId));
+    const alta = vigilar(guardarUnidad(ctx(), null, null, unidadDePrueba({ placa: "NUEVA9", capacidadKg: 15000 })));
+    const edicion = vigilar(guardarUnidad(ctx(), unidadId, u.version, unidadDePrueba({ placa: "DOS002", capacidadKg: 12000 })));
+    await pausa(300);
+    expect(alta.estado.terminada).toBe(false);
+    expect(edicion.estado.terminada).toBe(false);
+    validacion.soltar();
+    await validacion.terminada;
+    expect(await alta.resultado).toMatchObject({ ok: true });
+    expect(await edicion.resultado).toMatchObject({ ok: true });
   });
 
   it("una jornada nueva de la fecha, asignada mientras se valida, hace que la validación responda datos_cambiaron", async () => {

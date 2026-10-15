@@ -382,7 +382,8 @@ export async function validarPlanDelDia(
       await bloquearClientesCompartido(tx, clienteIds);
       const ruteadas = solicitudesRuteadas(plan.resultado);
       const pospuestas = plan.resultado.pospuestas.map((p) => p.solicitudId);
-      const bloqueadas = await bloquearSolicitudes(tx, [...ruteadas, ...pospuestas]);
+      // Todas las de la propuesta, también las bloqueadas por el motor: su versión también sustenta el plan.
+      const bloqueadas = await bloquearSolicitudes(tx, plan.entrada.solicitudes.map((s) => s.id));
       await bloquearConfiguracionCompartido(tx);
       // La hora se toma después de los bloqueos: la espera puede haber dejado salidas en el pasado.
       const ahora = (ctx.reloj ?? (() => ctx.ahora))();
@@ -452,7 +453,9 @@ async function comprobarValidacion(
   if (!mismasVersiones(versiones.clientes, porVersion(clientes))) return cambiaron("Cambiaron datos de clientes");
   const clienteDe = new Map(entrada.solicitudes.map((s) => [s.id, s.clienteId]));
   const porCliente = new Map<string, ClienteGuardado>(clientes.map((c) => [c.id, c]));
-  for (const id of new Set(ruteadas.map((s) => clienteDe.get(s)!))) {
+  const aEscribir = new Set([...ruteadas, ...plan.resultado.pospuestas.map((p) => p.solicitudId)]);
+  // Ruteadas y pospuestas: posponer la de un cliente que ya no está habilitado también sería escribir sobre datos viejos.
+  for (const id of new Set([...aEscribir].map((s) => clienteDe.get(s)!))) {
     const cliente = porCliente.get(id);
     if (!cliente || motivosDeBloqueoCliente(cliente, fecha, config.versionAvisoPrivacidad).length > 0) {
       return conflicto("cliente_no_habilitado", `${cliente?.nombre ?? "Un cliente"} ya no se puede programar (por ejemplo, retiró su consentimiento); regenera la propuesta`);
@@ -466,16 +469,14 @@ async function comprobarValidacion(
     return conflicto("capacidades_cambiaron", "Cambió la capacidad de la flota desde que se generó la propuesta; regenérala");
   }
 
+  if (solicitudes.length !== entrada.solicitudes.length) return cambiaron("Una solicitud ya no existe");
   for (const s of solicitudes) {
     if (s.version !== versiones.solicitudes[s.id]) {
       return s.estado === "programada" || s.estado === "en_ruta"
         ? conflicto("solicitud_asignada", "Una de las solicitudes ya quedó asignada en otro plan; regenera la propuesta")
         : cambiaron("Cambió una solicitud");
     }
-    if (s.estado !== "pendiente" || s.proximaFechaElegible > fecha) return cambiaron("Cambió una solicitud");
-  }
-  if (solicitudes.length !== new Set([...ruteadas, ...plan.resultado.pospuestas.map((p) => p.solicitudId)]).size) {
-    return cambiaron("Una solicitud ya no existe");
+    if (aEscribir.has(s.id) && (s.estado !== "pendiente" || s.proximaFechaElegible > fecha)) return cambiaron("Cambió una solicitud");
   }
   if ((await conParadaVigente(tx, ruteadas)).length > 0) {
     return conflicto("solicitud_asignada", "Una de las solicitudes ya quedó asignada en otro plan; regenera la propuesta");

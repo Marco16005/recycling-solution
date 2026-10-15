@@ -13,6 +13,7 @@ import { unidadDePrueba } from "@/datos/pruebas/flota-ejemplo";
 import { usuarioDePrueba } from "@/datos/pruebas/usuarios-prueba";
 import type { UsuarioSesion } from "@/seguridad/permisos";
 import { guardarUnidad } from "./flota.nucleo";
+import { cancelarSolicitud } from "./solicitudes.nucleo";
 import { quitarJornada } from "./jornada.nucleo";
 import { ajustarPlanDelDia, descartarPlan, generarPlanDelDia, iniciarRevision, validarPlanDelDia } from "./plan.nucleo";
 import type { Contexto, Resultado } from "./tipos";
@@ -194,6 +195,39 @@ describe("plan del día", () => {
       insertarMovimientoPrivacidad(tx, { clienteId: s.clienteId, versionAviso: "2026-10", accion: "retirado", medio: "papel", registradoPor: despachador.id, en: minutos(1) }),
     );
     expect(await revisarYValidar(planId, version)).toMatchObject({ ok: false, error: "conflicto", motivo: { codigo: "cliente_no_habilitado" } });
+  });
+
+  it("si el cliente de una pospuesta retiró su consentimiento, validar tampoco pospone: cliente_no_habilitado", async () => {
+    await bd.execute(sql`DELETE FROM jornadas`); // la unidad sigue en el catálogo: todo queda pospuesto, no bloqueado
+    const { planId, version } = await generar();
+    const [s] = await bd.select().from(solicitudes).where(eq(solicitudes.id, solicitudIds[0]));
+    await bd.transaction((tx) =>
+      insertarMovimientoPrivacidad(tx, { clienteId: s.clienteId, versionAviso: "2026-10", accion: "retirado", medio: "papel", registradoPor: despachador.id, en: minutos(1) }),
+    );
+    expect(await revisarYValidar(planId, version)).toMatchObject({ ok: false, error: "conflicto", motivo: { codigo: "cliente_no_habilitado" } });
+    expect((await bd.select().from(solicitudes)).every((x) => x.vecesPospuesta === 0)).toBe(true);
+  });
+
+  it("si cambió una solicitud que el motor bloqueó por carga, validar responde datos_cambiaron", async () => {
+    const c = await clienteHabilitado(bd, "Carga Imposible", 0.02, { cargaEstimadaKg: 20000 });
+    const imposible = await solicitudPendiente(bd, c.id, despachador.id, FECHA_PLAN);
+    const { planId, version } = await generar();
+    expect(valor(await obtenerPlan(ctx(), FECHA_PLAN)).bloqueadas.map((b) => b.solicitudId)).toEqual([imposible]);
+    valor(await cancelarSolicitud(ctx(), imposible, 1, "El cliente ya no la necesita"));
+    expect(await revisarYValidar(planId, version)).toMatchObject({ ok: false, error: "conflicto", motivo: { codigo: "datos_cambiaron" } });
+  });
+
+  it("el mapa usa las ubicaciones de la instantánea del plan, no las actuales del catálogo", async () => {
+    await generar();
+    const antes = valor(await obtenerPlan(ctx(), FECHA_PLAN));
+    await bd.update(clientes).set({ lat: 21.5, lng: -101.5 });
+    await bd.execute(sql`UPDATE configuracion SET patio_lat = 21.9, patio_lng = -101.9`);
+    const despues = valor(await obtenerPlan(ctx(), FECHA_PLAN));
+    expect(despues.patio).toEqual(antes.patio);
+    expect(despues.unidades[0].viajes[0].paradas.map((p) => [p.cliente.lat, p.cliente.lng])).toEqual(
+      antes.unidades[0].viajes[0].paradas.map((p) => [p.cliente.lat, p.cliente.lng]),
+    );
+    expect(despues.unidades[0].viajes[0].paradas[0].cliente.lat).not.toBe(21.5);
   });
 
   it("si cambió la capacidad máxima de la flota, validar responde capacidades_cambiaron", async () => {
