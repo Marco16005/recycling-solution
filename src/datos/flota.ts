@@ -103,8 +103,17 @@ export async function leerUnidad(bd: Conexion, id: string): Promise<UnidadGuarda
  * actualiza primero ese renglón (actualizarUnidadSiVersion, actualizarOperadorSiVersion, registrarEntregaAvisoSiVersion).
  */
 export async function bloquearUnidadYOperador(tx: Tx, unidadId: string, operadorId: string): Promise<void> {
-  await tx.select({ id: unidades.id }).from(unidades).where(eq(unidades.id, unidadId)).for("share");
-  await tx.select({ id: operadores.id }).from(operadores).where(eq(operadores.id, operadorId)).for("share");
+  await bloquearUnidadesYOperadores(tx, [unidadId], [operadorId]);
+}
+
+/** Igual que bloquearUnidadYOperador para varias, en orden de id (validación del plan). */
+export async function bloquearUnidadesYOperadores(tx: Tx, unidadIds: string[], operadorIds: string[]): Promise<void> {
+  if (unidadIds.length > 0) {
+    await tx.select({ id: unidades.id }).from(unidades).where(inArray(unidades.id, unidadIds)).orderBy(asc(unidades.id)).for("share");
+  }
+  if (operadorIds.length > 0) {
+    await tx.select({ id: operadores.id }).from(operadores).where(inArray(operadores.id, operadorIds)).orderBy(asc(operadores.id)).for("share");
+  }
 }
 
 /** Ids de unidades con esa placa o número económico, sin contar excluirId. */

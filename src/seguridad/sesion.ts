@@ -24,5 +24,5 @@ export async function usuarioActual(): Promise<UsuarioSesion | null> {
 /** Contexto de las consultas y acciones de esta petición. */
 export async function contextoDeLaPeticion(): Promise<Contexto> {
   const usuario = await usuarioActual();
-  return { bd: bdDeLaAplicacion(), usuario, ahora: new Date() };
+  return { bd: bdDeLaAplicacion(), usuario, ahora: new Date(), reloj: () => new Date() };
 }

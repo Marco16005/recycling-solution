@@ -151,6 +151,20 @@ async function leerClientes(bd: Conexion, ids?: string[]): Promise<ClienteGuarda
   }));
 }
 
+/** Clientes de esos ids, con ventanas, documentos y privacidad. */
+export async function leerClientesPorId(bd: Conexion, ids: string[]): Promise<ClienteGuardado[]> {
+  return ids.length === 0 ? [] : leerClientes(bd, ids);
+}
+
+/**
+ * Bloquea (FOR SHARE, en orden de id) los renglones de esos clientes hasta el fin de la transacción. Editar un cliente
+ * o registrar su privacidad bloquea el mismo renglón (FOR UPDATE), así que no puede cruzarse con la validación del plan.
+ */
+export async function bloquearClientesCompartido(tx: Tx, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await tx.select({ id: clientes.id }).from(clientes).where(inArray(clientes.id, ids)).orderBy(asc(clientes.id)).for("share");
+}
+
 export async function leerCliente(bd: Conexion, id: string): Promise<ClienteGuardado | null> {
   const [cliente] = await leerClientes(bd, [id]);
   return cliente ?? null;

@@ -4,6 +4,7 @@ import {
   actualizarOperadorSiVersion, actualizarUnidadSiVersion, insertarOperador, insertarUnidad, leerCatalogo, leerOperador,
   leerUnidad, registrarEntregaAvisoSiVersion, unidadesConPlacaONumero,
 } from "@/datos/flota";
+import { tomarCandadoDeCatalogoFlota } from "@/datos/planes";
 import { erroresPorCampo } from "@/dominio/clientes/esquemas";
 import { operadorSchema, unidadSchema } from "@/dominio/flota/esquemas";
 import type { AplicaDocumento, DocumentoRegistrado, OperadorEntrada, UnidadEntrada } from "@/dominio/flota/tipos";
@@ -46,6 +47,8 @@ export async function guardarUnidad(ctx: Contexto, id: unknown, versionEsperada:
 
   try {
     return await ctx.bd.transaction(async (tx): Promise<Resultado<{ id: string; version: number }>> => {
+      // Antes de tocar el renglón: la validación del plan protege las capacidades por tipo con este candado (Plan 4, §4).
+      await tomarCandadoDeCatalogoFlota(tx, "exclusivo");
       const ajenos = await tiposAjenos(tx, datos.documentos, "unidad");
       if (ajenos.length > 0) return invalido({ documentos: [`Tipos de documento que no aplican a unidades: ${ajenos.join(", ")}`] });
       const repetidas = await unidadesConPlacaONumero(tx, datos.placa, datos.numeroEconomico, ids.id);

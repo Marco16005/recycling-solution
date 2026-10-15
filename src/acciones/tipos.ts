@@ -6,6 +6,8 @@ export interface Contexto {
   bd: BD;
   usuario: UsuarioSesion | null;
   ahora: Date;
+  /** Hora actual para lo que se mide después de esperar un bloqueo (validar el plan). Si falta, se usa ahora. */
+  reloj?: () => Date;
 }
 
 /** Por qué una operación del plan del día no pudo hacerse (Plan 4, §3.3). */
