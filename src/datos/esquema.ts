@@ -393,10 +393,12 @@ export const planes = pgTable(
     uniqueIndex("planes_un_validado_por_fecha").on(t.fecha).where(sql`${t.estado} = 'validado'`),
     uniqueIndex("planes_un_propuesto_por_fecha").on(t.fecha).where(sql`${t.estado} = 'propuesto'`),
     check("planes_version", sql`${t.version} >= 1`),
-    check("planes_validado", sql`(${t.estado} = 'validado') = (${t.validadoEn} IS NOT NULL)`),
+    // Un plan reemplazado por un re-ruteo (Plan 5) conserva los datos de su validación. Se compara como texto: el valor
+    // 'reemplazado' se agrega al enum en la misma migración y no se puede usar como constante del enum en ella.
+    check("planes_validado", sql`(${t.estado}::text IN ('validado', 'reemplazado')) = (${t.validadoEn} IS NOT NULL)`),
     check(
       "planes_validado_completo",
-      sql`${t.estado} <> 'validado' OR (${t.validadoPor} IS NOT NULL AND ${t.revisionIniciadaEn} IS NOT NULL AND ${t.requisitosConfirmadosEn} IS NOT NULL)`,
+      sql`${t.estado}::text NOT IN ('validado', 'reemplazado') OR (${t.validadoPor} IS NOT NULL AND ${t.revisionIniciadaEn} IS NOT NULL AND ${t.requisitosConfirmadosEn} IS NOT NULL)`,
     ),
     check("planes_descartado", sql`(${t.estado} = 'descartado') = (${t.descartadoEn} IS NOT NULL)`),
     check("planes_ajustes", sql`jsonb_typeof(${t.ajustes}) = 'array'`),

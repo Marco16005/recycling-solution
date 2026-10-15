@@ -54,6 +54,8 @@ CREATE TABLE "incidentes" (
 	CONSTRAINT "incidentes_version" CHECK ("incidentes"."version" >= 1)
 );
 --> statement-breakpoint
+ALTER TABLE "planes" DROP CONSTRAINT "planes_validado";--> statement-breakpoint
+ALTER TABLE "planes" DROP CONSTRAINT "planes_validado_completo";--> statement-breakpoint
 ALTER TABLE "jornadas" ADD COLUMN "version_operacion" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "paradas" ADD COLUMN "motivo_no_atendida" text;--> statement-breakpoint
 ALTER TABLE "paradas" ADD COLUMN "cierre_en" timestamp with time zone;--> statement-breakpoint
@@ -73,4 +75,6 @@ CREATE INDEX "eventos_operador_jornada_idx" ON "eventos_operador" USING btree ("
 CREATE INDEX "incidentes_jornada_idx" ON "incidentes" USING btree ("jornada_id");--> statement-breakpoint
 ALTER TABLE "planes" ADD CONSTRAINT "planes_plan_base_id_planes_id_fk" FOREIGN KEY ("plan_base_id") REFERENCES "public"."planes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "paradas" ADD CONSTRAINT "paradas_no_atendida" CHECK (("paradas"."estado" = 'no_atendida') = ("paradas"."motivo_no_atendida" IS NOT NULL) AND ("paradas"."motivo_no_atendida" IS NULL OR length("paradas"."motivo_no_atendida") <= 200));--> statement-breakpoint
-ALTER TABLE "planes" ADD CONSTRAINT "planes_re_ruteo" CHECK (("planes"."tipo" = 're_ruteo') = ("planes"."plan_base_id" IS NOT NULL AND "planes"."restricciones" IS NOT NULL));
+ALTER TABLE "planes" ADD CONSTRAINT "planes_re_ruteo" CHECK (("planes"."tipo" = 're_ruteo') = ("planes"."plan_base_id" IS NOT NULL AND "planes"."restricciones" IS NOT NULL));--> statement-breakpoint
+ALTER TABLE "planes" ADD CONSTRAINT "planes_validado" CHECK (("planes"."estado"::text IN ('validado', 'reemplazado')) = ("planes"."validado_en" IS NOT NULL));--> statement-breakpoint
+ALTER TABLE "planes" ADD CONSTRAINT "planes_validado_completo" CHECK ("planes"."estado"::text NOT IN ('validado', 'reemplazado') OR ("planes"."validado_por" IS NOT NULL AND "planes"."revision_iniciada_en" IS NOT NULL AND "planes"."requisitos_confirmados_en" IS NOT NULL));

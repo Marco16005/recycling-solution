@@ -1,5 +1,5 @@
 {
-  "id": "f3b5b791-241a-4e8a-9dd2-b1cf17289dae",
+  "id": "0b3259ec-4f9f-4317-a4e9-c7c63a255a16",
   "prevId": "2b690f1b-7d7c-42c1-b69c-d2adb0079d34",
   "version": "7",
   "dialect": "postgresql",
@@ -2327,11 +2327,11 @@
         },
         "planes_validado": {
           "name": "planes_validado",
-          "value": "(\"planes\".\"estado\" = 'validado') = (\"planes\".\"validado_en\" IS NOT NULL)"
+          "value": "(\"planes\".\"estado\"::text IN ('validado', 'reemplazado')) = (\"planes\".\"validado_en\" IS NOT NULL)"
         },
         "planes_validado_completo": {
           "name": "planes_validado_completo",
-          "value": "\"planes\".\"estado\" <> 'validado' OR (\"planes\".\"validado_por\" IS NOT NULL AND \"planes\".\"revision_iniciada_en\" IS NOT NULL AND \"planes\".\"requisitos_confirmados_en\" IS NOT NULL)"
+          "value": "\"planes\".\"estado\"::text NOT IN ('validado', 'reemplazado') OR (\"planes\".\"validado_por\" IS NOT NULL AND \"planes\".\"revision_iniciada_en\" IS NOT NULL AND \"planes\".\"requisitos_confirmados_en\" IS NOT NULL)"
         },
         "planes_descartado": {
           "name": "planes_descartado",

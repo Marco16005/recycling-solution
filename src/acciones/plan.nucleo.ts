@@ -20,6 +20,7 @@ import {
   propuestoEnVersion, rutasParaGuardar, solicitudesRuteadas, validarIdYVersionDePlan, ValidacionRechazada,
 } from "./plan-comun";
 import { permitir } from "./autorizacion";
+import { validarReruteo } from "./reruteo.nucleo";
 import type { Contexto, Resultado } from "./tipos";
 import { esDuplicado, fechaSchema, idSchema, invalido, type Fallo } from "./validacion";
 
@@ -252,6 +253,8 @@ export async function validarPlanDelDia(
   const usuarioId = permiso.usuario.id;
 
   try {
+    // Un re-ruteo tiene su propia rama (Plan 5, §4): reemplaza al validado y acepta las ya asignadas no congeladas.
+    if (leido.tipo === "re_ruteo") return await validarReruteo(ctx, usuarioId, leido, ids.version);
     return await ctx.bd.transaction(async (tx): Promise<Resultado<{ programadas: number; pospuestas: number }>> => {
       // Orden estable de bloqueos (Plan 4, §4).
       const fecha = leido.fecha;
