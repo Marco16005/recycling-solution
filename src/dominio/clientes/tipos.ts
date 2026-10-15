@@ -22,7 +22,7 @@ export interface Ventana {
 
 /**
  * venceEl: fecha "AAAA-MM-DD" o null si no vence.
- * tipoDocumentoId: tipo del catálogo de clientes, o null/ausente si el nombre es libre (opcional mientras el esquema lo incorpora).
+ * tipoDocumentoId: tipo del catálogo de clientes, o null/ausente si el nombre es libre (documentoSchema lo normaliza a null).
  */
 export interface DocumentoCliente {
   nombre: string;
