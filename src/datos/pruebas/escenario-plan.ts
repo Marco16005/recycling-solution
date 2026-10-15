@@ -58,7 +58,7 @@ export async function solicitudPendiente(bd: BD, clienteId: string, registradoPo
   consecutivo += 1;
   return bd.transaction((tx) =>
     insertarSolicitud(tx, {
-      folio: `S-${fechaSolicitada.replaceAll("-", "")}-${String(consecutivo).padStart(3, "0")}`, clienteId, registradaEn, registradaPor,
+      folio: `S-${fechaSolicitada.replaceAll("-", "")}-${String(consecutivo).padStart(3, "0")}`, clienteId, registradaEn, registradaPor: registradoPor,
       fechaSolicitada, canal: "telefono", cargaEstimadaKg: null, notas: null, capturaInicioEn: null, capturaFinEn: registradaEn,
     }),
   );

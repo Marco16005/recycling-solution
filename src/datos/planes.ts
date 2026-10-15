@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { VersionesPlan } from "@/dominio/plan/tipos";
 import type { AjusteManual, EntradaPlan, Plan } from "@/motor";
 import type { BD, Tx } from "./bd";
@@ -136,12 +136,12 @@ export async function descartarPropuesto(tx: Tx, id: string, ahora: Date): Promi
     .where(and(eq(planes.id, id), eq(planes.estado, "propuesto")));
 }
 
-/** Fija revision_iniciada_en una sola vez, sin cambiar la versión. true si el plan está propuesto. */
+/** Fija revision_iniciada_en una sola vez, sin cambiar la versión. true solo si la fijó ahora (plan propuesto y sin revisión). */
 export async function fijarRevisionIniciada(tx: Tx, id: string, ahora: Date): Promise<boolean> {
   const filas = await tx
     .update(planes)
-    .set({ revisionIniciadaEn: sql`COALESCE(${planes.revisionIniciadaEn}, ${ahora.toISOString()}::timestamptz)` })
-    .where(and(eq(planes.id, id), eq(planes.estado, "propuesto")))
+    .set({ revisionIniciadaEn: ahora })
+    .where(and(eq(planes.id, id), eq(planes.estado, "propuesto"), isNull(planes.revisionIniciadaEn)))
     .returning({ id: planes.id });
   return filas.length > 0;
 }
