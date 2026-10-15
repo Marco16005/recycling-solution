@@ -4,6 +4,7 @@ import { unidades, usuarios } from "@/datos/esquema";
 import { operadorDePrueba, unidadDePrueba } from "@/datos/pruebas/flota-ejemplo";
 import { crearBasePostgres, type BasePostgres } from "@/datos/pruebas/postgres-prueba";
 import { usuarioDePrueba } from "@/datos/pruebas/usuarios-prueba";
+import { cambiarActivoPorScript } from "@/seguridad/bajas-por-script";
 import type { UsuarioSesion } from "@/seguridad/permisos";
 import { guardarOperador, guardarUnidad, registrarEntregaAviso } from "./flota.nucleo";
 import { asignarJornada } from "./jornada.nucleo";
@@ -96,6 +97,20 @@ describe("acciones del Plan 2 con Postgres real (concurrencia)", () => {
     const activos = await base.bd.execute(sql`SELECT count(*)::int AS n FROM usuarios WHERE rol = 'admin' AND activo`);
     expect((activos as unknown as { rows: { n: number }[] }).rows[0].n).toBe(1);
     // Deja otra vez a admin como administrador para las pruebas siguientes.
+    await base.comoAdmin(`UPDATE usuarios SET rol = 'admin', activo = true WHERE id = '${admin.id}'`);
+  });
+
+  it("la web degrada a un administrador mientras el script desactiva al otro: siempre queda uno activo", async () => {
+    const otro = await usuarioDePrueba(base.bd, "admin");
+    await base.comoAdmin(`UPDATE usuarios SET activo = false WHERE rol = 'admin' AND id NOT IN ('${admin.id}', '${otro.id}')`);
+    const [web, script] = await Promise.all([
+      cambiarRol(ctx(admin), otro.id, await versionDe(otro.id), { rol: "gerencia", operadorId: null }),
+      base.bd.transaction((tx) => cambiarActivoPorScript(tx, admin.id, false, AHORA)),
+    ]);
+    expect([web.ok, script === "hecho"].filter(Boolean)).toHaveLength(1);
+    expect(web.ok ? script : web).toEqual(web.ok ? "ultimo_admin" : { ok: false, error: "invalido", campos: { rol: ["Debe quedar al menos un administrador activo"] } });
+    const activos = await base.bd.execute(sql`SELECT count(*)::int AS n FROM usuarios WHERE rol = 'admin' AND activo`);
+    expect((activos as unknown as { rows: { n: number }[] }).rows[0].n).toBe(1);
     await base.comoAdmin(`UPDATE usuarios SET rol = 'admin', activo = true WHERE id = '${admin.id}'`);
   });
 
