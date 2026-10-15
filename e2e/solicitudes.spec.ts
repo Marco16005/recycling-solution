@@ -84,6 +84,12 @@ test("reprogramar conserva el registro y cancelar exige y conserva un motivo", a
   const manana = siguiente.toISOString().slice(0, 10);
   await fila.getByRole("button", { name: "Reprogramar", exact: true }).click();
   const reprogramar = fila.getByRole("form", { name: `Reprogramar ${folio}`, exact: true });
+  const nuevaFecha = reprogramar.getByLabel("Nueva fecha solicitada", { exact: true });
+  await nuevaFecha.fill("");
+  await reprogramar.getByRole("button", { name: "Confirmar", exact: true }).click();
+  await expect(reprogramar.getByRole("alert")).toContainText("Revisa los datos");
+  await expect(nuevaFecha).toHaveAttribute("aria-invalid", "true");
+  await expect(nuevaFecha).toBeFocused();
   await reprogramar.getByLabel("Nueva fecha solicitada", { exact: true }).fill(manana);
   await reprogramar.getByRole("button", { name: "Confirmar", exact: true }).click();
   await expect(fila.getByText("Futura", { exact: true })).toBeVisible();

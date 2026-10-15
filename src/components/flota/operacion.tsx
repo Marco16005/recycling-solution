@@ -52,7 +52,7 @@ export function MensajesOperacion({ operacion, alRevisar, textoRevision = "Revis
   return (
     <>
       {operacion.fallo && <ResultadoFallido resultado={operacion.fallo} />}
-      <ResumenErrores errores={operacion.errores} />
+      <ResumenErrores errores={operacion.errores} pendiente={operacion.pendiente} />
       {operacion.mensaje && <p role="status" className="text-sm">{operacion.mensaje}</p>}
       {operacion.conflicto && (
         <div role="alert" className="space-y-3 rounded-lg border border-amber-600/40 p-4 text-sm">
