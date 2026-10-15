@@ -1,5 +1,5 @@
 import { distanciaKm, minutosDeTraslado } from "./geometria";
-import type { EntradaPlan, Plan, RutaPlan, SolicitudMotor, UnidadMotor, ViajePlan } from "./tipos";
+import type { EntradaPlan, Plan, RestriccionesPlan, RutaPlan, SolicitudMotor, UnidadMotor, ViajePlan } from "./tipos";
 
 /** Comparación estructural sin depender del orden de las claves de un objeto. */
 function iguales(a: unknown, b: unknown): boolean {
@@ -37,9 +37,13 @@ function segundosUtc(iso: string): number {
  * Con ventanas que limitan el inicio, empezar antes nunca perjudica una visita posterior.
  * No importa admisión, orden, zonas ni sus auxiliares.
  */
-export function validarPlan(entrada: EntradaPlan, plan: Plan, opciones?: { ajustadoAMano: boolean }): string[] {
+export function validarPlan(entrada: EntradaPlan, plan: Plan,
+  opciones?: { ajustadoAMano?: boolean; restricciones?: RestriccionesPlan }): string[] {
   const manual = opciones?.ajustadoAMano === true;
   const errores: string[] = [];
+  // R0a: no certificar restricciones mientras su implementación (R2) está pendiente.
+  if (opciones?.restricciones && Object.values(opciones.restricciones.admitidas).some(viajes => viajes.length > 0))
+    errores.push("Restricciones de admitidas pendientes de implementar (R2)");
   if (!opciones?.ajustadoAMano && plan.pospuestas.some(s => s.motivo === "pospuesta_a_mano")) {
     errores.push("Posposición manual en un plan automático");
   }

@@ -1,6 +1,6 @@
 import { distanciaKm, minutosDeTraslado } from "./geometria";
 import { validarPlan } from "./validacion";
-import type { AjusteManual, CausaNoFactible, EntradaPlan, Plan, ResultadoAjuste, ResultadoRecalculo, ViajePlan } from "./tipos";
+import type { AjusteManual, CausaNoFactible, EntradaPlan, Plan, RestriccionesPlan, ResultadoAjuste, ResultadoRecalculo, ViajePlan } from "./tipos";
 
 const invalida = (detalle: string): Extract<ResultadoRecalculo, { error: "entrada_invalida" }> =>
   ({ ok: false, error: "entrada_invalida", detalle });
@@ -62,7 +62,10 @@ export function recalcularRuta(entrada: EntradaPlan, unidadId: string, viajes: s
 }
 
 /** Recalcula las rutas afectadas y el resumen completo; conserva la traza original y no muta los argumentos. */
-export function ajustarPlan(entrada: EntradaPlan, plan: Plan, ajuste: AjusteManual): ResultadoAjuste {
+export function ajustarPlan(entrada: EntradaPlan, plan: Plan, ajuste: AjusteManual, restricciones?: RestriccionesPlan): ResultadoAjuste {
+  // R0a: no ignorar restricciones mientras su implementación (R2) está pendiente.
+  if (restricciones && Object.values(restricciones.admitidas).some(viajes => viajes.length > 0))
+    return invalida("Restricciones de admitidas pendientes de implementar (R2)");
   if (entrada.unidades.some(u => u.cargaActualKg !== 0
     || u.ubicacionInicial.lat !== entrada.parametros.patio.lat || u.ubicacionInicial.lng !== entrada.parametros.patio.lng))
     return invalida("Solo se admite el plan inicial desde el patio y sin carga");

@@ -2,7 +2,7 @@ import { distanciaKm, minutosDeTraslado } from "./geometria";
 import { compararTexto, ordenarFifo } from "./orden";
 import { agruparZonas } from "./zonas";
 import { validarPlan } from "./validacion";
-import type { Diagnostico, EntradaPlan, Plan, RutaPlan, SolicitudMotor, UnidadMotor, ViajePlan } from "./tipos";
+import type { Diagnostico, EntradaPlan, Plan, RestriccionesPlan, RutaPlan, SolicitudMotor, UnidadMotor, ViajePlan } from "./tipos";
 
 const diagnosticoVacio = (): Diagnostico => ({ capacidad: 0, ventana: 0, finDeTurno: 0, afectaAOtra: 0 });
 type Calculo = { ruta: RutaPlan } | { causa: keyof Diagnostico; afectaAOtra: boolean };
@@ -51,7 +51,10 @@ function calcular(
   return { ruta: { unidadId: unidad.id, viajes: resultado } };
 }
 
-export function generarPlan(entrada: EntradaPlan): Plan {
+export function generarPlan(entrada: EntradaPlan, restricciones?: RestriccionesPlan): Plan {
+  // R0a: no ignorar restricciones mientras su implementación (R2) está pendiente.
+  if (restricciones && Object.values(restricciones.admitidas).some(viajes => viajes.length > 0))
+    throw new Error("pendiente");
   const solicitudes = new Map(entrada.solicitudes.map(s => [s.id, s]));
   if (solicitudes.size !== entrada.solicitudes.length) throw new Error("Solicitudes repetidas en la entrada");
   if (new Set(entrada.unidades.map(u => u.id)).size !== entrada.unidades.length)

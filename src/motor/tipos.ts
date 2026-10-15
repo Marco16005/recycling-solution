@@ -55,6 +55,17 @@ export interface EntradaPlan {
   parametros: ParametrosMotor;
 }
 
+/** Por unidad (id de jornada): viajes ya admitidos, conservando viaje y orden relativo. */
+export interface RestriccionesPlan { admitidas: Record<string, string[][]> }
+
+/** Las admitidas de una unidad no son factibles tal cual. */
+export class ErrorAdmitidas extends Error {
+  constructor(public readonly unidadId: string, public readonly causa: string) {
+    super(`Admitidas no factibles para ${unidadId}: ${causa}`);
+    this.name = "ErrorAdmitidas";
+  }
+}
+
 export interface ParadaPlan {
   solicitudId: string;
   secuencia: number;             // 1, 2, … dentro del viaje
