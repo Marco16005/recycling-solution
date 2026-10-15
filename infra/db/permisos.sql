@@ -21,3 +21,8 @@ REVOKE INSERT, UPDATE, DELETE ON avisos_privacidad, tipos_documento FROM rs_app;
 
 -- Las solicitudes se cancelan, nunca se borran; los folios tampoco.
 REVOKE DELETE ON solicitudes, folios_dia FROM rs_app;
+
+-- Plan 4: cada corrida del motor es historial de solo inserción (K7); una propuesta se descarta y una parada se
+-- retira con vigente = false, nunca se borran.
+REVOKE UPDATE, DELETE ON ejecuciones_motor FROM rs_app;
+REVOKE DELETE ON planes, rutas, paradas FROM rs_app;

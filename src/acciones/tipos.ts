@@ -8,7 +8,20 @@ export interface Contexto {
   ahora: Date;
 }
 
+/** Por qué una operación del plan del día no pudo hacerse (Plan 4, §3.3). */
+export type CodigoConflicto =
+  | "plan_validado_existente"
+  | "generacion_adelantada"
+  | "datos_cambiaron"
+  | "cliente_no_habilitado"
+  | "capacidades_cambiaron"
+  | "solicitud_asignada"
+  | "hora_vencida"
+  | "jornada_con_rutas";
+
+/** Un conflicto puede traer su motivo (texto para la pantalla); los conflictos de versión de los Planes 1 y 2 no lo traen. */
 export type Resultado<T> =
   | { ok: true; valor: T }
-  | { ok: false; error: "no_autenticado" | "no_autorizado" | "no_encontrado" | "conflicto" }
+  | { ok: false; error: "no_autenticado" | "no_autorizado" | "no_encontrado" }
+  | { ok: false; error: "conflicto"; motivo?: { codigo: CodigoConflicto; texto: string } }
   | { ok: false; error: "invalido"; campos: Record<string, string[]> };

@@ -1,8 +1,9 @@
 import { sql } from "drizzle-orm";
 import {
   bigint, boolean, check, date, doublePrecision, index, integer, jsonb, pgEnum, pgTable, smallint, text, time, timestamp,
-  unique, uuid, type AnyPgColumn,
+  unique, uniqueIndex, uuid, type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import type { EntradaPlan, Plan } from "@/motor";
 import { user } from "./esquema-auth";
 
 /** Tablas de Better Auth (generadas por su CLI). Solo autentican; la autorización vive en `usuarios`. */
@@ -17,7 +18,11 @@ export const medioPrivacidadEnum = pgEnum("medio_privacidad", ["papel", "correo"
 export const aplicaDocumentoEnum = pgEnum("aplica_documento", ["cliente", "unidad", "operador"]);
 export const origenDocumentoEnum = pgEnum("origen_documento", ["ley", "contrato", "politica"]);
 export const canalSolicitudEnum = pgEnum("canal_solicitud", ["telefono", "whatsapp", "correo", "presencial", "otro"]);
-export const estadoSolicitudEnum = pgEnum("estado_solicitud", ["pendiente", "cancelada", "atendida", "no_atendida"]);
+/** programada: tiene parada vigente en un plan validado; en_ruta: su unidad ya salió (Plan 5). */
+export const estadoSolicitudEnum = pgEnum("estado_solicitud", ["pendiente", "cancelada", "atendida", "no_atendida", "programada", "en_ruta"]);
+export const estadoPlanEnum = pgEnum("estado_plan", ["propuesto", "validado", "descartado"]);
+export const resultadoMotorEnum = pgEnum("resultado_motor", ["ok", "error", "tiempo_agotado"]);
+export const estadoParadaEnum = pgEnum("estado_parada", ["pendiente", "en_sitio", "completada", "omitida", "no_atendida"]);
 
 const marcas = {
   creadoEn: timestamp("creado_en", { withTimezone: true }).notNull().defaultNow(),
@@ -336,5 +341,156 @@ export const solicitudes = pgTable(
     check("solicitudes_cancelacion", sql`(${t.estado} = 'cancelada') = (${t.motivoCancelacion} IS NOT NULL)`),
     check("solicitudes_captura", sql`${t.capturaInicioEn} IS NULL OR ${t.capturaFinEn} IS NULL OR ${t.capturaInicioEn} <= ${t.capturaFinEn}`),
     check("solicitudes_version", sql`${t.version} >= 1`),
+  ],
+);
+
+// ---------- Plan 4: plan del día (docs/superpowers/plans/2026-10-15-plan-4-plan-del-dia.md §2)
+
+/**
+ * Propuestas y planes validados. Mientras está propuesto, `resultado` (el Plan del motor, con la traza original y los
+ * ajustes aplicados) es la única fuente de verdad; rutas y paradas se escriben al validar.
+ */
+export const planes = pgTable(
+  "planes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    fecha: date("fecha", { mode: "string" }).notNull(),
+    estado: estadoPlanEnum("estado").notNull().default("propuesto"),
+    version: integer("version").notNull().default(1),
+    generadoEn: timestamp("generado_en", { withTimezone: true }).notNull(),
+    generadoPor: uuid("generado_por").notNull().references(() => usuarios.id),
+    revisionIniciadaEn: timestamp("revision_iniciada_en", { withTimezone: true }),
+    validadoEn: timestamp("validado_en", { withTimezone: true }),
+    validadoPor: uuid("validado_por").references(() => usuarios.id),
+    descartadoEn: timestamp("descartado_en", { withTimezone: true }),
+    requisitosConfirmadosEn: timestamp("requisitos_confirmados_en", { withTimezone: true }),
+    semilla: integer("semilla").notNull(),
+    versionMotor: text("version_motor").notNull(),
+    entrada: jsonb("entrada").$type<EntradaPlan>().notNull(),
+    /** VersionesPlan (src/dominio/plan/tipos.ts): versiones de todo lo que sustentó la propuesta. */
+    versiones: jsonb("versiones").notNull(),
+    resultado: jsonb("resultado").$type<Plan>().notNull(),
+    /** Ajustes manuales en orden, con autor y hora. Vacío: el plan es el del motor. */
+    ajustes: jsonb("ajustes").notNull().default(sql`'[]'::jsonb`),
+    ...marcas,
+  },
+  (t) => [
+    uniqueIndex("planes_un_validado_por_fecha").on(t.fecha).where(sql`${t.estado} = 'validado'`),
+    uniqueIndex("planes_un_propuesto_por_fecha").on(t.fecha).where(sql`${t.estado} = 'propuesto'`),
+    check("planes_version", sql`${t.version} >= 1`),
+    check("planes_validado", sql`(${t.estado} = 'validado') = (${t.validadoEn} IS NOT NULL)`),
+    check(
+      "planes_validado_completo",
+      sql`${t.estado} <> 'validado' OR (${t.validadoPor} IS NOT NULL AND ${t.revisionIniciadaEn} IS NOT NULL AND ${t.requisitosConfirmadosEn} IS NOT NULL)`,
+    ),
+    check("planes_descartado", sql`(${t.estado} = 'descartado') = (${t.descartadoEn} IS NOT NULL)`),
+    check("planes_ajustes", sql`jsonb_typeof(${t.ajustes}) = 'array'`),
+  ],
+);
+
+/** Toda corrida del motor, incluso fallida (K7). Solo inserción. plan_id es null si no se guardó plan. */
+export const ejecucionesMotor = pgTable(
+  "ejecuciones_motor",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    fecha: date("fecha", { mode: "string" }).notNull(),
+    inicioEn: timestamp("inicio_en", { withTimezone: true }).notNull(),
+    finEn: timestamp("fin_en", { withTimezone: true }).notNull(),
+    /** Reloj monotónico (performance.now()), medido fuera del motor. */
+    duracionMs: doublePrecision("duracion_ms").notNull(),
+    resultado: resultadoMotorEnum("resultado").notNull(),
+    /** Mensaje técnico saneado (nombre y código), sin datos personales. */
+    error: text("error"),
+    planId: uuid("plan_id").references(() => planes.id),
+    versionMotor: text("version_motor").notNull(),
+    usuarioId: uuid("usuario_id").notNull().references(() => usuarios.id),
+    creadoEn: timestamp("creado_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("ejecuciones_motor_fecha_idx").on(t.fecha, t.inicioEn),
+    check("ejecuciones_motor_duracion", sql`${t.duracionMs} >= 0`),
+    check("ejecuciones_motor_orden", sql`${t.inicioEn} <= ${t.finEn}`),
+    check("ejecuciones_motor_plan", sql`${t.resultado} = 'ok' OR ${t.planId} IS NULL`),
+    check("ejecuciones_motor_error", sql`${t.error} IS NULL OR length(${t.error}) <= 200`),
+  ],
+);
+
+/** Un viaje de una jornada en un plan validado (K1, K4). Los campos reales los llena el Plan 5. */
+export const rutas = pgTable(
+  "rutas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    planId: uuid("plan_id").notNull().references(() => planes.id, { onDelete: "restrict" }),
+    jornadaId: uuid("jornada_id").notNull().references(() => jornadas.id, { onDelete: "restrict" }),
+    numeroViaje: integer("numero_viaje").notNull(),
+    version: integer("version").notNull().default(1),
+    salidaEstimada: timestamp("salida_estimada", { withTimezone: true }).notNull(),
+    regresoEstimado: timestamp("regreso_estimado", { withTimezone: true }).notNull(),
+    finDescargaEstimado: timestamp("fin_descarga_estimado", { withTimezone: true }).notNull(),
+    cargaKg: integer("carga_kg").notNull(),
+    kmEstimados: doublePrecision("km_estimados").notNull(),
+    /** Suma de paradas.km_contrafactual del viaje al validar. */
+    kmContrafactual: doublePrecision("km_contrafactual").notNull(),
+    /** Rendimiento de la unidad al validar, congelado para K4. */
+    rendimientoKmLUsado: doublePrecision("rendimiento_km_l_usado").notNull(),
+    /** Viaje 1: disponible_desde de la jornada; siguientes: fin de descarga estimado del anterior (el Plan 5 pone el real). */
+    disponibleParaSalirEn: timestamp("disponible_para_salir_en", { withTimezone: true }).notNull(),
+    asignadaEn: timestamp("asignada_en", { withTimezone: true }).notNull(),
+    salidaPatioEn: timestamp("salida_patio_en", { withTimezone: true }),
+    regresoPatioEn: timestamp("regreso_patio_en", { withTimezone: true }),
+    descargaFinEn: timestamp("descarga_fin_en", { withTimezone: true }),
+    odometroInicioKm: doublePrecision("odometro_inicio_km"),
+    odometroFinKm: doublePrecision("odometro_fin_km"),
+    ...marcas,
+  },
+  (t) => [
+    unique("rutas_viaje").on(t.planId, t.jornadaId, t.numeroViaje),
+    index("rutas_jornada_idx").on(t.jornadaId),
+    check("rutas_version", sql`${t.version} >= 1`),
+    check("rutas_numero", sql`${t.numeroViaje} >= 1`),
+    check("rutas_carga", sql`${t.cargaKg} >= 0`),
+    check("rutas_km", sql`${t.kmEstimados} >= 0 AND ${t.kmContrafactual} >= 0`),
+    check("rutas_rendimiento", sql`${t.rendimientoKmLUsado} > 0`),
+    check("rutas_horas", sql`${t.salidaEstimada} <= ${t.regresoEstimado} AND ${t.regresoEstimado} <= ${t.finDescargaEstimado}`),
+    check("rutas_odometro", sql`${t.odometroInicioKm} IS NULL OR ${t.odometroFinKm} IS NULL OR ${t.odometroInicioKm} <= ${t.odometroFinKm}`),
+  ],
+);
+
+/** Una visita de un viaje. Una solicitud tiene a lo sumo una parada vigente (especificación §6). */
+export const paradas = pgTable(
+  "paradas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    rutaId: uuid("ruta_id").notNull().references(() => rutas.id, { onDelete: "restrict" }),
+    solicitudId: uuid("solicitud_id").notNull().references(() => solicitudes.id, { onDelete: "restrict" }),
+    secuencia: integer("secuencia").notNull(),
+    /** Ventana comprometida: limita el inicio del servicio (K3). */
+    ventanaInicio: time("ventana_inicio").notNull(),
+    ventanaFin: time("ventana_fin").notNull(),
+    llegadaEstimada: timestamp("llegada_estimada", { withTimezone: true }).notNull(),
+    inicioEstimado: timestamp("inicio_estimado", { withTimezone: true }).notNull(),
+    finEstimado: timestamp("fin_estimado", { withTimezone: true }).notNull(),
+    esperaMin: integer("espera_min").notNull(),
+    cargaKg: integer("carga_kg").notNull(),
+    kmDesdeAnterior: doublePrecision("km_desde_anterior").notNull(),
+    /** Viaje redondo patio–cliente–patio de esta solicitud: el método actual (K4). */
+    kmContrafactual: doublePrecision("km_contrafactual").notNull(),
+    vigente: boolean("vigente").notNull().default(true),
+    estado: estadoParadaEnum("estado").notNull().default("pendiente"),
+    llegadaEn: timestamp("llegada_en", { withTimezone: true }),
+    inicioServicioEn: timestamp("inicio_servicio_en", { withTimezone: true }),
+    finServicioEn: timestamp("fin_servicio_en", { withTimezone: true }),
+    ...marcas,
+  },
+  (t) => [
+    unique("paradas_secuencia").on(t.rutaId, t.secuencia),
+    uniqueIndex("paradas_solicitud_vigente").on(t.solicitudId).where(sql`${t.vigente}`),
+    index("paradas_solicitud_idx").on(t.solicitudId),
+    check("paradas_secuencia_positiva", sql`${t.secuencia} >= 1`),
+    check("paradas_ventana", sql`${t.ventanaInicio} <= ${t.ventanaFin}`),
+    check("paradas_estimados", sql`${t.llegadaEstimada} <= ${t.inicioEstimado} AND ${t.inicioEstimado} <= ${t.finEstimado}`),
+    check("paradas_espera", sql`${t.esperaMin} >= 0`),
+    check("paradas_carga", sql`${t.cargaKg} >= 0`),
+    check("paradas_km", sql`${t.kmDesdeAnterior} >= 0 AND ${t.kmContrafactual} >= 0`),
   ],
 );
