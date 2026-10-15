@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import type { Rol } from "@/seguridad/permisos";
 import type { BD, Tx } from "./bd";
-import { operadores, session, user, usuarios } from "./esquema";
+import { operadores, user, usuarios } from "./esquema";
 
 export interface UsuarioConCorreo {
   id: string;
@@ -51,24 +51,34 @@ export async function leerUsuarioParaCambiar(tx: Tx, id: string): Promise<Usuari
   return fila ?? null;
 }
 
-/** Administradores activos, bloqueando sus renglones para que dos cambios simultáneos no dejen al sistema sin ninguno. */
+/** Llave del candado de Postgres que serializa los cambios que pueden dejar al sistema sin administradores. */
+const CANDADO_ADMINISTRADORES = 727_004;
+
+/**
+ * Toma el candado de administradores hasta el fin de la transacción. Va antes de bloquear al usuario que se cambia:
+ * si cada cambio bloqueara primero a su usuario y luego a los demás administradores, dos cambios simultáneos sobre
+ * administradores distintos se bloquearían mutuamente.
+ */
+export async function tomarCandadoDeAdministradores(tx: Tx): Promise<void> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(${CANDADO_ADMINISTRADORES})`);
+}
+
+/** Administradores activos. Llamar con el candado de administradores tomado. */
 export async function adminsActivos(tx: Tx): Promise<string[]> {
   const filas = await tx
     .select({ id: usuarios.id })
     .from(usuarios)
-    .where(and(eq(usuarios.rol, "admin"), eq(usuarios.activo, true)))
-    .for("update");
+    .where(and(eq(usuarios.rol, "admin"), eq(usuarios.activo, true)));
   return filas.map((f) => f.id);
 }
 
-/** Cambia rol y ficha de operador, sube versión y generación, y borra sus sesiones. */
-export async function cambiarRolYCerrarSesiones(tx: Tx, u: UsuarioConCorreo, rol: Rol, operadorId: string | null, ahora: Date): Promise<number> {
+/** Cambia rol y ficha de operador y sube versión y generación. Las sesiones las cierra identidades.cerrarSesiones. */
+export async function cambiarRolUsuario(tx: Tx, u: UsuarioConCorreo, rol: Rol, operadorId: string | null, ahora: Date): Promise<number> {
   const [fila] = await tx
     .update(usuarios)
     .set({ rol, operadorId, actualizadoEn: ahora, version: sql`${usuarios.version} + 1`, generacion: sql`${usuarios.generacion} + 1` })
     .where(eq(usuarios.id, u.id))
     .returning({ version: usuarios.version });
-  await tx.delete(session).where(eq(session.userId, u.authUserId));
   return fila.version;
 }
 

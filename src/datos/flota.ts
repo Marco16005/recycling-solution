@@ -97,6 +97,16 @@ export async function leerUnidad(bd: Conexion, id: string): Promise<UnidadGuarda
   return (await leerUnidades(bd, [id]))[0] ?? null;
 }
 
+/**
+ * Bloquea (FOR SHARE) los renglones de la unidad y del operador hasta el fin de la transacción, antes de leer sus datos y
+ * documentos: así ambas lecturas ven el mismo estado. Funciona porque toda edición de una ficha o de sus documentos
+ * actualiza primero ese renglón (actualizarUnidadSiVersion, actualizarOperadorSiVersion, registrarEntregaAvisoSiVersion).
+ */
+export async function bloquearUnidadYOperador(tx: Tx, unidadId: string, operadorId: string): Promise<void> {
+  await tx.select({ id: unidades.id }).from(unidades).where(eq(unidades.id, unidadId)).for("share");
+  await tx.select({ id: operadores.id }).from(operadores).where(eq(operadores.id, operadorId)).for("share");
+}
+
 /** Ids de unidades con esa placa o número económico, sin contar excluirId. */
 export async function unidadesConPlacaONumero(bd: Conexion, placa: string, numeroEconomico: string | null, excluirId: string | null) {
   const filas = await bd

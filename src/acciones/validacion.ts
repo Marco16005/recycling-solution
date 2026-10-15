@@ -26,8 +26,12 @@ export function validarIdYVersion(
   return { ok: true, id: id as string, version: version.data };
 }
 
-/** true si el error es una violación de unicidad de Postgres (código 23505), directa o como causa. */
-export function esDuplicado(error: unknown): boolean {
-  const codigo = (e: unknown) => (e as { code?: string } | null)?.code;
-  return codigo(error) === "23505" || codigo((error as { cause?: unknown } | null)?.cause) === "23505";
+/**
+ * true si el error es una violación de unicidad de Postgres (código 23505), directa o como causa.
+ * Con restriccion, solo si es la de ese nombre.
+ */
+export function esDuplicado(error: unknown, restriccion?: string): boolean {
+  const pg = (e: unknown) => e as { code?: string; constraint?: string } | null;
+  const coincide = (e: unknown) => pg(e)?.code === "23505" && (restriccion === undefined || pg(e)?.constraint === restriccion);
+  return coincide(error) || coincide((error as { cause?: unknown } | null)?.cause);
 }

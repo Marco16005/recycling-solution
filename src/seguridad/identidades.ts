@@ -110,6 +110,11 @@ async function authUserIdDe(tx: Tx, usuarioId: string): Promise<string | null> {
   return fila?.authUserId ?? null;
 }
 
+/** Borra todas las sesiones del usuario (por ejemplo, al cambiar su rol). */
+export async function cerrarSesiones(tx: Tx, authUserId: string): Promise<void> {
+  await tx.delete(session).where(eq(session.userId, authUserId));
+}
+
 /** Desactiva y borra todas sus sesiones. false si el usuario no existe. */
 export async function desactivarUsuario(tx: Tx, usuarioId: string, por: Autor, ahora: Date): Promise<boolean> {
   const authUserId = await authUserIdDe(tx, usuarioId);

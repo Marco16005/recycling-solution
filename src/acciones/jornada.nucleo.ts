@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { registrarEvento } from "@/datos/bitacora";
-import { leerCatalogo, leerOperador, leerUnidad } from "@/datos/flota";
+import { bloquearUnidadYOperador, leerCatalogo, leerOperador, leerUnidad } from "@/datos/flota";
 import { bloquearJornadasDelDia, borrarJornadaSiVersion, insertarJornada, leerJornadas } from "@/datos/jornadas";
 import { erroresPorCampo } from "@/dominio/clientes/esquemas";
 import { ETIQUETA_NO_DISPONIBLE } from "@/dominio/clientes/etiquetas";
@@ -39,6 +39,7 @@ export async function asignarJornada(ctx: Contexto, entrada: unknown): Promise<R
   try {
     return await ctx.bd.transaction(async (tx): Promise<Resultado<{ id: string }>> => {
       await bloquearJornadasDelDia(tx, datos.fecha);
+      await bloquearUnidadYOperador(tx, datos.unidadId, datos.operadorId);
       const unidad = await leerUnidad(tx, datos.unidadId);
       const operador = await leerOperador(tx, datos.operadorId);
       if (unidad === null) return invalido({ unidadId: ["La unidad no existe"] });

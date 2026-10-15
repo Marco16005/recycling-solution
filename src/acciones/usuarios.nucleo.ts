@@ -2,15 +2,16 @@ import { z } from "zod";
 import type { Tx } from "@/datos/bd";
 import { registrarEvento } from "@/datos/bitacora";
 import {
-  adminsActivos, cambiarRolYCerrarSesiones, leerUsuarioParaCambiar, operadorLibre, subirVersionUsuario, type UsuarioConCorreo,
+  adminsActivos, cambiarRolUsuario, leerUsuarioParaCambiar, operadorLibre, subirVersionUsuario, tomarCandadoDeAdministradores,
+  type UsuarioConCorreo,
 } from "@/datos/usuarios";
 import { erroresPorCampo } from "@/dominio/clientes/esquemas";
 import { claveAleatoria } from "@/seguridad/claves";
-import { buscarPorCorreo, crearIdentidad, desactivarUsuario, reactivarUsuario, restablecerClave } from "@/seguridad/identidades";
+import { buscarPorCorreo, cerrarSesiones, crearIdentidad, desactivarUsuario, reactivarUsuario, restablecerClave } from "@/seguridad/identidades";
 import { ROLES } from "@/seguridad/permisos";
 import { permitir } from "./autorizacion";
 import type { Contexto, Resultado } from "./tipos";
-import { idSchema, invalido, versionSchema, type Fallo } from "./validacion";
+import { esDuplicado, idSchema, invalido, versionSchema, type Fallo } from "./validacion";
 
 /**
  * Reglas comunes (permiso usuarios.gestionar): rol operador ⇔ operadorId obligatorio y sin otro usuario; correo único;
@@ -61,19 +62,26 @@ export async function crearUsuario(ctx: Contexto, entrada: unknown): Promise<Res
   if (!validado.success) return invalido(erroresPorCampo(validado.error));
   const datos = validado.data;
   const claveTemporal = claveAleatoria();
+  const correoRepetido = invalido({ correo: ["Ya hay una cuenta con ese correo"] });
 
-  return ctx.bd.transaction(async (tx): Promise<Resultado<{ id: string; claveTemporal: string }>> => {
-    if (await buscarPorCorreo(tx, datos.correo)) return invalido({ correo: ["Ya hay una cuenta con ese correo"] });
-    const operadorId = await operadorParaRol(tx, datos.rol, datos.operadorId, null);
-    if (esFallo(operadorId)) return operadorId;
-    const { usuarioId } = await crearIdentidad(
-      tx,
-      { correo: datos.correo, nombre: datos.nombre, clave: claveTemporal, rol: datos.rol, operadorId },
-      permiso.usuario.id,
-      ctx.ahora,
-    );
-    return { ok: true, valor: { id: usuarioId, claveTemporal } };
-  });
+  try {
+    return await ctx.bd.transaction(async (tx): Promise<Resultado<{ id: string; claveTemporal: string }>> => {
+      if (await buscarPorCorreo(tx, datos.correo)) return correoRepetido;
+      const operadorId = await operadorParaRol(tx, datos.rol, datos.operadorId, null);
+      if (esFallo(operadorId)) return operadorId;
+      const { usuarioId } = await crearIdentidad(
+        tx,
+        { correo: datos.correo, nombre: datos.nombre, clave: claveTemporal, rol: datos.rol, operadorId },
+        permiso.usuario.id,
+        ctx.ahora,
+      );
+      return { ok: true, valor: { id: usuarioId, claveTemporal } };
+    });
+  } catch (error) {
+    // Otra alta con el mismo correo ganó entre la búsqueda y la inserción; la transacción ya se revirtió.
+    if (esDuplicado(error, "user_email_unique")) return correoRepetido;
+    throw error;
+  }
 }
 
 /** entrada: { rol, operadorId }. Sube la generación y cierra sus sesiones en la misma transacción. */
@@ -87,6 +95,7 @@ export async function cambiarRol(ctx: Contexto, id: unknown, versionEsperada: un
   if (ids.id === permiso.usuario.id) return invalido({ rol: ["No puedes cambiar tu propio rol"] });
 
   return ctx.bd.transaction(async (tx): Promise<Resultado<{ version: number }>> => {
+    await tomarCandadoDeAdministradores(tx);
     const u = await usuarioEnVersion(tx, ids.id, ids.version);
     if ("ok" in u) return u;
     if (u.rol === "admin" && validado.data.rol !== "admin" && u.activo && (await adminsActivos(tx)).length <= 1) {
@@ -94,7 +103,8 @@ export async function cambiarRol(ctx: Contexto, id: unknown, versionEsperada: un
     }
     const operadorId = await operadorParaRol(tx, validado.data.rol, validado.data.operadorId, u.id);
     if (esFallo(operadorId)) return operadorId;
-    const version = await cambiarRolYCerrarSesiones(tx, u, validado.data.rol, operadorId, ctx.ahora);
+    const version = await cambiarRolUsuario(tx, u, validado.data.rol, operadorId, ctx.ahora);
+    await cerrarSesiones(tx, u.authUserId);
     await registrarEvento(tx, { usuarioId: permiso.usuario.id, entidad: "usuario", entidadId: u.id, accion: "cambiar_rol", campos: ["rol", "operadorId"] });
     return { ok: true, valor: { version } };
   });
@@ -108,6 +118,7 @@ export async function darDeBajaUsuario(ctx: Contexto, id: unknown, versionEspera
   if (ids.id === permiso.usuario.id) return invalido({ _: ["No puedes desactivar tu propia cuenta"] });
 
   return ctx.bd.transaction(async (tx): Promise<Resultado<{ version: number }>> => {
+    await tomarCandadoDeAdministradores(tx);
     const u = await usuarioEnVersion(tx, ids.id, ids.version);
     if ("ok" in u) return u;
     if (u.rol === "admin" && u.activo && (await adminsActivos(tx)).length <= 1) {
