@@ -90,7 +90,7 @@ panel(ctx, desde: unknown, hasta: unknown): Promise<Resultado<VistaPanel>>
 
 **Esquema (Claude, migración `0007`):**
 
-- `instantaneas_k5`: `fecha` (llave), `activos`, `completos` y `tomada_en`; solo inserción. La toma el script `npm run instantanea-k5`, que el cron de §9 de `docs/operacion.md` corre junto al respaldo de las 17:00. Si falta la del día, también la toma la primera consulta del panel o la primera generación de plan.
+- `instantaneas_k5`: `fecha` (llave), `activos`, `completos` y `tomada_en`; solo inserción. La toma el script `npm run instantanea-k5`, que el cron de §9 de `docs/operacion.md` corre junto al respaldo de las 17:00. Si falta la del día, también la toma la primera consulta del panel.
 - `configuracion.linea_base` agrega `k2Seg`, `k2Muestra` y `k2Fecha`, editables por el administrador.
 
 ## 4. Tareas

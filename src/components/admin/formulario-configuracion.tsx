@@ -155,6 +155,36 @@ export function FormularioConfiguracion({ configuracion }: { configuracion: Conf
         {error("diasOperacion")}
       </fieldset>
 
+      <fieldset className="grid gap-4 rounded-xl border bg-background p-5 sm:grid-cols-3">
+        <legend className="px-1 text-lg font-semibold">Línea base de K2 (captura de una solicitud)</legend>
+        <p className="text-sm text-muted-foreground sm:col-span-3">
+          Se cronometra con el método actual antes del piloto, desde que se empieza a tomar la solicitud hasta que queda registrada.
+          Las líneas base de espera ({valores.lineaBase.esperaMin} min), traslado ({valores.lineaBase.trasladoMin} min) y ciclo
+          ({valores.lineaBase.cicloMin} min) vienen del Documento Integrador.
+        </p>
+        {([
+          ["k2Seg", "Mediana (segundos)", "number"],
+          ["k2Muestra", "Capturas cronometradas", "number"],
+          ["k2Fecha", "Fecha de la medición", "date"],
+        ] as const).map(([campo, titulo, tipo]) => (
+          <div key={campo} className="space-y-2">
+            <Label htmlFor={campo}>{titulo}</Label>
+            <Input
+              id={campo}
+              type={tipo}
+              value={valores.lineaBase[campo] ?? ""}
+              aria-invalid={Boolean(errores["lineaBase"])}
+              onChange={(e) => {
+                const texto = e.target.value;
+                const nuevo = texto === "" ? undefined : tipo === "number" ? Number(texto) : texto;
+                cambiar("lineaBase", { ...valores.lineaBase, [campo]: nuevo });
+              }}
+            />
+          </div>
+        ))}
+        <div className="sm:col-span-3">{error("lineaBase")}</div>
+      </fieldset>
+
       <p className="text-sm text-muted-foreground">
         Versión vigente del aviso de privacidad: <strong>{versionAvisoPrivacidad}</strong>. Se cambia publicando una versión nueva con
         <code className="mx-1">publicar-aviso</code>(ver docs/operacion.md).
