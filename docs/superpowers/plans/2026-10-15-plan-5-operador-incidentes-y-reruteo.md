@@ -1,7 +1,7 @@
 # Plan 5 — Aplicación del operador, incidentes y re-ruteo
 
 - **Fecha:** 2026-10-15.
-- **Revisión:** 2. Incorpora los 10 hallazgos de Codex sobre el borrador; las respuestas están en §9.
+- **Revisión:** 3. La revisión 2 incorporó los 10 hallazgos de Codex sobre el borrador (§9); la revisión 3 incorpora sus 5 hallazgos sobre la revisión 2 (§10).
 - **Especificación:**
   - §5, pasos 5 y 6;
   - §6: `eventos_operador`, `incidentes` y los campos reales de rutas y paradas;
@@ -75,10 +75,14 @@
 | `incidentes` (nueva) | `id`, `evento_id` uuid único, `huella`, `jornada_id`, `parada_id` (opcional), `tipo`, `descripcion` (≤ 300), `reportado_en`, `reportado_por`, `resuelto_en`, `resuelto_por`, `accion`, `version`. Sin DELETE |
 | `jornadas` | `version_operacion` (entero; sube con cada evento aplicado y con cada cancelación por incidente). El re-ruteo la compara |
 | `planes` | `tipo` (`inicial` \| `re_ruteo`), `plan_base_id`, `restricciones` (jsonb: `{ jornadasNoDisponibles: string[]; admitidas: Record<jornadaId, string[][]>; congeladas: string[] }`). `estado` agrega `reemplazado` |
-| `paradas` | `estado` agrega `en_servicio` y `reasignada`. `motivo_no_atendida` (≤ 200). `omitida` ya existe y se usa para la parada que deja de hacerse (pospuesta o cancelada por re-ruteo o incidente) |
+| `paradas` | `estado` agrega `en_servicio` y `reasignada`. `motivo_no_atendida` (≤ 200). `cierre_en`: hora en que se cerró la parada (`fin_servicio` o `no_atendida`), para medir el traslado a la siguiente. `omitida` ya existe y se usa para la parada que deja de hacerse (pospuesta o cancelada por re-ruteo o incidente) |
 | `solicitudes` | Sin cambios de esquema |
 
 `rutas.version` es la versión estructural: solo la cambia un re-ruteo, que retira paradas de esa ruta. Los eventos no la cambian, porque si lo hicieran los encolados sin señal fallarían.
+
+**Plan operativo de una fecha.** Es el plan `validado` más todos sus antecesores `reemplazado`, siguiendo `plan_base_id`. Sus rutas son las **rutas operativas**. Las paradas vigentes de la fecha pueden estar en cualquiera de ellas: un re-ruteo conserva en su ruta original lo congelado, y un segundo re-ruteo vuelve a partir de lo que esté vigente en todas.
+
+**Secuencia operativa de una jornada.** Son sus rutas operativas que ya salieron o que tienen al menos una parada vigente, ordenadas por `salida_patio_en` (las iniciadas) y luego por `salida_estimada`. Una ruta no iniciada y con todas sus paradas retiradas sale de la secuencia. El "viaje anterior" y el "viaje siguiente" se toman de esta secuencia, sin importar en qué plan esté cada ruta.
 
 ## 3. Contratos
 
@@ -89,16 +93,23 @@ export type TipoEvento = "check_in" | "salida_patio" | "llegada" | "inicio_servi
   | "regreso_patio" | "fin_descarga" | "check_out";
 export type EstadoParada = "pendiente" | "en_sitio" | "en_servicio" | "completada" | "no_atendida" | "reasignada" | "omitida";
 
-export interface ParadaOperacion { paradaId: string; solicitudId: string; secuencia: number; estado: EstadoParada; vigente: boolean }
+/** Horas ISO; las "estimadas" son las del plan con que se validó la ruta (Plan 4). */
+export interface ParadaOperacion {
+  paradaId: string; solicitudId: string; secuencia: number; estado: EstadoParada; vigente: boolean;
+  llegadaEstimada: string; inicioEstimado: string; finEstimado: string;
+  llegadaEn: string | null; inicioServicioEn: string | null; cierreEn: string | null;
+}
 export interface ViajeOperacion {
-  rutaId: string; numero: number; version: number;
+  rutaId: string; version: number;
+  salidaEstimada: string; regresoEstimado: string; finDescargaEstimado: string;
   salidaPatioEn: string | null; regresoPatioEn: string | null; descargaFinEn: string | null;
   odometroInicioKm: number | null; paradas: ParadaOperacion[];          // en secuencia
 }
-/** Estado de una jornada en todos los planes validados o reemplazados de su fecha, armado con todo bloqueado. */
+/** Estado de una jornada sobre su secuencia operativa (§2), armado por la acción con todo bloqueado. */
 export interface EstadoJornada {
   jornadaId: string; fecha: string; checkInEn: string | null; checkOutEn: string | null;
-  ultimoOcurridoEn: string | null; ultimoOdometroKm: number | null; viajes: ViajeOperacion[]; // en orden de salida planeada
+  ultimoOcurridoEn: string | null; ultimoOdometroKm: number | null;
+  viajes: ViajeOperacion[];   // la secuencia operativa: rutas iniciadas o con paradas vigentes, en orden
 }
 export interface EventoEntrada {
   eventoId: string; jornadaId: string; tipo: TipoEvento; ocurridoEn: string;
@@ -108,7 +119,7 @@ export type Efecto =
   | { tipo: "jornada"; campo: "check_in_en" | "check_out_en" }
   | { tipo: "ruta"; rutaId: string; campo: "salida_patio_en" | "regreso_patio_en" | "descarga_fin_en"; odometroKm?: number }
   | { tipo: "disponibilidad_siguiente"; rutaId: string }                 // el viaje siguiente queda disponible con la descarga real
-  | { tipo: "parada"; paradaId: string; estado: EstadoParada; campo: "llegada_en" | "inicio_servicio_en" | "fin_servicio_en" | null; motivo?: string; liberar?: boolean }
+  | { tipo: "parada"; paradaId: string; estado: EstadoParada; campos: ("llegada_en" | "inicio_servicio_en" | "fin_servicio_en" | "cierre_en")[]; motivo?: string; liberar?: boolean }
   | { tipo: "solicitudes"; rutaId: string; estado: "en_ruta" }
   | { tipo: "solicitud"; paradaId: string; estado: "atendida" | "pendiente_siguiente_dia" };
 
@@ -117,9 +128,14 @@ export function aplicarEvento(estado: EstadoJornada, evento: EventoEntrada, reci
   | { ok: true; efectos: Efecto[] } | { ok: false; motivo: string };
 export function huellaEvento(evento: EventoEntrada): string;          // canónica: claves ordenadas, sin recibidoEn
 
-/** Frontera del re-ruteo (§4). disponible: si la jornada sigue disponible. ahora: minutos en Ciudad de México. */
-export function fronteraDeReruteo(estado: EstadoJornada, disponible: boolean, ahoraMin: number, plan: { viajes: { rutaId: string; finDescargaMin: number; salidaMin: number }[] }):
-  | { ok: true; congeladas: string[]; viajeEnCurso: string | null; libreDesdeMin: number; admitidas: string[][]; aReubicar: string[] }
+/**
+ * Frontera del re-ruteo (§4). ahora: instante ISO; libreDesdeMin en minutos de Ciudad de México.
+ * Retraso = hora real del último hito del viaje en curso − su hora estimada (salida, llegada, inicio, cierre, regreso
+ * o descarga; para una no atendida, su llegada estimada), sin bajar de 0.
+ */
+export function fronteraDeReruteo(estado: EstadoJornada, disponible: boolean, ahora: string):
+  | { ok: true; congeladas: string[]; viajeEnCurso: string | null; retrasoMin: number; libreDesdeMin: number;
+      admitidas: string[][]; aReubicar: string[] }                    // ids de solicitudes
   | { ok: false; motivo: string };                                     // p. ej., jornada no disponible con parada en sitio
 ```
 
@@ -188,13 +204,13 @@ Es exhaustiva. Cualquier evento que no esté en la tabla se rechaza.
 | Evento | Requiere | Efecto |
 |---|---|---|
 | `check_in` | Sin `check_in` previo | Jornada `check_in_en` |
-| `salida_patio` (viaje v) | `check_in`, sin `check_out`, v sin salida, el viaje anterior con `descarga_fin_en`, v con paradas vigentes, odómetro ≥ último | Ruta `salida_patio_en` y odómetro; solicitudes del viaje `en_ruta` |
+| `salida_patio` (viaje v) | `check_in`, sin `check_out`, v sin salida, el viaje **anterior en la secuencia operativa** con `descarga_fin_en`, v con paradas vigentes, odómetro ≥ último | Ruta `salida_patio_en` y odómetro; solicitudes del viaje `en_ruta` |
 | `llegada` (parada p) | El viaje de p salió y no regresó; p `pendiente` y vigente; p es la **primera pendiente en secuencia** de su viaje; ninguna otra en sitio o en servicio | p `en_sitio`, `llegada_en` |
 | `inicio_servicio` | p `en_sitio` | p `en_servicio`, `inicio_servicio_en` |
-| `fin_servicio` | p `en_servicio` | p `completada`, `fin_servicio_en`; solicitud `atendida` |
-| `no_atendida` | El viaje salió; p es la primera pendiente o está en sitio; motivo | p `no_atendida`, motivo, `vigente = false`; solicitud `pendiente` para el siguiente día de operación (con una posposición más y su registro original) |
+| `fin_servicio` | p `en_servicio` | p `completada`, `fin_servicio_en` y `cierre_en`; solicitud `atendida` |
+| `no_atendida` | El viaje de p salió y no regresó; motivo; **o** p está `en_sitio`, **o** p es la primera pendiente en secuencia y ninguna otra parada está en sitio o en servicio | p `no_atendida`, motivo, `cierre_en`, `vigente = false`; solicitud `pendiente` para el siguiente día de operación (con una posposición más y su registro original) |
 | `regreso_patio` (v) | v salió y no regresó; todas sus paradas cerradas (`completada`, `no_atendida`, `reasignada` u `omitida`); odómetro ≥ el de salida | Ruta `regreso_patio_en` y odómetro |
-| `fin_descarga` (v) | v regresó, sin descarga | Ruta `descarga_fin_en`; el viaje siguiente queda con `disponible_para_salir_en` igual a esta hora |
+| `fin_descarga` (v) | v regresó, sin descarga | Ruta `descarga_fin_en`; el viaje **siguiente en la secuencia operativa** queda con `disponible_para_salir_en` igual a esta hora |
 | `check_out` | `check_in`; ningún viaje con salida y sin descarga; ninguna parada vigente pendiente, en sitio o en servicio | Jornada `check_out_en`. Después, nada |
 
 - **Hora.** `ocurrido_en` cae en la fecha de la jornada (Ciudad de México). No es anterior al último evento aplicado de la jornada ni más de 2 minutos posterior a `recibido_en`. El evento se recibe a lo sumo 24 horas después de ocurrir.
@@ -203,10 +219,10 @@ Es exhaustiva. Cualquier evento que no esté en la tabla se rechaza.
 
 ### Re-ruteo (`generarReruteo`)
 
-1. Se toma el plan base validado de hoy, en su versión, y las `jornadasNoDisponibles`.
+1. Se toma el plan validado de hoy (en su versión), su **plan operativo** (§2) y las `jornadasNoDisponibles`. Lo que sigue se calcula sobre las paradas vigentes de todas las rutas operativas.
 2. **Jornadas disponibles**, por `fronteraDeReruteo`:
    - el viaje en curso, si ya salió y no se ha descargado, se congela **completo**, incluidas sus pendientes;
-   - `libreDesdeMin` es el fin de descarga planeado de ese viaje más el retraso acumulado (hora real del último evento menos su hora planeada), y nunca antes de ahora. Sin viaje en curso, es ahora;
+   - `libreDesdeMin` es el fin de descarga estimado de ese viaje más el retraso de su último hito (`fronteraDeReruteo`), y nunca antes de ahora. Sin viaje en curso, es ahora;
    - los viajes futuros, que no han salido, pasan como `admitidas`.
 3. **Jornadas no disponibles:**
    - se congela solo lo completado y lo no atendido;
@@ -220,18 +236,21 @@ Es exhaustiva. Cualquier evento que no esté en la tabla se rechaza.
 
 **Validar un re-ruteo** es una rama propia de `validarPlanDelDia`:
 
-1. **Bloqueos:** los mismos que en el Plan 4, más el plan base y las paradas vigentes del base.
+1. **Bloqueos:** los mismos que en el Plan 4, más todos los planes del plan operativo, sus rutas y sus paradas vigentes, en orden de id.
 2. **Frescura:**
    - el plan base sigue `validado` y en su versión;
    - ninguna `version_operacion` cambió (`operacion_avanzo`).
 3. **Solicitudes:**
-   - las ya programadas solo se aceptan si su parada vigente es del plan base y no está congelada;
+   - las ya asignadas (`programada` o `en_ruta`) solo se aceptan si su parada vigente está en una ruta operativa y no está congelada;
    - las nuevas deben estar `pendiente`, sin parada vigente y elegibles.
 4. **Escrituras**, en este orden:
-   1. retirar en el plan base las paradas pendientes no congeladas: `vigente = false`, con estado `reasignada` si quedan ruteadas en el nuevo, u `omitida` si quedan pospuestas;
-   2. subir la `version` de las rutas base que pierden paradas;
+   1. retirar, en su ruta operativa real, las paradas pendientes no congeladas: `vigente = false`, con estado `reasignada` si quedan ruteadas en el nuevo, u `omitida` si quedan pospuestas;
+   2. subir la `version` de cada ruta que pierde paradas;
    3. insertar las rutas y paradas nuevas;
-   4. pasar a `programada` las solicitudes nuevas ruteadas, y las pospuestas al siguiente día;
+   4. solicitudes:
+      - las ruteadas (vengan de `pendiente`, `programada` o `en_ruta`) pasan a `programada`;
+      - las pospuestas pasan a `pendiente` para el siguiente día de operación, con una posposición más;
+      - todas conservan su registro original y suben su versión;
    5. marcar el plan base `reemplazado` y el nuevo `validado`;
    6. bitácora.
 5. **Lo que se conserva:** las congeladas siguen vigentes en el plan base, y los viajes en curso no cambian.
@@ -309,3 +328,13 @@ No se captura la ubicación del teléfono, porque K1, K3 y K4 salen de horas y o
 | §8.1 | Parada no atendida | Se libera (`vigente = false`) y la solicitud vuelve a `pendiente` |
 | §8.2 | Orden real | Sustituido por orden restringido |
 | §8.3 | Solicitudes nuevas en el re-ruteo y GPS | Documentados en §8 de este plan |
+
+## 10. Respuesta a la revisión de Codex de la revisión 2 (2026-10-15)
+
+| # | Hallazgo | Decisión |
+|---|---|---|
+| 1 | La frontera no puede calcular el retraso | `EstadoJornada` lleva las horas estimadas y reales de rutas y paradas; `fronteraDeReruteo` define el retraso por el último hito, con su equivalente planeado (§3.1) |
+| 2 | Re-ruteos encadenados | Plan operativo y rutas operativas: el validado y sus reemplazados; bloquear, comprobar y retirar sobre las rutas reales (§2, §4) |
+| 3 | Viaje anterior y siguiente entre planes | Secuencia operativa de la jornada, sin viajes no iniciados y totalmente retirados (§2, §4) |
+| 4 | Estado de las solicitudes reubicadas | Las ruteadas pasan a `programada` desde `pendiente`, `programada` o `en_ruta`; las pospuestas, a `pendiente` (§4) |
+| 5 | `no_atendida` con otra parada en sitio | La primera pendiente solo si ninguna otra está en sitio o en servicio; la propia en sitio sí (§4) |
