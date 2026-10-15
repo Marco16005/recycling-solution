@@ -140,11 +140,15 @@ const ENCABEZADOS = [
   "regreso_y_descarga_min", "ciclo_min", "dentro_de_ventana", "km_contrafactual",
 ];
 
+/** Un texto que empieza como fórmula (=, +, -, @, tabulador o retorno) se neutraliza con un apóstrofo: Excel no lo ejecuta. */
+const sinFormula = (v: string) => (/^[=+\-@\t\r]/.test(v) ? `'${v}` : v);
+
 function celda(v: string | number | boolean | null): string {
   if (v === null) return "";
   if (typeof v === "boolean") return v ? "si" : "no";
   if (typeof v === "number") return Number.isFinite(v) ? String(Math.round(v * 100) / 100) : "";
-  return /[",\r\n]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v;
+  const texto = sinFormula(v);
+  return /[",\r\n]/.test(texto) ? `"${texto.replaceAll('"', '""')}"` : texto;
 }
 
 /** CSV para Excel: UTF-8 con BOM, comas, punto decimal y CRLF. Celdas vacías para lo que falta. */

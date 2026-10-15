@@ -109,4 +109,13 @@ describe("indicadores (valores calculados a mano)", () => {
     expect(filas[2]).toBe("2026-10-15,F2,Papelera,ABC123,1,no atendida,,,,,,,10");
     expect(filas[3]).toBe('2026-10-15,F3,"Empaques ""Sur""",ABC123,1,completada,5,20,25,15,65,no,10');
   });
+
+  it("CSV: un nombre que empieza como fórmula se neutraliza para que Excel no lo ejecute", () => {
+    const [p1] = viaje();
+    for (const nombre of ["=HYPERLINK(\"http://x\")", "+1", "-2+3", "@SUMA(A1)"]) {
+      const fila = csv([{ ...p1, cliente: nombre }]).slice(1).split("\r\n")[1];
+      expect(fila.split(",")[2].replace(/^"/, "").startsWith("'")).toBe(true);
+    }
+    expect(csv([{ ...p1, folio: "=F1" }]).slice(1).split("\r\n")[1].startsWith("2026-10-15,'=F1,")).toBe(true);
+  });
 });
