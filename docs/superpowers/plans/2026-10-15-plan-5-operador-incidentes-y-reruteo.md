@@ -275,10 +275,12 @@ No se captura la ubicación del teléfono, porque K1, K3 y K4 salen de horas y o
   - indicador de conexión y de eventos por enviar, y lista de rechazados ("Llama al despachador");
   - reportar incidente.
   - La cola y la ruta van en `localStorage` con clave `rs-operador:<usuarioId>:<jornadaId>`. Se envían en orden, al volver la señal y cada 30 segundos.
+  - Cerrar sesión borra todo lo guardado en el teléfono, aunque falle la red. Si quedan eventos sin enviar, la pantalla avisa antes de salir y pide confirmación ("se perderán N eventos; mejor espera a tener señal").
 - **Service worker (Claude, `public/sw-operador.js`, alcance `/operador`):**
   - red primero para la navegación de `/operador`, con respaldo en caché;
   - caché para `/_next/static`.
-  - Se registra solo en `/operador`. Al cerrar sesión se borran su caché y las claves `rs-operador:` del teléfono.
+  - Se registra solo en `/operador`, como `/sw-operador.js?u=<usuarioId>`: la caché es de un solo usuario y, al activarse, borra la de otros. La pantalla también purga las claves `rs-operador:` de otros usuarios.
+  - Al cerrar sesión se borran su caché, su registro y las claves `rs-operador:`. Al entrar se borra la caché de pantallas, pero no la cola (puede ser del mismo operador).
   - El e2e lo habilita sobre `http://web:3000` con `--unsafely-treat-insecure-origin-as-secure`.
 - **Plan del día (despacho)** validado, con sondeo cada 30 segundos:
   - seguimiento por unidad, incidentes abiertos y eventos rechazados por conciliar;

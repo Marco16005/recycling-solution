@@ -31,3 +31,6 @@ REVOKE DELETE ON planes, rutas, paradas FROM rs_app;
 REVOKE UPDATE, DELETE ON eventos_operador FROM rs_app;
 GRANT UPDATE (conciliado_en, conciliado_por, nota_conciliacion) ON eventos_operador TO rs_app;
 REVOKE DELETE ON incidentes FROM rs_app;
+
+-- Plan 6: la instantánea diaria de K5 es historial de solo inserción.
+REVOKE UPDATE, DELETE ON instantaneas_k5 FROM rs_app;

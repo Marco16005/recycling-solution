@@ -23,6 +23,7 @@ const ESPERADO: Record<Permiso, Rol[]> = {
   "operacion.ver": ["admin", "despachador", "gerencia"],
   "operacion.conciliar": ["admin", "despachador"],
   "incidentes.resolver": ["admin", "despachador"],
+  "indicadores.ver": ["admin", "despachador", "gerencia"],
 };
 
 describe("matriz de permisos", () => {

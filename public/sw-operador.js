@@ -1,7 +1,10 @@
 // Service worker de /operador (Plan 5, §5): la pantalla del operador abre sin señal.
 // Red primero para la pantalla (con respaldo en caché) y caché para los archivos estáticos de Next.
-// No guarda respuestas de acciones ni de la API. Al cerrar sesión, la pantalla borra esta caché.
-const CACHE = "rs-operador-v1";
+// No guarda respuestas de acciones ni de la API.
+// La pantalla guardada lleva datos de la ruta: la caché es de un solo usuario (se registra como /sw-operador.js?u=<id>),
+// al activarse borra las de otros usuarios, y entrar o cerrar sesión la borran por completo.
+const USUARIO = new URL(self.location.href).searchParams.get("u") || "sin-usuario";
+const CACHE = `rs-operador-v1-${USUARIO}`;
 
 self.addEventListener("install", () => self.skipWaiting());
 

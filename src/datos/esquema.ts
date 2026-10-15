@@ -583,3 +583,17 @@ export const incidentes = pgTable(
     check("incidentes_version", sql`${t.version} >= 1`),
   ],
 );
+
+// ---------- Plan 6: indicadores (docs/superpowers/plans/2026-10-15-plan-6-indicadores-y-panel.md §3)
+
+/** Instantánea diaria de K5 para su serie histórica. Solo inserción; una por fecha. */
+export const instantaneasK5 = pgTable(
+  "instantaneas_k5",
+  {
+    fecha: date("fecha", { mode: "string" }).primaryKey(),
+    activos: integer("activos").notNull(),
+    completos: integer("completos").notNull(),
+    tomadaEn: timestamp("tomada_en", { withTimezone: true }).notNull(),
+  },
+  (t) => [check("instantaneas_k5_conteos", sql`${t.activos} >= 0 AND ${t.completos} BETWEEN 0 AND ${t.activos}`)],
+);

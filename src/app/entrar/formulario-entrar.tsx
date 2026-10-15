@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/seguridad/auth-cliente";
+import { borrarDatosDelOperador } from "@/components/sesion/registrar-sw-operador";
 
 export function FormularioEntrar() {
   const router = useRouter();
@@ -23,6 +24,8 @@ export function FormularioEntrar() {
         setError("No se pudo entrar. Revisa tu correo y contraseña, o pide ayuda al administrador.");
         return;
       }
+      // Las pantallas de /operador que otro usuario dejó guardadas en este teléfono no se conservan.
+      await borrarDatosDelOperador({ soloCache: true });
       router.replace("/");
       router.refresh();
     });
