@@ -41,9 +41,25 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
   opciones?: { ajustadoAMano?: boolean; restricciones?: RestriccionesPlan }): string[] {
   const manual = opciones?.ajustadoAMano === true;
   const errores: string[] = [];
-  // R0a: no certificar restricciones mientras su implementación (R2) está pendiente.
-  if (opciones?.restricciones && Object.values(opciones.restricciones.admitidas).some(viajes => viajes.length > 0))
-    errores.push("Restricciones de admitidas pendientes de implementar (R2)");
+  const restricciones = opciones?.restricciones?.admitidas ?? {};
+  const admitidas = new Set<string>();
+  // Contrasta el resultado directamente con el contrato, aunque la traza haya sido alterada.
+  for (const [unidadId, viajes] of Object.entries(restricciones)) {
+    if (!entrada.unidades.some(u => u.id === unidadId)) errores.push(`Unidad admitida desconocida: ${unidadId}`);
+    const ruta = plan.rutas.find(r => r.unidadId === unidadId);
+    for (const [i, ids] of viajes.entries()) {
+      if (!ids.length) errores.push(`Viaje admitido vacío: ${unidadId}`);
+      const reales = ruta?.viajes[i]?.paradas.map(p => p.solicitudId) ?? [];
+      let anterior = -1;
+      for (const id of ids) {
+        if (admitidas.has(id) || !entrada.solicitudes.some(s => s.id === id)) errores.push(`Admitida desconocida o repetida: ${id}`);
+        admitidas.add(id);
+        const posicion = reales.indexOf(id);
+        if (posicion <= anterior) errores.push(`Admitida retirada, movida o desordenada: ${id}`);
+        anterior = posicion;
+      }
+    }
+  }
   if (!opciones?.ajustadoAMano && plan.pospuestas.some(s => s.motivo === "pospuesta_a_mano")) {
     errores.push("Posposición manual en un plan automático");
   }
@@ -153,11 +169,11 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
   } else {
     // La reconstrucción inicia con las descargas obligatorias, incluso sin decisiones.
     let estado: RutaPlan[] = flota.map(u => {
-      const ruta = reconstruir(u, u.cargaActualKg > 0 ? [[]] : []);
+      const ruta = reconstruir(u, restricciones[u.id]?.length ? restricciones[u.id] : u.cargaActualKg > 0 ? [[]] : []);
       if (!ruta) errores.push(`Estado inicial inviable de ${u.id}`);
       return ruta ?? { unidadId: u.id, viajes: [] };
     });
-    const fifo = [...entrada.solicitudes].sort((a, b) => segundosUtc(a.registradaEn) - segundosUtc(b.registradaEn)
+    const fifo = entrada.solicitudes.filter(s => !admitidas.has(s.id)).sort((a, b) => segundosUtc(a.registradaEn) - segundosUtc(b.registradaEn)
       || texto(a.folio, b.folio) || texto(a.id, b.id));
     if (plan.traza.length !== fifo.length) errores.push("La traza no tiene una decisión por solicitud");
     const pospuestas: Plan["pospuestas"] = [];
@@ -177,7 +193,7 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
     for (const [i, decision] of plan.traza.entries()) {
       const s = porId.get(decision.solicitudId);
       if (!s) { errores.push(`Solicitud desconocida en traza: ${decision.solicitudId}`); continue; }
-      if (fifo[i]?.id !== s.id) errores.push(`Orden FIFO incorrecto en decisión ${i + 1}`);
+      if (admitidas.has(s.id) || fifo[i]?.id !== s.id) errores.push(`Orden FIFO incorrecto en decisión ${i + 1}`);
       if (decision.resultado === "bloqueada") {
         if (!bloqueada(s) || decision.motivo !== "carga_mayor_a_capacidad_compatible")
           errores.push(`Bloqueo injustificado: ${s.id}`);

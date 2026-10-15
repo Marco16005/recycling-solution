@@ -63,13 +63,13 @@ export function recalcularRuta(entrada: EntradaPlan, unidadId: string, viajes: s
 
 /** Recalcula las rutas afectadas y el resumen completo; conserva la traza original y no muta los argumentos. */
 export function ajustarPlan(entrada: EntradaPlan, plan: Plan, ajuste: AjusteManual, restricciones?: RestriccionesPlan): ResultadoAjuste {
-  // R0a: no ignorar restricciones mientras su implementación (R2) está pendiente.
-  if (restricciones && Object.values(restricciones.admitidas).some(viajes => viajes.length > 0))
-    return invalida("Restricciones de admitidas pendientes de implementar (R2)");
+  if (ajuste.tipo !== "actualizarHora" && Object.values(restricciones?.admitidas ?? {})
+    .some(viajes => viajes.some(v => v.includes(ajuste.solicitudId))))
+    return invalida("No se puede mover ni posponer una solicitud admitida");
   if (entrada.unidades.some(u => u.cargaActualKg !== 0
     || u.ubicacionInicial.lat !== entrada.parametros.patio.lat || u.ubicacionInicial.lng !== entrada.parametros.patio.lng))
     return invalida("Solo se admite el plan inicial desde el patio y sin carga");
-  if (validarPlan(entrada, plan, { ajustadoAMano: true }).length) return invalida("Plan de origen inválido");
+  if (validarPlan(entrada, plan, { ajustadoAMano: true, restricciones }).length) return invalida("Plan de origen inválido");
   let nuevaEntrada = entrada;
   const secuencias = new Map(plan.rutas.map(r => [r.unidadId, r.viajes.map(v => v.paradas.map(s => s.solicitudId))]));
   const afectadas = new Set<string>();
@@ -130,6 +130,6 @@ export function ajustarPlan(entrada: EntradaPlan, plan: Plan, ajuste: AjusteManu
     resumen.minutosTraslado += viaje.regresoPatioMin - (viaje.paradas.at(-1)?.finServicioMin ?? viaje.salidaMin);
   }
   const nuevo = { ...plan, rutas, pospuestas, resumen };
-  if (validarPlan(nuevaEntrada, nuevo, { ajustadoAMano: true }).length) return invalida("El ajuste produce un plan inválido");
+  if (validarPlan(nuevaEntrada, nuevo, { ajustadoAMano: true, restricciones }).length) return invalida("El ajuste produce un plan inválido");
   return { ok: true, plan: nuevo, entrada: nuevaEntrada };
 }
