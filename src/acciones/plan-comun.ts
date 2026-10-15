@@ -5,7 +5,8 @@ import { leerConfiguracionCompleta } from "@/datos/configuracion";
 import { leerCatalogo, leerOperadores, leerUnidades } from "@/datos/flota";
 import type { JornadaGuardada } from "@/datos/jornadas";
 import {
-  bloquearSolicitudes, conParadaVigente, insertarEjecucion, leerPlanParaCambiar, type NuevaEjecucion, type NuevaRuta, type PlanGuardado,
+  bloquearSolicitudes, conParadaVigente, descartarPropuesto, insertarEjecucion, insertarPlan, leerPlanParaCambiar, propuestoDeFecha,
+  tomarCandadoDeFecha, type NuevaEjecucion, type NuevaPlan, type NuevaRuta, type PlanGuardado,
 } from "@/datos/planes";
 import { motivosDeBloqueoCliente } from "@/dominio/clientes/habilitacion";
 import type { ClienteGuardado } from "@/dominio/clientes/tipos";
@@ -13,8 +14,8 @@ import { motivosNoDisponibleOperador, motivosNoDisponibleUnidad } from "@/domini
 import type { OperadorGuardado, UnidadGuardada } from "@/dominio/flota/tipos";
 import { capacidadMaximaPorTipo, instanteDeMinutos, minutoEnMexico, minutosDeHora } from "@/dominio/plan/entrada";
 import { fechaEnMexico } from "@/dominio/tiempo";
-import { distanciaKm, validarPlan, type Plan, type RestriccionesPlan } from "@/motor";
-import type { CodigoConflicto, Contexto } from "./tipos";
+import { distanciaKm, ErrorAdmitidas, validarPlan, type EntradaPlan, type Plan, type RestriccionesPlan } from "@/motor";
+import type { CodigoConflicto, Contexto, Resultado } from "./tipos";
 import { idSchema, invalido, versionSchema, type Fallo } from "./validacion";
 
 /** Utilidades del plan del día compartidas por el plan inicial (Plan 4) y el re-ruteo (Plan 5). */
@@ -239,3 +240,84 @@ export const reglasDelPlanInicial: ReglasSolicitudes = async (tx, plan, solicitu
   if ((await conParadaVigente(tx, ruteadas)).length > 0) return asignada();
   return null;
 };
+
+export interface Generacion {
+  fecha: string;
+  usuarioId: string;
+  entrada: EntradaPlan;
+  versiones: NuevaPlan["versiones"];
+  /** El propuesto vigente cuando se leyó la instantánea: si al guardar es otro, la generación quedó atrás. */
+  esperado: { id: string; version: number } | null;
+  correr: (entrada: EntradaPlan) => Plan;
+  /** Comprobación extra con el candado de la fecha tomado (plan inicial: que no haya validado; re-ruteo: que el base siga igual). */
+  antesDeGuardar: (tx: Tx) => Promise<Fallo | null>;
+  reruteo?: NuevaPlan["reruteo"];
+  accion: "generar" | "generar_reruteo";
+}
+
+/**
+ * Corre el motor fuera de toda transacción, medido con reloj monotónico (K7), y guarda la propuesta bajo el candado de la
+ * fecha. La ejecución queda registrada aunque el motor falle, se agote el tiempo o no se pueda guardar (Plan 4, §4).
+ */
+export async function ejecutarYGuardar(ctx: Contexto, g: Generacion): Promise<Resultado<{ planId: string }>> {
+  const inicio = performance.now();
+  let plan: Plan | null = null;
+  let errorMotor: string | null = null;
+  let admitidasImposibles = false;
+  try {
+    plan = g.correr(g.entrada);
+  } catch (error) {
+    errorMotor = errorSaneado(error);
+    admitidasImposibles = error instanceof ErrorAdmitidas;
+    if (!admitidasImposibles) console.error("[plan] el motor falló", errorMotor);
+  }
+  const duracionMs = performance.now() - inicio;
+  const ejecucion: Omit<NuevaEjecucion, "planId" | "resultado" | "error"> = {
+    fecha: g.fecha, inicioEn: ctx.ahora, finEn: new Date(ctx.ahora.getTime() + duracionMs), duracionMs,
+    versionMotor: plan?.versionMotor ?? "desconocida", usuarioId: g.usuarioId,
+  };
+
+  if (plan === null) {
+    await registrarEjecucionSinPlan(ctx, { ...ejecucion, resultado: "error", error: errorMotor });
+    return invalido({
+      _: [admitidasImposibles
+        ? "Lo que ya estaba asignado a las unidades disponibles no cabe con la hora actual; ajusta o pospón a mano"
+        : "El motor no pudo generar el plan. Intenta de nuevo; si se repite, avisa al administrador."],
+    });
+  }
+  if (duracionMs > LIMITE_MOTOR_MS) {
+    await registrarEjecucionSinPlan(ctx, { ...ejecucion, resultado: "tiempo_agotado", error: null });
+    return invalido({ _: ["El motor tardó demasiado y su resultado se descartó. Intenta de nuevo."] });
+  }
+
+  const generado = plan;
+  try {
+    const r = await ctx.bd.transaction(async (tx): Promise<Resultado<{ planId: string }>> => {
+      await tomarCandadoDeFecha(tx, g.fecha);
+      const previo = await g.antesDeGuardar(tx);
+      if (previo !== null) return previo;
+      const vigente = await propuestoDeFecha(tx, g.fecha);
+      if ((vigente?.id ?? null) !== (g.esperado?.id ?? null) || (vigente?.version ?? null) !== (g.esperado?.version ?? null)) {
+        return conflicto("generacion_adelantada", "Otra generación o un ajuste se guardó mientras el motor calculaba; revisa el plan vigente");
+      }
+      if (vigente !== null) {
+        await descartarPropuesto(tx, vigente.id, ctx.ahora);
+        await registrarEvento(tx, { usuarioId: g.usuarioId, entidad: "plan", entidadId: vigente.id, accion: "descartar_por_regeneracion", campos: ["estado"] });
+      }
+      const planId = await insertarPlan(tx, {
+        fecha: g.fecha, generadoEn: ctx.ahora, generadoPor: g.usuarioId, semilla: g.entrada.parametros.semilla,
+        versionMotor: generado.versionMotor, entrada: g.entrada, versiones: g.versiones, resultado: generado, reruteo: g.reruteo,
+      });
+      await insertarEjecucion(tx, { ...ejecucion, resultado: "ok", error: null, planId });
+      await registrarEvento(tx, { usuarioId: g.usuarioId, entidad: "plan", entidadId: planId, accion: g.accion, campos: [] });
+      return { ok: true, valor: { planId } };
+    });
+    if (!r.ok) await registrarEjecucionSinPlan(ctx, { ...ejecucion, resultado: "ok", error: null });
+    return r;
+  } catch (error) {
+    const saneado = errorSaneado(error);
+    console.error("[plan] no se pudo guardar la propuesta", saneado);
+    await registrarEjecucionSinPlan(ctx, { ...ejecucion, resultado: "ok", error: `guardado:${saneado}`.slice(0, 200) });
+    return invalido({ _: ["No se pudo guardar el plan. Intenta de nuevo; si se repite, avisa al administrador."] });
+  }
+}

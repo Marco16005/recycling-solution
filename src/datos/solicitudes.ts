@@ -71,6 +71,19 @@ export async function leerSolicitudesParaCola(bd: BD | Tx, fecha: string): Promi
   return filas.map(comoGuardada);
 }
 
+/** Cancela por incidente (Plan 5): desde pendiente, programada o en ruta, con su motivo. */
+export async function cancelarPorIncidente(tx: Tx, id: string, ahora: Date): Promise<void> {
+  await tx
+    .update(solicitudes)
+    .set({ estado: "cancelada", motivoCancelacion: "Cancelada por incidente", version: sql`${solicitudes.version} + 1`, actualizadoEn: ahora })
+    .where(and(eq(solicitudes.id, id), inArray(solicitudes.estado, ["pendiente", "programada", "en_ruta"])));
+}
+
+export async function solicitudesPorId(bd: BD | Tx, ids: string[]): Promise<SolicitudGuardada[]> {
+  if (ids.length === 0) return [];
+  return (await bd.select().from(solicitudes).where(inArray(solicitudes.id, ids))).map(comoGuardada);
+}
+
 export async function leerSolicitud(bd: BD | Tx, id: string): Promise<SolicitudGuardada | null> {
   const [fila] = await bd.select().from(solicitudes).where(eq(solicitudes.id, id));
   return fila ? comoGuardada(fila) : null;

@@ -377,3 +377,6 @@ export async function posponerSolicitudes(tx: Tx, ids: string[], proximaFechaEle
     })
     .where(and(inArray(solicitudes.id, ids), eq(solicitudes.estado, "pendiente")));
 }
+
+/** Alias para quien arma una generación. */
+export type NuevaPlan = NuevoPlan;

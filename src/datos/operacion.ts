@@ -142,6 +142,16 @@ export async function ultimoOdometroDeUnidad(bd: Conexion, unidadId: string): Pr
   return fila?.km ?? null;
 }
 
+export async function ultimoEventoAplicado(bd: Conexion, jornadaId: string): Promise<{ tipo: string; en: Date } | null> {
+  const [fila] = await bd
+    .select({ tipo: eventosOperador.tipo, en: eventosOperador.ocurridoEn })
+    .from(eventosOperador)
+    .where(and(eq(eventosOperador.jornadaId, jornadaId), eq(eventosOperador.resultado, "aplicado")))
+    .orderBy(desc(eventosOperador.ocurridoEn))
+    .limit(1);
+  return fila ?? null;
+}
+
 export async function ultimoOcurrido(bd: Conexion, jornadaId: string): Promise<Date | null> {
   const [fila] = await bd
     .select({ en: eventosOperador.ocurridoEn })
@@ -165,6 +175,13 @@ export async function estadoDeJornada(bd: Conexion, j: JornadaOperacion, bloquea
     ultimoOdometroKm: await ultimoOdometroDeUnidad(bd, j.unidadId),
     viajes: operativas.map(comoViaje),
   };
+}
+
+/** Con bloquear: FOR UPDATE, en orden de id. */
+export async function paradasPorId(bd: Conexion, ids: string[], bloquear = false): Promise<FilaParada[]> {
+  if (ids.length === 0) return [];
+  const consulta = bd.select().from(paradas).where(inArray(paradas.id, ids)).orderBy(asc(paradas.id));
+  return bloquear ? consulta.for("update") : consulta;
 }
 
 // ---------- Eventos
@@ -296,6 +313,11 @@ export async function incidentePorEvento(bd: Conexion, eventoId: string): Promis
 export async function insertarIncidente(tx: Tx, i: typeof incidentes.$inferInsert): Promise<string> {
   const [fila] = await tx.insert(incidentes).values(i).returning({ id: incidentes.id });
   return fila.id;
+}
+
+export async function incidentePorId(bd: Conexion, id: string): Promise<FilaIncidente | null> {
+  const [i] = await bd.select().from(incidentes).where(eq(incidentes.id, id));
+  return i ?? null;
 }
 
 export async function leerIncidenteParaCambiar(tx: Tx, id: string): Promise<FilaIncidente | null> {

@@ -5,9 +5,8 @@ import { bloquearConfiguracionCompartido, leerConfiguracionCompleta, type Config
 import { bloquearUnidadesYOperadores, leerCatalogo, leerOperadores, leerUnidades } from "@/datos/flota";
 import { bloquearJornadasDelDia, leerJornadas } from "@/datos/jornadas";
 import {
-  bloquearSolicitudes, descartarPropuesto, fijarRevisionIniciada, guardarAjuste, hayValidado, insertarEjecucion, insertarPlan, insertarRutas,
-  leerPlan, marcarDescartado, marcarValidado, posponerSolicitudes, programarSolicitudes, propuestoDeFecha, tomarCandadoDeCatalogoFlota,
-  tomarCandadoDeFecha, type NuevaEjecucion,
+  bloquearSolicitudes, fijarRevisionIniciada, guardarAjuste, hayValidado, insertarRutas, leerPlan, marcarDescartado, marcarValidado,
+  posponerSolicitudes, programarSolicitudes, propuestoDeFecha, tomarCandadoDeCatalogoFlota, tomarCandadoDeFecha,
 } from "@/datos/planes";
 import { leerSolicitudesParaCola } from "@/datos/solicitudes";
 import { diaSemanaDeFecha } from "@/dominio/clientes/habilitacion";
@@ -15,10 +14,10 @@ import { construirEntrada, ErrorDeEntrada, MARGEN_REVISION_MIN, minutoEnMexico }
 import type { VersionesPlan } from "@/dominio/plan/tipos";
 import { colaDelDia, siguienteDiaOperacion } from "@/dominio/solicitudes/cola";
 import { fechaEnMexico } from "@/dominio/tiempo";
-import { ajustarPlan, generarPlan, validarPlan, type AjusteManual, type EntradaPlan, type Plan, type ResultadoAjuste } from "@/motor";
+import { ajustarPlan, generarPlan, validarPlan, type AjusteManual, type EntradaPlan, type ResultadoAjuste } from "@/motor";
 import {
-  comprobarValidacion, conflicto, disponibleOperador, disponibleUnidad, errorSaneado, esFallo, LIMITE_MOTOR_MS, porVersion,
-  propuestoEnVersion, registrarEjecucionSinPlan, rutasParaGuardar, solicitudesRuteadas, validarIdYVersionDePlan, ValidacionRechazada,
+  comprobarValidacion, conflicto, disponibleOperador, disponibleUnidad, ejecutarYGuardar, esFallo, LIMITE_MOTOR_MS, porVersion,
+  propuestoEnVersion, rutasParaGuardar, solicitudesRuteadas, validarIdYVersionDePlan, ValidacionRechazada,
 } from "./plan-comun";
 import { permitir } from "./autorizacion";
 import type { Contexto, Resultado } from "./tipos";
@@ -54,66 +53,15 @@ export async function generarPlanDelDia(ctx: Contexto, fecha: unknown): Promise<
   if (esFallo(leida)) return leida;
   const { entrada, versiones, esperado } = leida;
 
-  // El motor corre fuera de toda transacción; el tiempo se mide aquí, con reloj monotónico (K7).
-  const inicio = performance.now();
-  let plan: Plan | null = null;
-  let errorMotor: string | null = null;
-  try {
-    plan = generarPlan(entrada);
-  } catch (error) {
-    errorMotor = errorSaneado(error);
-    console.error("[plan] el motor falló", errorMotor);
-  }
-  const duracionMs = performance.now() - inicio;
-  const ejecucion: Omit<NuevaEjecucion, "planId" | "resultado" | "error"> = {
-    fecha: dia.data,
-    inicioEn: ctx.ahora,
-    finEn: new Date(ctx.ahora.getTime() + duracionMs),
-    duracionMs,
-    versionMotor: plan?.versionMotor ?? "desconocida",
-    usuarioId,
-  };
-
-  if (plan === null) {
-    await registrarEjecucionSinPlan(ctx, { ...ejecucion, resultado: "error", error: errorMotor });
-    return invalido({ _: ["El motor no pudo generar el plan. Intenta de nuevo; si se repite, avisa al administrador."] });
-  }
-  if (duracionMs > LIMITE_MOTOR_MS) {
-    await registrarEjecucionSinPlan(ctx, { ...ejecucion, resultado: "tiempo_agotado", error: null });
-    return invalido({ _: ["El motor tardó demasiado y su resultado se descartó. Intenta de nuevo."] });
-  }
-
-  const generado = plan;
-  try {
-    const r = await ctx.bd.transaction(async (tx): Promise<Resultado<{ planId: string }>> => {
-      await tomarCandadoDeFecha(tx, dia.data);
-      if (await hayValidado(tx, dia.data)) {
-        return conflicto("plan_validado_existente", "La fecha ya tiene un plan validado; los cambios del día se hacen con el re-ruteo");
-      }
-      const vigente = await propuestoDeFecha(tx, dia.data);
-      if ((vigente?.id ?? null) !== (esperado?.id ?? null) || (vigente?.version ?? null) !== (esperado?.version ?? null)) {
-        return conflicto("generacion_adelantada", "Otra generación o un ajuste se guardó mientras el motor calculaba; revisa el plan vigente");
-      }
-      if (vigente !== null) {
-        await descartarPropuesto(tx, vigente.id, ctx.ahora);
-        await registrarEvento(tx, { usuarioId, entidad: "plan", entidadId: vigente.id, accion: "descartar_por_regeneracion", campos: ["estado"] });
-      }
-      const planId = await insertarPlan(tx, {
-        fecha: dia.data, generadoEn: ctx.ahora, generadoPor: usuarioId, semilla: entrada.parametros.semilla,
-        versionMotor: generado.versionMotor, entrada, versiones, resultado: generado,
-      });
-      await insertarEjecucion(tx, { ...ejecucion, resultado: "ok", error: null, planId });
-      await registrarEvento(tx, { usuarioId, entidad: "plan", entidadId: planId, accion: "generar", campos: [] });
-      return { ok: true, valor: { planId } };
-    });
-    if (!r.ok) await registrarEjecucionSinPlan(ctx, { ...ejecucion, resultado: "ok", error: null });
-    return r;
-  } catch (error) {
-    const saneado = errorSaneado(error);
-    console.error("[plan] no se pudo guardar la propuesta", saneado);
-    await registrarEjecucionSinPlan(ctx, { ...ejecucion, resultado: "ok", error: `guardado:${saneado}`.slice(0, 200) });
-    return invalido({ _: ["No se pudo guardar el plan. Intenta de nuevo; si se repite, avisa al administrador."] });
-  }
+  return ejecutarYGuardar(ctx, {
+    fecha: dia.data, usuarioId, entrada, versiones, esperado,
+    correr: (e) => generarPlan(e),
+    antesDeGuardar: async (tx) =>
+      (await hayValidado(tx, dia.data))
+        ? conflicto("plan_validado_existente", "La fecha ya tiene un plan validado; los cambios del día se hacen con el re-ruteo")
+        : null,
+    accion: "generar",
+  });
 }
 
 /** Lee todo lo que necesita el motor en una sola instantánea y arma la entrada y sus versiones. */
