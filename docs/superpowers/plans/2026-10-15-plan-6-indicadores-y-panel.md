@@ -10,8 +10,8 @@
   - §16: trazabilidad.
 - **Base:** Plan 5 terminado. Las funciones puras pueden empezar antes, con datos sintéticos.
 - **Ejecutan:**
-  - Codex: `src/indicadores`, el panel y el e2e;
-  - Claude: la extracción de datos, la instantánea de K5, la línea base de K2 y el CSV.
+  - Codex: el panel y el e2e, y la revisión de `src/indicadores`;
+  - Claude: `src/indicadores` (reasignado, ver I1), la extracción de datos, la instantánea de K5, la línea base de K2 y el CSV.
 
 ## 1. Objetivo y aceptación
 
@@ -98,7 +98,7 @@ panel(ctx, desde: unknown, hasta: unknown): Promise<Resultado<VistaPanel>>
 | # | Responsable | Tarea |
 |---|---|---|
 | I0 | Ambos | Contratos compilables de §3 y migración `0007` |
-| I1 | Codex | `src/indicadores`, con valores calculados a mano. Casos borde: viaje sin completadas, datos faltantes, anterior no atendida, re-ruteo con viaje congelado, asignación antes de la disponibilidad (espera 0), llegar antes y esperar dentro de la ventana, y servicio iniciado antes de que abra |
+| I1 | Claude (reasignado el 2026-10-15: Codex sin cuota; Codex lo revisa) | `src/indicadores`, con valores calculados a mano. Casos borde: viaje sin completadas, datos faltantes, anterior no atendida, re-ruteo con viaje congelado, asignación antes de la disponibilidad (espera 0), llegar antes y esperar dentro de la ventana, y servicio iniciado antes de que abra |
 | I2 | Claude | Extracción a `RecoleccionMedida` y `ViajeMedido` (una consulta por rango, en una instantánea), conteos de K3, instantánea de K5 y su script, línea base de K2 y CSV con su permiso, con pruebas de integración |
 | I3 | Codex | Panel con tarjetas contra la línea base, tendencia, muestras, rango y botón de CSV. Tablas accesibles, no solo gráficas |
 | I4 | Codex escribe, Claude ejecuta | e2e del día sintético, con los valores esperados en el panel y el CSV |
