@@ -81,7 +81,8 @@ export interface RutaPlan { unidadId: string; viajes: ViajePlan[] }
 export type MotivoPospuesta =
   | "sin_unidades_disponibles"   // no hay ninguna unidad
   | "sin_unidad_compatible"      // ninguna unidad disponible es de un tipo admitido
-  | "sin_cupo";                  // no cabe en ninguna posición factible
+  | "sin_cupo"                   // no cabe en ninguna posición factible
+  | "pospuesta_a_mano";          // solo ajuste del despachador, con diagnostico null
 export type MotivoBloqueoMotor = "carga_mayor_a_capacidad_compatible"; // > máximo de capacidadMaximaPorTipoKg entre sus tipos admitidos
 
 /** Por qué se descartaron las posiciones probadas para una pospuesta "sin_cupo" (cuántas por cada razón). */
@@ -106,3 +107,22 @@ export interface Plan {
     kmMetodoActual: number; minutosTrasladoMetodoActual: number;
   };
 }
+
+/** viaje y posicion se interpretan después de retirar la solicitud; viaje n+1 abre uno nuevo. */
+export type AjusteManual =
+  | { tipo: "mover"; solicitudId: string; unidadId: string; viaje: number; posicion: number }
+  | { tipo: "posponer"; solicitudId: string }
+  | { tipo: "actualizarHora"; instanteMin: number };
+
+export type CausaNoFactible = "capacidad" | "ventana" | "finDeTurno" | "tipoNoAdmitido";
+
+export type ResultadoRecalculo =
+  | { ok: true; ruta: RutaPlan }
+  | { ok: false; error: "entrada_invalida"; detalle: string }
+  | { ok: false; error: "no_factible"; causa: CausaNoFactible; viaje: number; solicitudId: string | null };
+
+/** entrada cambia solo con actualizarHora: instanteMin nuevo y libreDesdeMin = max(el anterior, instanteMin). */
+export type ResultadoAjuste =
+  | { ok: true; plan: Plan; entrada: EntradaPlan }
+  | { ok: false; error: "entrada_invalida"; detalle: string }
+  | { ok: false; error: "no_factible"; causa: CausaNoFactible; unidadId: string; viaje: number; solicitudId: string | null };

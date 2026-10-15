@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const secciones = [
   ["clientes", "Clientes"], ["solicitudes", "Solicitudes"], ["jornada", "Jornada"],
-  ["unidades", "Unidades"], ["operadores", "Operadores"],
+  ["plan", "Plan del día"], ["unidades", "Unidades"], ["operadores", "Operadores"],
 ] as const;
 
 export function NavegacionDespacho() {

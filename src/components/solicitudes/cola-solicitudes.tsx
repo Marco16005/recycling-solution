@@ -7,7 +7,7 @@ import { MotivosCliente } from "./motivos-cliente";
 import { AccionesSolicitud } from "./acciones-solicitud";
 
 const etiquetas: Record<EstadoEnCola, string> = {
-  lista: "Lista para planear", bloqueada: "Bloqueada", futura: "Futura", cerrada: "Cerrada",
+  lista: "Lista para planear", bloqueada: "Bloqueada", futura: "Futura", cerrada: "Cerrada", programada: "Programada",
 };
 
 export function ColaSolicitudes({ vista }: { vista: VistaCola }) {

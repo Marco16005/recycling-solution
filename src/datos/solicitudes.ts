@@ -1,7 +1,7 @@
-import { and, asc, eq, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import type { Canal, SolicitudGuardada } from "@/dominio/solicitudes/tipos";
 import type { BD, Tx } from "./bd";
-import { foliosDia, solicitudes } from "./esquema";
+import { foliosDia, paradas, planes, rutas, solicitudes } from "./esquema";
 
 /** Siguiente consecutivo del día; concurrente y sin repetirse (el renglón queda bloqueado hasta terminar la transacción). */
 export async function siguienteConsecutivo(tx: Tx, fecha: string): Promise<number> {
@@ -52,12 +52,21 @@ function comoGuardada(f: typeof solicitudes.$inferSelect): SolicitudGuardada {
   };
 }
 
-/** Pendientes de cualquier fecha y cerradas cuya fecha solicitada es la consultada, en orden FIFO. */
+/**
+ * Pendientes de cualquier fecha, las de fecha solicitada igual a la consultada y las que tienen parada vigente en el plan
+ * validado de esa fecha (aunque se hayan solicitado otro día), en orden FIFO.
+ */
 export async function leerSolicitudesParaCola(bd: BD | Tx, fecha: string): Promise<SolicitudGuardada[]> {
+  const programadasEnLaFecha = bd
+    .select({ id: paradas.solicitudId })
+    .from(paradas)
+    .innerJoin(rutas, eq(rutas.id, paradas.rutaId))
+    .innerJoin(planes, eq(planes.id, rutas.planId))
+    .where(and(eq(paradas.vigente, true), eq(planes.fecha, fecha), eq(planes.estado, "validado")));
   const filas = await bd
     .select()
     .from(solicitudes)
-    .where(or(eq(solicitudes.estado, "pendiente"), eq(solicitudes.fechaSolicitada, fecha)))
+    .where(or(eq(solicitudes.estado, "pendiente"), eq(solicitudes.fechaSolicitada, fecha), inArray(solicitudes.id, programadasEnLaFecha)))
     .orderBy(asc(solicitudes.registradaEn), asc(solicitudes.folio));
   return filas.map(comoGuardada);
 }

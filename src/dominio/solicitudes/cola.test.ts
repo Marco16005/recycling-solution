@@ -73,6 +73,12 @@ describe("cola del día", () => {
   it.each(["cancelada", "atendida", "no_atendida"] as const)("%s se clasifica cerrada antes que futura o bloqueada", (estado) => {
     expect(armar([{ ...solicitud, estado, proximaFechaElegible: "2026-10-15" }], { ...cliente, activo: false })[0]).toMatchObject({ estado: "cerrada", motivos: [], atrasada: false });
   });
+  it.each(["programada", "en_ruta"] as const)("%s se clasifica programada, sin bloqueo ni marca de atraso", (estado) => {
+    const asignada = { ...solicitud, estado, proximaFechaElegible: "2026-10-15" };
+    expect(armar([asignada], { ...cliente, activo: false })[0]).toMatchObject({
+      solicitud: asignada, estado: "programada", motivos: [], diasDeAtraso: 2, atrasada: false,
+    });
+  });
   it("al corregir cliente vuelve a lista conservando registro y lugar FIFO", () => {
     const reciente = { ...solicitud, id: "s2", registradaEn: new Date("2026-10-13T15:00:00Z"), vecesPospuesta: 0 };
     const entrada = [reciente, solicitud];

@@ -6,7 +6,7 @@ Para quien revise el proyecto (una persona u otro modelo, por ejemplo Codex). El
 
 1. `docs/superpowers/specs/2026-10-07-recycling-solution-piloto-design.md` (revisión 2) — qué debe hacer el sistema.
 2. `docs/superpowers/plans/2026-10-07-hoja-de-ruta.md` — qué hito se está revisando y su lista de aceptación.
-3. El plan detallado del hito, en `docs/superpowers/plans/` (para el Plan 1, el v2 del 2026-10-13). Su sección "Review Focus" lista las entradas riesgosas que deben tener prueba.
+3. El plan detallado del hito, en `docs/superpowers/plans/` (para el Plan 1, el v2 del 2026-10-13; para el Plan 4, el del 2026-10-15). Su sección "Review Focus" lista las entradas riesgosas que deben tener prueba.
 4. `docs/operacion.md` — cómo se levanta, respalda y muda el sistema.
 
 ## Cómo ejecutar
@@ -43,6 +43,10 @@ Cada una debe cumplirse siempre. Si alguna falla, es un hallazgo.
 | 16 | Toda petición HTTP a Better Auth pasa por `manejar`; una baja, reactivación o restablecimiento a media entrada no deja sesión viva | `src/app/api/auth/[...all]/route.ts` solo llama a `manejarPeticionDeAuth`; pruebas con pausas en `auth.integracion.test.ts` |
 | 17 | Una restauración falla completa o se aplica completa, y no corre con la aplicación activa | `scripts/probar-restauracion.sh` |
 | 14 | Todo se ejecuta en contenedores con versiones fijas | Ningún `@latest` ni imagen sin versión exacta en `Dockerfile`, `compose*.yaml` ni scripts |
+| 18 | Una solicitud tiene a lo sumo una parada vigente, y una fecha a lo sumo un plan validado y un propuesto | Índices únicos parciales `paradas_solicitud_vigente`, `planes_un_validado_por_fecha` y `planes_un_propuesto_por_fecha`; `src/datos/plan4.integracion.test.ts` y las pruebas de concurrencia de `src/acciones/plan4.integracion.test.ts` |
+| 19 | Validar un plan es todo o nada y vuelve a comprobar, con todo bloqueado, versiones, habilitación de clientes (incluida la privacidad), disponibilidad, capacidades de la flota y la hora actual | `src/acciones/plan.nucleo.ts` (orden de bloqueos del Plan 4, §4); pruebas `datos_cambiaron`, `cliente_no_habilitado`, `capacidades_cambiaron` y `hora_vencida` |
+| 20 | Toda corrida del motor queda en `ejecuciones_motor`, aunque falle, se agote el tiempo o no se pueda guardar el plan, sin datos personales en el mensaje; `rs_app` no puede cambiarla ni borrarla | Pruebas de generar en `src/acciones/plan.nucleo.test.ts` y de permisos en `src/datos/plan4.integracion.test.ts` |
+| 21 | Un ajuste manual nunca deja un plan que rompa capacidad, ventanas, turno o tipo de unidad | `ajustarPlan` comprueba con `validarPlan(…, { ajustadoAMano: true })`, que reconstruye cada ruta sin usar la admisión; pruebas de propiedades en `src/motor/ajustes.test.ts` |
 
 ## Qué intentar romper
 
@@ -57,6 +61,9 @@ Cada una debe cumplirse siempre. Si alguna falla, es un hallazgo.
 - Identificadores mal formados en la URL y en las acciones.
 - Archivos CSV con codificación distinta de UTF-8, columnas repetidas, campos multilínea, comillas sin cerrar, más de 2000 registros o más de 1 MB; reimportar la misma cartera (posibles duplicados).
 - Borrar todos los contenedores y volver a levantarlos; restaurar un respaldo en una máquina limpia.
+- Validar dos planes de fechas distintas que comparten solicitudes; validar mientras otro despachador cancela, reprograma, edita una unidad, asigna una jornada o el cliente retira su consentimiento.
+- Validar el plan de hoy cuando la hora ya pasó la primera salida; ajustar a mano hasta dejar una ruta imposible.
+- Generar dos veces la misma fecha a la vez, o generar mientras otro despachador ajusta la propuesta.
 
 ## Formato de un hallazgo
 

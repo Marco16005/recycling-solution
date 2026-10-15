@@ -34,6 +34,11 @@ export interface ConfiguracionCompleta {
 
 const hhmm = (hora: string) => hora.slice(0, 5);
 
+/** Bloquea (FOR SHARE) la fila de configuración hasta el fin de la transacción: nadie la edita mientras se valida un plan. */
+export async function bloquearConfiguracionCompartido(tx: Tx): Promise<void> {
+  await tx.select({ id: configuracion.id }).from(configuracion).where(eq(configuracion.id, 1)).for("share");
+}
+
 export async function leerConfiguracionCompleta(bd: BD | Tx): Promise<ConfiguracionCompleta> {
   const [c] = await bd.select().from(configuracion).where(eq(configuracion.id, 1));
   if (!c) throw new Error("Falta la fila de configuración: ejecuta el servicio migrate");

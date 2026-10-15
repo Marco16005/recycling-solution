@@ -35,6 +35,8 @@ test("el administrador crea un usuario con clave temporal; al cambiarle el rol s
     const fila = page.getByRole("row").filter({ hasText: correo });
     await fila.getByLabel(/^Rol de/).selectOption("gerencia");
     await fila.getByRole("button", { name: /Guardar rol/ }).click();
+    // El selector cambia en cuanto se elige; el botón desaparece solo cuando la tabla ya trae el rol guardado en el servidor.
+    await expect(fila.getByRole("button", { name: /Guardar rol/ })).toHaveCount(0);
     await expect(page.getByRole("row").filter({ hasText: correo }).getByLabel(/^Rol de/)).toHaveValue("gerencia");
 
     await suPagina.reload();
