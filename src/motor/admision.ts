@@ -8,16 +8,22 @@ const diagnosticoVacio = (): Diagnostico => ({ capacidad: 0, ventana: 0, finDeTu
 type Calculo = { ruta: RutaPlan } | { causa: keyof Diagnostico; afectaAOtra: boolean };
 
 /** Recalcula desde el origen libre, nunca desde los horarios de la propuesta anterior. */
-function calcular(entrada: EntradaPlan, unidad: UnidadMotor, viajes: string[][], solicitudes: Map<string, SolicitudMotor>, nueva?: string): Calculo {
+function calcular(
+  entrada: EntradaPlan, unidad: UnidadMotor, viajes: string[][],
+  solicitudes: Map<string, SolicitudMotor>, nueva?: string
+): Calculo {
   const p = entrada.parametros;
   let hora = Math.max(entrada.instanteMin, unidad.libreDesdeMin, p.turnoInicioMin);
   let origen = unidad.ubicacionInicial;
   const resultado: ViajePlan[] = [];
   for (let i = 0; i < viajes.length; i++) {
     const ids = viajes[i];
-    const cargaKg = (i === 0 ? unidad.cargaActualKg : 0) + ids.reduce((suma, id) => suma + solicitudes.get(id)!.cargaKg, 0);
+    const cargaKg = (i === 0 ? unidad.cargaActualKg : 0)
+      + ids.reduce((suma, id) => suma + solicitudes.get(id)!.cargaKg, 0);
     if (cargaKg > unidad.capacidadKg) return { causa: "capacidad", afectaAOtra: false };
-    const viaje: ViajePlan = { numero: i + 1, salidaMin: hora, paradas: [], regresoPatioMin: 0, finDescargaMin: 0, cargaKg, km: 0 };
+    const viaje: ViajePlan = {
+      numero: i + 1, salidaMin: hora, paradas: [], regresoPatioMin: 0, finDescargaMin: 0, cargaKg, km: 0
+    };
     for (const id of ids) {
       const s = solicitudes.get(id)!;
       const km = distanciaKm(origen, s.ubicacion, p.factorCircuidad);
@@ -28,7 +34,8 @@ function calcular(entrada: EntradaPlan, unidad: UnidadMotor, viajes: string[][],
       const inicio = Math.max(llegada, ventana.inicioMin);
       hora = inicio + s.tiempoServicioMin;
       viaje.paradas.push({ solicitudId: id, secuencia: viaje.paradas.length + 1, kmDesdeAnterior: km,
-        llegadaMin: llegada, esperaMin: inicio - llegada, inicioServicioMin: inicio, finServicioMin: hora, ventana: { ...ventana } });
+        llegadaMin: llegada, esperaMin: inicio - llegada, inicioServicioMin: inicio, finServicioMin: hora,
+        ventana: { ...ventana } });
       viaje.km += km;
       origen = s.ubicacion;
     }
@@ -47,7 +54,8 @@ function calcular(entrada: EntradaPlan, unidad: UnidadMotor, viajes: string[][],
 export function generarPlan(entrada: EntradaPlan): Plan {
   const solicitudes = new Map(entrada.solicitudes.map(s => [s.id, s]));
   if (solicitudes.size !== entrada.solicitudes.length) throw new Error("Solicitudes repetidas en la entrada");
-  if (new Set(entrada.unidades.map(u => u.id)).size !== entrada.unidades.length) throw new Error("Unidades repetidas en la entrada");
+  if (new Set(entrada.unidades.map(u => u.id)).size !== entrada.unidades.length)
+    throw new Error("Unidades repetidas en la entrada");
   const p = entrada.parametros;
   if (!(p.velocidadKmh > 0) || !Number.isFinite(p.velocidadKmh) || !(p.factorCircuidad >= 1)
     || !Number.isFinite(p.factorCircuidad) || p.descargaMin < 0) throw new Error("Parámetros de traslado inválidos");
@@ -61,7 +69,8 @@ export function generarPlan(entrada: EntradaPlan): Plan {
   const fifo = ordenarFifo(entrada.solicitudes);
   const zonas = agruparZonas(fifo.map(s => s.ubicacion), unidades.length, p.patio, p.semilla);
   const plan: Plan = { versionMotor: "1.0.0", rutas: [], pospuestas: [], bloqueadas: [], traza: [],
-    resumen: { ruteadas: 0, pospuestas: 0, bloqueadas: 0, km: 0, minutosTraslado: 0, kmMetodoActual: 0, minutosTrasladoMetodoActual: 0 } };
+    resumen: { ruteadas: 0, pospuestas: 0, bloqueadas: 0, km: 0, minutosTraslado: 0,
+      kmMetodoActual: 0, minutosTrasladoMetodoActual: 0 } };
   for (const [indice, s] of fifo.entries()) {
     if (s.cargaKg > Math.max(0, ...s.tiposUnidadAdmitidos.map(t => p.capacidadMaximaPorTipoKg[t]))) {
       const motivo = "carga_mayor_a_capacidad_compatible" as const;
@@ -72,7 +81,8 @@ export function generarPlan(entrada: EntradaPlan): Plan {
     const diagnostico = diagnosticoVacio();
     // Rutas persistentes: cada cambio reemplaza la ruta y el arreglo; la traza conserva el estado anterior.
     const rutasAntes = rutas;
-    const compatibles = unidades.map((u, i) => ({ u, i, zona: i % Math.max(1, Math.min(unidades.length, fifo.length)) === zonas[indice] }))
+    const compatibles = unidades.map((u, i) => ({
+      u, i, zona: i % Math.max(1, Math.min(unidades.length, fifo.length)) === zonas[indice] }))
       .filter(({ u }) => s.tiposUnidadAdmitidos.includes(u.tipo))
       .sort((a, b) => Number(b.zona) - Number(a.zona) || compararTexto(a.u.id, b.u.id));
     type Candidata = { ruta: RutaPlan; i: number; viaje: number; secuencia: number; costo: number; zona: boolean };
@@ -88,7 +98,8 @@ export function generarPlan(entrada: EntradaPlan): Plan {
         return;
       }
       const fin = calculo.ruta.viajes.at(-1)!.finDescargaMin;
-      const anterior = rutas[c.i].viajes.at(-1)?.finDescargaMin ?? Math.max(entrada.instanteMin, c.u.libreDesdeMin, p.turnoInicioMin);
+      const anterior = rutas[c.i].viajes.at(-1)?.finDescargaMin
+        ?? Math.max(entrada.instanteMin, c.u.libreDesdeMin, p.turnoInicioMin);
       const costo = nuevo ? fin : fin - anterior;
       const candidata = { ruta: calculo.ruta, i: c.i, viaje: viaje + 1, secuencia: posicion + 1, costo, zona: c.zona };
       const mejor = seleccion.mejor;
@@ -105,7 +116,8 @@ export function generarPlan(entrada: EntradaPlan): Plan {
       plan.traza.push({ solicitudId: s.id, resultado: "admitida", unidadId: elegida.ruta.unidadId,
         viaje: elegida.viaje, secuencia: elegida.secuencia, rutasAntes });
     } else {
-      const motivo = !unidades.length ? "sin_unidades_disponibles" : !compatibles.length ? "sin_unidad_compatible" : "sin_cupo";
+      const motivo = !unidades.length ? "sin_unidades_disponibles"
+        : !compatibles.length ? "sin_unidad_compatible" : "sin_cupo";
       plan.pospuestas.push({ solicitudId: s.id, motivo, diagnostico: motivo === "sin_cupo" ? diagnostico : null });
       plan.traza.push({ solicitudId: s.id, resultado: "pospuesta", motivo, diagnostico, rutasAntes });
     }

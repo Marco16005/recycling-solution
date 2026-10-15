@@ -19,7 +19,9 @@ async function Alta() {
           Puedes guardar una ficha incompleta y terminarla después.
         </p>
       </div>
-      <FormularioCliente estiloMapaUrl={resultado.valor.estiloMapaUrl} />
+      <FormularioCliente
+        estiloMapaUrl={resultado.valor.estiloMapaUrl} catalogoDocumentos={resultado.valor.catalogoDocumentos}
+      />
       <PrivacidadCliente
         clienteId={null}
         privacidad={null}

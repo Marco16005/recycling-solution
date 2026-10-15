@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { guardarClienteAccion } from "@/acciones/clientes";
 import type { FichaCliente } from "@/consultas/clientes";
+import type { TipoDocumento } from "@/dominio/flota/tipos";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,7 +39,11 @@ const SelectorUbicacion = dynamic(() => import("./selector-ubicacion").then((m) 
 const texto = (valor: string) => (valor === "" ? null : valor);
 const numero = (valor: string) => (valor === "" ? null : Number(valor));
 
-export function FormularioCliente({ ficha, estiloMapaUrl }: { ficha?: FichaCliente; estiloMapaUrl: string }) {
+export function FormularioCliente({ ficha, estiloMapaUrl, catalogoDocumentos = ficha?.catalogoDocumentos ?? [] }: {
+  ficha?: FichaCliente;
+  estiloMapaUrl: string;
+  catalogoDocumentos?: TipoDocumento[];
+}) {
   const router = useRouter();
   const prefijo = useId();
   const [datos, setDatos] = useState<ClienteEntrada>(() =>
@@ -463,6 +468,27 @@ export function FormularioCliente({ ficha, estiloMapaUrl }: { ficha?: FichaClien
                 {datos.documentos.map((d, i) => (
                   <div key={i} className="grid items-end gap-4 rounded-lg border p-4 sm:grid-cols-2">
                     <Campo
+                      nombre={`documentos.${i}.tipoDocumentoId`}
+                      titulo={`Tipo (catálogo) · documento ${i + 1}`}
+                      prefijo={prefijo}
+                      errores={errores}
+                    >
+                      {(b) => (
+                        <select
+                          {...b} className={CLASE_SELECT} value={d.tipoDocumentoId ?? ""}
+                          onChange={(e) => {
+                            const tipo = catalogoDocumentos.find((t) => t.id === e.target.value);
+                            cambiar("documentos", datos.documentos.map((w, j) => j === i ? {
+                              ...w, tipoDocumentoId: tipo?.id ?? null, nombre: tipo?.nombre ?? w.nombre,
+                            } : w));
+                          }}
+                        >
+                          <option value="">Nombre libre</option>
+                          {catalogoDocumentos.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                        </select>
+                      )}
+                    </Campo>
+                    <Campo
                       nombre={`documentos.${i}.nombre`}
                       titulo={`Nombre · documento ${i + 1}`}
                       prefijo={prefijo}
@@ -472,6 +498,7 @@ export function FormularioCliente({ ficha, estiloMapaUrl }: { ficha?: FichaClien
                         <Input
                           {...b}
                           value={d.nombre}
+                          readOnly={d.tipoDocumentoId != null}
                           onChange={(e) =>
                             cambiar(
                               "documentos",
@@ -588,7 +615,7 @@ export function FormularioCliente({ ficha, estiloMapaUrl }: { ficha?: FichaClien
               onClick={() =>
                 cambiar("documentos", [
                   ...datos.documentos,
-                  { nombre: "", obligatorio: true, estado: "pendiente", venceEl: null },
+                  { tipoDocumentoId: null, nombre: "", obligatorio: true, estado: "pendiente", venceEl: null },
                 ])
               }
             >
