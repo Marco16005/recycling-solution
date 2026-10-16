@@ -383,3 +383,6 @@ Actualizado el 2026-10-14 con lo que respondió el dueño. "Dueño" indica que l
 | Tabla 10, requerimientos por etapa | §7, §10 |
 | §6, cuatro pasos del motor | §8 |
 | Tabla 14, alternativa A3 | §3 |
+| Mi ruta del operador, eventos e incidentes (Tabla 6, rol operador) | Plan 5: `/operador`, `src/dominio/operacion`, `src/acciones/operador.nucleo.ts` |
+| Re-ruteo ante incidente (§6 del DI, paso 4 del motor) | §8 Re-ruteo; Plan 5 §4 |
+| Cartas X̄-R y panel (Tabla 1) | Plan 6: `/gerencia/panel`, `src/indicadores`, CSV en `/api/indicadores/csv` |
