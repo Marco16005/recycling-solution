@@ -9,14 +9,16 @@ type Medida = { valor: number | null; muestra: number; lineaBase?: number };
 const numero = (v: number | null, decimales = 1) =>
   v === null ? "—" : v.toLocaleString("es-MX", { maximumFractionDigits: decimales, minimumFractionDigits: 0 });
 
-function Tarjeta({ id, titulo, medida, unidad, lineaBase, nota }: { id: string; titulo: string; medida: Medida; unidad: string; lineaBase?: number; nota?: string }) {
+function Tarjeta({ id, titulo, medida, unidad, lineaBase, meta, nota }: {
+  id: string; titulo: string; medida: Medida; unidad: string; lineaBase?: number; meta?: number; nota?: string;
+}) {
   const base = lineaBase ?? medida.lineaBase;
   return (
     <section aria-labelledby={id} className="space-y-2 rounded-xl border bg-background p-5">
       <h3 id={id} className="text-sm font-medium text-muted-foreground">{titulo}</h3>
       <p className="font-mono text-3xl tabular-nums">{numero(medida.valor)}<span className="ml-1 text-base text-muted-foreground">{unidad}</span></p>
       <p className="text-xs text-muted-foreground">
-        Muestra: {medida.muestra}{base !== undefined && <> · Línea base: {numero(base)} {unidad}</>}
+        Muestra: {medida.muestra}{base !== undefined && <> · Línea base: {numero(base)} {unidad}</>}{meta !== undefined && <> · Meta: {numero(meta)} {unidad}</>}
       </p>
       {nota && <p className="text-xs text-muted-foreground">{nota}</p>}
     </section>
@@ -67,9 +69,11 @@ export function PanelIndicadores({ vista }: { vista: VistaPanel }) {
       <section aria-labelledby="titulo-planeacion" className="space-y-4">
         <h2 id="titulo-planeacion" className="text-xl font-semibold">Planeación</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Tarjeta id="k6-inicial" titulo="K6 · Trabajo activo, plan del día" medida={vista.k6.inicial.trabajoActivo} unidad="min" lineaBase={vista.k6.metaMin}
-            nota={`Meta: ${vista.k6.metaMin} min. Demora total: ${numero(vista.k6.inicial.demora.valor)} min.`} />
+          <Tarjeta id="k6-inicial" titulo="K6 · Trabajo activo, plan del día" medida={vista.k6.inicial.trabajoActivo} unidad="min" meta={vista.k6.metaMin} />
+          <Tarjeta id="k6-inicial-demora" titulo="K6 · Demora total, plan del día" medida={vista.k6.inicial.demora} unidad="min"
+            nota="De la generación a la validación; la meta se compara solo con el trabajo activo." />
           <Tarjeta id="k6-reruteo" titulo="K6 · Trabajo activo, re-ruteos" medida={vista.k6.re_ruteo.trabajoActivo} unidad="min" />
+          <Tarjeta id="k6-reruteo-demora" titulo="K6 · Demora total, re-ruteos" medida={vista.k6.re_ruteo.demora} unidad="min" />
           <Tarjeta id="k7" titulo="K7 · Tiempo del motor (mediana)" medida={vista.k7.mediana} unidad="ms"
             nota={`Máximo: ${numero(vista.k7.maximo)} ms · Fallidas: ${vista.k7.errores} · Agotadas: ${vista.k7.agotadas}`} />
         </div>
@@ -82,16 +86,14 @@ export function PanelIndicadores({ vista }: { vista: VistaPanel }) {
             <table className="w-full text-left text-sm">
               <caption className="sr-only">Indicadores por día</caption>
               <thead><tr>
-                {["Fecha", "Espera (min)", "Traslado (min)", "Ventana (%)", "Ciclo (min)", "Recolecciones"].map((t) => <th key={t} scope="col" className="p-3">{t}</th>)}
+                {["Fecha", "Espera (min)", "Traslado (min)", "Ventana (%)", "Ciclo (min)"].map((t) => <th key={t} scope="col" className="p-3">{t}</th>)}
               </tr></thead>
               <tbody>{vista.tendencia.map((d) => (
                 <tr key={d.fecha} className="border-t">
                   <th scope="row" className="p-3 font-mono">{d.fecha}</th>
-                  <td className="p-3 tabular-nums">{numero(d.k1Espera.valor)}</td>
-                  <td className="p-3 tabular-nums">{numero(d.k1Traslado.valor)}</td>
-                  <td className="p-3 tabular-nums">{numero(d.k3.valor)}</td>
-                  <td className="p-3 tabular-nums">{numero(d.ciclo.valor)}</td>
-                  <td className="p-3 tabular-nums">{d.k1Espera.muestra}</td>
+                  {[d.k1Espera, d.k1Traslado, d.k3, d.ciclo].map((m, i) => (
+                    <td key={i} className="p-3 tabular-nums">{numero(m.valor)} <span className="text-xs text-muted-foreground">(n = {m.muestra})</span></td>
+                  ))}
                 </tr>
               ))}</tbody>
             </table>

@@ -14,7 +14,7 @@ await ejecutar(async () => {
     bd.transaction(async (tx) => {
       const { versionAvisoPrivacidad } = await leerConfiguracionCompleta(tx);
       const k = resumenK5(await leerCartera(tx), versionAvisoPrivacidad);
-      return tomarInstantaneaK5(tx, fecha, k.activos, k.completos, ahora);
+      return tomarInstantaneaK5(tx, fecha, k.activos, k.completos, ahora, null);
     }),
   );
   console.log(tomada ? `Instantánea de K5 del ${fecha} guardada.` : `Ya había una instantánea de K5 del ${fecha}.`);

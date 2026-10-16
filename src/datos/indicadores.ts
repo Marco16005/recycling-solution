@@ -1,6 +1,7 @@
 import { and, asc, between, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Plan } from "@/motor";
 import type { BD, Tx } from "./bd";
+import { registrarEvento } from "./bitacora";
 import { clientes, ejecucionesMotor, instantaneasK5, jornadas, paradas, planes, rutas, solicitudes, unidades } from "./esquema";
 
 type Conexion = BD | Tx;
@@ -75,12 +76,20 @@ export async function leerDatosIndicadores(bd: Conexion, desde: string, hasta: s
   };
 }
 
-/** Guarda la instantánea de K5 de la fecha si todavía no hay una (la primera del día queda). */
-export async function tomarInstantaneaK5(tx: Tx, fecha: string, activos: number, completos: number, ahora: Date): Promise<boolean> {
+/**
+ * Guarda la instantánea de K5 de la fecha si todavía no hay una (la primera del día queda), con su renglón de bitácora.
+ * usuarioId: quien consultó el panel, o null si la toma el script del cron.
+ */
+export async function tomarInstantaneaK5(tx: Tx, fecha: string, activos: number, completos: number, ahora: Date, usuarioId: string | null): Promise<boolean> {
   const filas = await tx
     .insert(instantaneasK5)
     .values({ fecha, activos, completos, tomadaEn: ahora })
     .onConflictDoNothing({ target: instantaneasK5.fecha })
     .returning({ fecha: instantaneasK5.fecha });
-  return filas.length > 0;
+  if (filas.length === 0) return false;
+  await registrarEvento(tx, {
+    usuarioId, entidad: "instantanea_k5", entidadId: null, accion: usuarioId === null ? "tomar_por_script" : "tomar",
+    campos: ["fecha", "activos", "completos"],
+  });
+  return true;
 }

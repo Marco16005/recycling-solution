@@ -109,11 +109,11 @@ function validarRango(ctx: Contexto, desde: unknown, hasta: unknown): Rango | Ex
 }
 
 /** Toma la instantánea de K5 de hoy si falta (la primera consulta del día la deja). */
-async function asegurarInstantaneaK5(ctx: Contexto): Promise<void> {
+async function asegurarInstantaneaK5(ctx: Contexto, usuarioId: string): Promise<void> {
   await ctx.bd.transaction(async (tx) => {
     const { versionAvisoPrivacidad } = await leerConfiguracionCompleta(tx);
     const k = resumenK5(await leerCartera(tx), versionAvisoPrivacidad);
-    await tomarInstantaneaK5(tx, fechaEnMexico(ctx.ahora), k.activos, k.completos, ctx.ahora);
+    await tomarInstantaneaK5(tx, fechaEnMexico(ctx.ahora), k.activos, k.completos, ctx.ahora, usuarioId);
   });
 }
 
@@ -123,7 +123,7 @@ export async function panel(ctx: Contexto, desde?: unknown, hasta?: unknown): Pr
   if (!permiso.ok) return permiso;
   const rango = validarRango(ctx, desde, hasta);
   if ("ok" in rango) return rango;
-  await asegurarInstantaneaK5(ctx);
+  await asegurarInstantaneaK5(ctx, permiso.usuario.id);
 
   const { datos, config, cartera } = await leerInstantanea(ctx.bd, async (tx) => ({
     datos: await leerDatosIndicadores(tx, rango.desde, rango.hasta),

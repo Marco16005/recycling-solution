@@ -46,12 +46,15 @@ describe("indicadores (valores calculados a mano)", () => {
     expect(k2([], null)).toEqual({ valor: null, muestra: 0 });
   });
 
-  it("K3: llegar antes y esperar cuenta; empezar antes de abrir no; el minuto del cierre cuenta completo", () => {
+  it("K3: llegar antes y esperar cuenta; empezar antes de abrir o después del cierre exacto, no", () => {
     const conteos = { noAtendidas: 1, omitidas: 0, pendientesAlCierre: 0 };
     expect(k3(viaje(), conteos)).toEqual({ valor: 50, muestra: 2, ...conteos });
-    const [p1] = viaje();
-    expect(k3([{ ...p1, inicioServicioEn: h("09:00", 30) }], conteos).valor).toBe(100);
-    expect(k3([{ ...p1, inicioServicioEn: h("09:01") }], conteos).valor).toBe(0);
+    const [p1] = viaje(); // ventana 08:30–09:00
+    const con = (hhmm: string, seg = 0) => k3([{ ...p1, inicioServicioEn: h(hhmm, seg) }], conteos).valor;
+    expect(con("08:30")).toBe(100);
+    expect(con("08:29", 59)).toBe(0);
+    expect(con("09:00")).toBe(100);
+    expect(con("09:00", 1)).toBe(0);
   });
 
   it("K4: km por odómetro contra el contrafactual de las completadas; litros con el rendimiento; ahorro simulado aparte", () => {

@@ -56,13 +56,13 @@ export function k2(capturasSeg: number[], lineaBaseSeg: number | null): Medida {
 }
 
 /**
- * Dentro de la ventana: el inicio del servicio cae entre su apertura y su cierre (llegar antes y esperar cuenta; empezar
- * antes de que abra, no). El minuto del cierre cuenta completo: 14:00:30 está dentro de una ventana que cierra a las 14:00.
+ * Dentro de la ventana: ventana_inicio ≤ inicio del servicio ≤ ventana_fin, con segundos (Plan 6 §2). Llegar antes y
+ * esperar cuenta; empezar antes de que abra o después del cierre exacto (09:00:01 para una ventana que cierra a las 09:00), no.
  */
 function dentroDeVentana(x: RecoleccionMedida): boolean | null {
   if (!x.inicioServicioEn) return null;
   const m = minutoDelDia(x.inicioServicioEn);
-  return minutoDeHora(x.ventanaInicio) <= m && m < minutoDeHora(x.ventanaFin) + 1;
+  return minutoDeHora(x.ventanaInicio) <= m && m <= minutoDeHora(x.ventanaFin);
 }
 
 export function k3(r: RecoleccionMedida[], conteos: ConteosK3): Medida & ConteosK3 {
