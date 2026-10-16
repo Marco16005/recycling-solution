@@ -267,6 +267,7 @@ test("gerencia consulta lista y ficha sin controles para escribir", async ({ pag
   try {
     const gerencia = await contextoGerencia.newPage();
     await entrarComo(gerencia, "gerencia");
+    await gerencia.goto("/despacho/clientes");
     await expect(gerencia.getByRole("heading", { name: "Clientes", exact: true })).toBeVisible();
     await expect(gerencia.getByRole("link", { name: "Nuevo cliente", exact: true })).toHaveCount(0);
     await expect(gerencia.getByRole("link", { name: "Importar CSV", exact: true })).toHaveCount(0);

@@ -8,7 +8,7 @@ const secciones = [
   ["plan", "Plan del día"], ["unidades", "Unidades"], ["operadores", "Operadores"],
 ] as const;
 
-export function NavegacionDespacho() {
+export function NavegacionDespacho({ puedeVerPanel = false }: { puedeVerPanel?: boolean }) {
   const ruta = usePathname();
   return (
     <nav aria-label="Despacho" className="mx-auto flex max-w-6xl flex-wrap gap-1 px-4 pb-3 sm:px-8">
@@ -27,6 +27,7 @@ export function NavegacionDespacho() {
           </Link>
         );
       })}
+      {puedeVerPanel && <Link href="/gerencia/panel" className="rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted">Panel</Link>}
     </nav>
   );
 }
