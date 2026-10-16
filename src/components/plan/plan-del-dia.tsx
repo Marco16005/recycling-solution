@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { VistaPlan } from "@/consultas/plan";
 import type { Resultado } from "@/acciones/tipos";
@@ -84,10 +85,11 @@ function ContenidoPlan({ vista }: { vista: VistaPlan }) {
           <p className="mt-2 text-sm">{vista.fecha} · <strong>{({ sin_plan: "Sin plan", propuesto: "Propuesto", validado: "Validado" })[vista.estado]}</strong></p>
           {(vista.estado === "validado" || !vista.puedeGenerar) && <p className="mt-2 text-sm text-muted-foreground">Solo lectura</p>}
         </div>
-        {vista.puedeGenerar && vista.estado !== "validado" && <Button disabled={ocupado || incierto} onClick={() => ejecutar(() => generarPlanAccion(vista.fecha))}>
+        {vista.puedeGenerar && vista.estado !== "validado" && vista.tipo !== "re_ruteo" && <Button disabled={ocupado || incierto} onClick={() => ejecutar(() => generarPlanAccion(vista.fecha))}>
           {vista.estado === "sin_plan" && codigo !== "generacion_adelantada" && codigo !== "datos_cambiaron" ? "Generar plan" : "Regenerar"}
         </Button>}
       </div>
+      {vista.tipo === "re_ruteo" && <p className="rounded-lg border p-3">Propuesta de re-ruteo · {vista.congeladas.length} solicitudes congeladas conservadas en sus rutas originales, sin ajustes. <Link className="underline" href={`/despacho/plan?fecha=${vista.fecha}`}>Volver al plan vigente</Link></p>}
       <SelectorFecha fecha={vista.fecha} ruta="/despacho/plan" />
       {vista.generadoEn && <p className="text-sm text-muted-foreground">Generado: {instante(vista.generadoEn)} · Ajustes: {vista.ajustes}</p>}
       <p className="text-sm text-muted-foreground">{vista.ultimaEjecucion
@@ -135,7 +137,8 @@ function ContenidoPlan({ vista }: { vista: VistaPlan }) {
                 ["Ventana", `${p.ventana.inicio}–${p.ventana.fin}`], ["Llegada", p.llegada], ["Espera", `${p.esperaMin} min`],
                 ["Inicio", p.inicio], ["Fin", p.fin], ["Carga", `${numero(p.cargaKg)} kg`], ["Desde anterior", `${numero(p.kmDesdeAnterior)} km`],
               ] as const).map(([titulo, valor]) => <div key={titulo}><dt className="text-muted-foreground">{titulo}</dt><dd className="tabular-nums">{valor}</dd></div>)}</dl>
-              {editable && <><MoverSolicitud solicitudId={p.solicitudId} folio={p.folio} unidades={vista.unidades} mover={ajustar} />
+              {vista.congeladas.includes(p.solicitudId) && <p>Congelada · sin ajustes</p>}
+              {editable && !vista.congeladas.includes(p.solicitudId) && <><MoverSolicitud solicitudId={p.solicitudId} folio={p.folio} unidades={vista.unidades} mover={ajustar} />
                 <Button variant="ghost" onClick={() => ajustar({ tipo: "posponer", solicitudId: p.solicitudId })}>Posponer</Button></>}
             </article>
           </li>)}</ol>
@@ -148,7 +151,7 @@ function ContenidoPlan({ vista }: { vista: VistaPlan }) {
         {vista.pospuestas.map(p => <article key={p.solicitudId} aria-label={`Pospuesta ${p.folio}`} className="space-y-3 rounded-xl border p-4">
           <h3 className="font-mono font-semibold">{p.folio}</h3><p>{p.cliente}</p><p className="text-sm">{motivos[p.motivo]}</p>
           {p.diagnostico && <p className="text-sm text-muted-foreground">Posiciones rechazadas: capacidad {p.diagnostico.capacidad}; ventana {p.diagnostico.ventana}; fin de turno {p.diagnostico.finDeTurno}; afecta a otra parada {p.diagnostico.afectaAOtra}.</p>}
-          {editable && <MoverSolicitud solicitudId={p.solicitudId} folio={p.folio} unidades={vista.unidades} mover={ajustar} />}
+          {editable && !vista.congeladas.includes(p.solicitudId) && <MoverSolicitud solicitudId={p.solicitudId} folio={p.folio} unidades={vista.unidades} mover={ajustar} />}
         </article>)}
       </section>
       <section aria-label="Solicitudes bloqueadas" className="space-y-3">
@@ -170,7 +173,11 @@ function ContenidoPlan({ vista }: { vista: VistaPlan }) {
       </section>}
       {editable && <div className="flex flex-wrap gap-3 border-t pt-5">
         {vista.puedeValidar && <Button disabled={!requisitosConfirmados} onClick={() => ejecutar(() => validarPlanAccion(vista.planId!, vista.version!, { requisitosConfirmados }))}>Validar</Button>}
-        <Button variant="outline" onClick={() => ejecutar(() => descartarPlanAccion(vista.planId!, vista.version!))}>Descartar</Button>
+        <Button variant="outline" onClick={() => ejecutar(async () => {
+          const resultado = await descartarPlanAccion(vista.planId!, vista.version!);
+          if (resultado.ok && vista.tipo === "re_ruteo") router.replace(`/despacho/plan?fecha=${vista.fecha}`);
+          return resultado;
+        })}>Descartar</Button>
       </div>}
     </fieldset>
   </>;
