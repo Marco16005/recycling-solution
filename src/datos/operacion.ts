@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
-import type { EstadoJornada, EstadoParada, ViajeOperacion } from "@/dominio/operacion/tipos";
+import type { EstadoJornada, EstadoParada, TiemposRuta, ViajeOperacion } from "@/dominio/operacion/tipos";
 import type { BD, Tx } from "./bd";
 import { eventosOperador, incidentes, jornadas, paradas, rutas, solicitudes } from "./esquema";
 
@@ -131,7 +131,7 @@ function comoViaje(r: { ruta: FilaRuta; paradas: FilaParada[] }): ViajeOperacion
       ventanaInicio: p.ventanaInicio.slice(0, 5),
       ventanaFin: p.ventanaFin.slice(0, 5),
     })),
-    tiempos: null,
+    tiempos: (r.ruta.tiempos as TiemposRuta | null) ?? null,
   };
 }
 

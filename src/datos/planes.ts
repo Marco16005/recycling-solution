@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import type { TiemposRuta } from "@/dominio/operacion/tipos";
 import type { VersionesPlan } from "@/dominio/plan/tipos";
 import type { AjusteManual, EntradaPlan, Plan } from "@/motor";
 import type { BD, Tx } from "./bd";
@@ -232,6 +233,8 @@ export interface NuevaEjecucion {
   planId: string | null;
   versionMotor: string;
   usuarioId: string;
+  /** Plan 7: consulta al mapa antes del motor; null si no hubo. */
+  consultaMapaMs: number | null;
 }
 
 export async function insertarEjecucion(tx: Tx, e: NuevaEjecucion): Promise<string> {
@@ -280,6 +283,8 @@ export interface NuevaRuta {
   rendimientoKmLUsado: number;
   disponibleParaSalirEn: Date;
   asignadaEn: Date;
+  /** Plan 7: modelo de tiempos con que se planeó. */
+  tiempos: TiemposRuta | null;
   paradas: NuevaParada[];
 }
 

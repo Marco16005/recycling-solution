@@ -211,6 +211,8 @@ export function rutasParaGuardar(
         rendimientoKmLUsado: unidad.rendimientoKmL,
         disponibleParaSalirEn: disponible,
         asignadaEn: ahora,
+        // P7-6: submatriz, horas pico, turno y descarga con que se planeó.
+        tiempos: null,
         paradas,
       });
       // El siguiente viaje queda disponible al terminar la descarga de este (el Plan 5 pone el real).
@@ -277,7 +279,7 @@ export async function ejecutarYGuardar(ctx: Contexto, g: Generacion): Promise<Re
   const duracionMs = performance.now() - inicio;
   const ejecucion: Omit<NuevaEjecucion, "planId" | "resultado" | "error"> = {
     fecha: g.fecha, inicioEn: ctx.ahora, finEn: new Date(ctx.ahora.getTime() + duracionMs), duracionMs,
-    versionMotor: plan?.versionMotor ?? "desconocida", usuarioId: g.usuarioId,
+    versionMotor: plan?.versionMotor ?? "desconocida", usuarioId: g.usuarioId, consultaMapaMs: g.consultaMapaMs,
   };
 
   if (plan === null) {
