@@ -44,10 +44,12 @@ test("operador: jornada, idempotencia, rechazo, cola sin señal e incidente con 
   await expect(page.getByText("Tocar en caseta").first()).toBeVisible();
   await expect(page.getByRole("link", { name: "Abrir mapa" }).first()).toHaveAttribute("href", /^geo:/);
 
-  // ready no implica que el mensaje de precarga haya terminado: espera también la caché.
-  await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+  // Espera el registro activo de /operador y luego que termine la precarga de la caché.
   await expect.poll(() => page.evaluate(async () => {
-    if (!navigator.serviceWorker.controller) return false;
+    const registro = await navigator.serviceWorker.getRegistration("/operador");
+    return Boolean(registro?.active);
+  }), { timeout: 30_000 }).toBe(true);
+  await expect.poll(() => page.evaluate(async () => {
     const nombres = (await caches.keys()).filter(n => n.startsWith("rs-operador-"));
     if (nombres.length !== 1) return false;
     const cache = await caches.open(nombres[0]);
