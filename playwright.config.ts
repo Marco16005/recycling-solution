@@ -21,6 +21,8 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         // El service worker de /operador exige un origen seguro; en la prueba, la aplicación corre en http://web:3000.
+        // Solo el Chromium completo (headless nuevo) respeta la bandera; el headless shell la ignora.
+        channel: "chromium",
         launchOptions: { args: [`--unsafely-treat-insecure-origin-as-secure=${new URL(baseURL).origin}`] },
       },
     },
