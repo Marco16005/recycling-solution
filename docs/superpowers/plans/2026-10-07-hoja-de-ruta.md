@@ -3,8 +3,8 @@
 - **Fecha:** 2026-10-07; revisión 2 del 2026-10-13 (Docker, Better Auth y correcciones de la revisión cruzada con Codex).
 - **Especificación:** `docs/superpowers/specs/2026-10-07-recycling-solution-piloto-design.md`
 - **Estado (2026-10-15):**
-  - Planes 1 a 4 terminados y validados por Claude y Codex en `main` (etiquetas `plan-1-validado`, `plan-2-3-validado` y `plan-4-validado`).
-  - Planes 5 y 6 en desarrollo en la rama `claude/plan-5`, con sus planes detallados del 2026-10-15.
+  - Planes 1 a 6 terminados y validados por Claude y Codex en `main` (etiquetas `plan-1-validado`, `plan-2-3-validado`, `plan-4-validado`, `plan-5-validado` y `plan-6-validado`).
+  - Sigue la preparación del piloto (abajo): VPS, línea base de K2, cartera completa y revisión del aviso de privacidad por un abogado.
   - Decisiones del dueño en la especificación §14.
 
 El piloto se construye en seis planes. Cada uno deja software funcionando y probado por sí mismo. Solo el Plan 1 está escrito al detalle; el plan detallado de cada hito siguiente se escribe al iniciarlo, con el mismo formato y la misma verificación previa del código, porque depende de lo que se aprenda en el anterior.

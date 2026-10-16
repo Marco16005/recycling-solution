@@ -5,15 +5,15 @@ Piloto de un asistente de logística para una recicladora de cartón. Lo desarro
 ## Leer antes de cambiar algo
 
 1. `docs/superpowers/specs/2026-10-07-recycling-solution-piloto-design.md` (revisión 2): qué debe hacer el sistema.
-2. El plan vigente en `docs/superpowers/plans/` (contratos y tareas con responsable). Plan 1: `2026-10-13-plan-1-v2-…`; Plan 2: `2026-10-14-plan-2-…`; Plan 3: `2026-10-14-plan-3-…`; Plan 4: `2026-10-15-plan-4-…`.
+2. El plan vigente en `docs/superpowers/plans/` (contratos y tareas con responsable). Plan 1: `2026-10-13-plan-1-v2-…`; Plan 2: `2026-10-14-plan-2-…`; Plan 3: `2026-10-14-plan-3-…`; Plan 4: `2026-10-15-plan-4-…`; Plan 5: `2026-10-15-plan-5-…`; Plan 6: `2026-10-15-plan-6-…`.
 3. `docs/guia-de-auditoria.md`: invariantes que siempre deben cumplirse.
 
 ## Responsables (especificación §15)
 
 | Responsable | Carpetas |
 |---|---|
-| Claude | Archivos raíz, `package*.json`, Docker y Compose, `infra/`, `src/datos`, `drizzle/`, `src/seguridad`, `src/acciones`, `src/consultas`, `src/components/sesion`, `src/components/ui`, `src/components/admin`, `src/app/layout.tsx`, `src/app/page.tsx`, `src/app/entrar`, `src/app/sin-acceso`, `src/app/admin`, `src/app/aviso-de-privacidad`, `src/app/api`, `scripts/` (salvo `simular.mts`), `docs/legal`, `e2e/ayudas`, `e2e/autenticacion.spec.ts`, `e2e/admin.spec.ts` |
-| Codex | `src/dominio`, `src/motor`, `src/app/despacho`, `src/components/clientes`, `src/components/flota`, `src/components/solicitudes`, `scripts/simular.mts`, `docs/simulacion/`, `e2e/*.spec.ts` funcionales (CRM, flota, solicitudes) |
+| Claude | Archivos raíz, `package*.json`, Docker y Compose, `infra/`, `src/datos`, `drizzle/`, `src/seguridad`, `src/acciones`, `src/consultas`, `src/components/sesion`, `src/components/ui`, `src/components/admin`, `src/app/layout.tsx`, `src/app/page.tsx`, `src/app/entrar`, `src/app/sin-acceso`, `src/app/admin`, `src/app/aviso-de-privacidad`, `src/app/api`, `src/app/gerencia`, `src/components/gerencia`, `src/indicadores` (reasignados en el Plan 6), `public/sw-operador.js`, `scripts/` (salvo `simular.mts`), `docs/legal`, `e2e/ayudas`, `e2e/autenticacion.spec.ts`, `e2e/admin.spec.ts`, `e2e/panel.spec.ts` |
+| Codex | `src/dominio`, `src/motor`, `src/app/despacho`, `src/components/clientes`, `src/components/flota`, `src/components/solicitudes`, `src/components/plan`, `src/app/operador`, `src/components/operador`, `scripts/simular.mts`, `docs/simulacion/`, `e2e/*.spec.ts` funcionales (CRM, flota, solicitudes, plan, operador) |
 
 - No se editan archivos del otro. Si hace falta un cambio ahí, se pide.
 - Cambiar un contrato de §3 del plan requiere acuerdo de ambos y un commit que actualice el plan.
