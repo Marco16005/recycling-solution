@@ -29,13 +29,20 @@ export async function tomarCandadoDeCatalogoFlota(tx: Tx, modo: "compartido" | "
   else await tx.execute(sql`SELECT pg_advisory_xact_lock(${CANDADO_CATALOGO_FLOTA})`);
 }
 
+/** Restricciones de un plan de re-ruteo: jornadas que dejaron de estar disponibles, viajes conservados y paradas congeladas. */
+export interface RestriccionesReruteo { jornadasNoDisponibles: string[]; admitidas: Record<string, string[][]>; congeladas: string[] }
+
 /** Un ajuste manual con su autor y su hora (planes.ajustes). */
 export interface AjusteRegistrado { ajuste: AjusteManual; por: string; en: string }
 
 export interface PlanGuardado {
   id: string;
   fecha: string;
-  estado: "propuesto" | "validado" | "descartado";
+  estado: "propuesto" | "validado" | "descartado" | "reemplazado";
+  tipo: "inicial" | "re_ruteo";
+  planBaseId: string | null;
+  /** Solo en un re-ruteo (Plan 5, §2). */
+  restricciones: RestriccionesReruteo | null;
   version: number;
   generadoEn: Date;
   generadoPor: string;
@@ -57,6 +64,9 @@ function comoPlan(f: typeof planes.$inferSelect): PlanGuardado {
     id: f.id,
     fecha: f.fecha,
     estado: f.estado,
+    tipo: f.tipo,
+    planBaseId: f.planBaseId,
+    restricciones: f.restricciones as RestriccionesReruteo | null,
     version: f.version,
     generadoEn: f.generadoEn,
     generadoPor: f.generadoPor,
@@ -109,6 +119,9 @@ export async function hayValidado(bd: Conexion, fecha: string): Promise<boolean>
   return fila !== undefined;
 }
 
+/** Versiones de un re-ruteo: las del Plan 4 más el plan base y la operación de cada jornada (Plan 5, §4). */
+export interface VersionesReruteo extends VersionesPlan { planBase: { id: string; version: number }; operacion: Record<string, number> }
+
 export interface NuevoPlan {
   fecha: string;
   generadoEn: Date;
@@ -116,14 +129,22 @@ export interface NuevoPlan {
   semilla: number;
   versionMotor: string;
   entrada: EntradaPlan;
-  versiones: VersionesPlan;
+  versiones: VersionesPlan | VersionesReruteo;
   resultado: Plan;
+  /** Solo un re-ruteo. */
+  reruteo?: { planBaseId: string; restricciones: RestriccionesReruteo };
 }
 
 export async function insertarPlan(tx: Tx, p: NuevoPlan): Promise<string> {
+  const { reruteo, ...datos } = p;
   const [fila] = await tx
     .insert(planes)
-    .values({ ...p, creadoEn: p.generadoEn, actualizadoEn: p.generadoEn })
+    .values({
+      ...datos,
+      ...(reruteo ? { tipo: "re_ruteo" as const, planBaseId: reruteo.planBaseId, restricciones: reruteo.restricciones } : {}),
+      creadoEn: p.generadoEn,
+      actualizadoEn: p.generadoEn,
+    })
     .returning({ id: planes.id });
   return fila.id;
 }
@@ -174,6 +195,20 @@ export async function marcarValidado(tx: Tx, id: string, por: string, ahora: Dat
     .update(planes)
     .set({ estado: "validado", validadoEn: ahora, validadoPor: por, requisitosConfirmadosEn: ahora, actualizadoEn: ahora, version: sql`${planes.version} + 1` })
     .where(eq(planes.id, id));
+}
+
+/** El plan base de un re-ruteo pasa a reemplazado (antes de validar el nuevo: un solo validado por fecha). */
+export async function marcarReemplazado(tx: Tx, id: string, ahora: Date): Promise<void> {
+  await tx
+    .update(planes)
+    .set({ estado: "reemplazado", actualizadoEn: ahora, version: sql`${planes.version} + 1` })
+    .where(and(eq(planes.id, id), eq(planes.estado, "validado")));
+}
+
+/** Bloquea (FOR UPDATE, en orden de id) los planes dados. */
+export async function bloquearPlanes(tx: Tx, ids: string[]): Promise<{ id: string; estado: string; version: number }[]> {
+  if (ids.length === 0) return [];
+  return tx.select({ id: planes.id, estado: planes.estado, version: planes.version }).from(planes).where(inArray(planes.id, ids)).orderBy(asc(planes.id)).for("update");
 }
 
 /** Marca el plan descartado. Llamar con el plan bloqueado. */
@@ -288,6 +323,39 @@ export async function bloquearSolicitudes(tx: Tx, ids: string[]): Promise<Solici
     .for("update");
 }
 
+/** Retira paradas vigentes (re-ruteo): reasignada si la solicitud queda ruteada en el plan nuevo, omitida si se pospone. */
+export async function retirarParadas(tx: Tx, paradaIds: string[], estado: "reasignada" | "omitida", ahora: Date): Promise<void> {
+  if (paradaIds.length === 0) return;
+  await tx.update(paradas).set({ vigente: false, estado, actualizadoEn: ahora }).where(and(inArray(paradas.id, paradaIds), eq(paradas.vigente, true)));
+}
+
+/** Sube la versión estructural de las rutas que perdieron paradas: un teléfono con la versión vieja recibe ruta_cambiada. */
+export async function subirVersionRutas(tx: Tx, rutaIds: string[], ahora: Date): Promise<void> {
+  if (rutaIds.length === 0) return;
+  await tx.update(rutas).set({ version: sql`${rutas.version} + 1`, actualizadoEn: ahora }).where(inArray(rutas.id, rutaIds));
+}
+
+/** Re-ruteo: las ruteadas pasan a programada desde pendiente, programada o en ruta. */
+export async function reprogramarSolicitudes(tx: Tx, ids: string[], ahora: Date): Promise<void> {
+  if (ids.length === 0) return;
+  await tx
+    .update(solicitudes)
+    .set({ estado: "programada", actualizadoEn: ahora, version: sql`${solicitudes.version} + 1` })
+    .where(and(inArray(solicitudes.id, ids), inArray(solicitudes.estado, ["pendiente", "programada", "en_ruta"])));
+}
+
+/** Re-ruteo: las pospuestas vuelven a pendiente para el siguiente día de operación, con su registro original. */
+export async function posponerAsignadas(tx: Tx, ids: string[], proximaFechaElegible: string, ahora: Date): Promise<void> {
+  if (ids.length === 0) return;
+  await tx
+    .update(solicitudes)
+    .set({
+      estado: "pendiente", proximaFechaElegible, vecesPospuesta: sql`${solicitudes.vecesPospuesta} + 1`,
+      actualizadoEn: ahora, version: sql`${solicitudes.version} + 1`,
+    })
+    .where(and(inArray(solicitudes.id, ids), inArray(solicitudes.estado, ["pendiente", "programada", "en_ruta"])));
+}
+
 export async function programarSolicitudes(tx: Tx, ids: string[], ahora: Date): Promise<void> {
   if (ids.length === 0) return;
   await tx
@@ -309,3 +377,6 @@ export async function posponerSolicitudes(tx: Tx, ids: string[], proximaFechaEle
     })
     .where(and(inArray(solicitudes.id, ids), eq(solicitudes.estado, "pendiente")));
 }
+
+/** Alias para quien arma una generación. */
+export type NuevaPlan = NuevoPlan;

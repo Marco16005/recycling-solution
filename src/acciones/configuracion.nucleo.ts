@@ -23,6 +23,20 @@ const configuracionSchema = z
     cargaPorOmisionKg: z.number().int().min(1).max(60000),
     diasOperacion: z.array(z.number().int().min(0).max(6)).min(1, "Elige al menos un día de operación").max(7),
     diasParaAtrasada: z.number().int().min(1).max(30),
+    /** Línea base (Plan 6): la del método actual viene del Documento Integrador; la de K2 se cronometra antes del piloto. */
+    lineaBase: z
+      .object({
+        esperaMin: z.number().positive(),
+        trasladoMin: z.number().positive(),
+        cicloMin: z.number().positive(),
+        k2Seg: z.number().positive("La mediana debe ser mayor que cero").max(3600).optional(),
+        k2Muestra: z.number().int().min(1, "Indica cuántas capturas se cronometraron").optional(),
+        k2Fecha: z.iso.date().optional(),
+      })
+      .refine((l) => (l.k2Seg === undefined) === (l.k2Muestra === undefined) && (l.k2Seg === undefined) === (l.k2Fecha === undefined), {
+        path: ["k2Seg"], message: "La línea base de K2 lleva mediana, tamaño de muestra y fecha juntos",
+      })
+      .optional(),
   })
   .refine((c) => (c.patioLat === null) === (c.patioLng === null), { path: ["patioLat"], message: "Latitud y longitud se capturan juntas" })
   .refine((c) => c.turnoInicio < c.turnoFin, { path: ["turnoFin"], message: "El turno debe terminar después de empezar" })
@@ -30,7 +44,7 @@ const configuracionSchema = z
 
 const CAMPOS = [
   "patioLat", "patioLng", "turnoInicio", "turnoFin", "velocidadKmh", "factorCircuidad", "descargaMin", "cargaPorOmisionKg",
-  "diasOperacion", "diasParaAtrasada",
+  "diasOperacion", "diasParaAtrasada", "lineaBase",
 ] as const;
 
 /** Permiso configuracion.editar. entrada: ConfiguracionVista sin version, versionAvisoPrivacidad ni estiloMapaUrl. */

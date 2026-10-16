@@ -29,8 +29,12 @@ export interface ConfiguracionCompleta {
   diasOperacion: number[];
   diasParaAtrasada: number;
   versionAvisoPrivacidad: string;
+  /** Línea base del método actual (DI) y de K2 cronometrada (Plan 6). */
+  lineaBase: LineaBase;
   version: number;
 }
+
+export interface LineaBase { esperaMin: number; trasladoMin: number; cicloMin: number; k2Seg?: number; k2Muestra?: number; k2Fecha?: string }
 
 const hhmm = (hora: string) => hora.slice(0, 5);
 
@@ -54,11 +58,12 @@ export async function leerConfiguracionCompleta(bd: BD | Tx): Promise<Configurac
     diasOperacion: c.diasOperacion,
     diasParaAtrasada: c.diasParaAtrasada,
     versionAvisoPrivacidad: c.versionAvisoPrivacidad,
+    lineaBase: c.lineaBase as LineaBase,
     version: c.version,
   };
 }
 
-export type CambiosConfiguracion = Omit<ConfiguracionCompleta, "versionAvisoPrivacidad" | "version">;
+export type CambiosConfiguracion = Omit<ConfiguracionCompleta, "versionAvisoPrivacidad" | "version" | "lineaBase"> & { lineaBase?: LineaBase };
 
 export async function actualizarConfiguracionSiVersion(tx: Tx, version: number, cambios: CambiosConfiguracion, ahora: Date): Promise<number | null> {
   const [fila] = await tx

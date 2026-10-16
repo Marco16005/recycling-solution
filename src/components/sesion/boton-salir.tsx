@@ -4,8 +4,9 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/seguridad/auth-cliente";
+import { borrarDatosDelOperador } from "./registrar-sw-operador";
 
-/** Cierra la sesión y lleva a /entrar. */
+/** Cierra la sesión, borra lo que /operador guardó en el teléfono y lleva a /entrar. */
 export function BotonSalir() {
   const router = useRouter();
   const [pendiente, iniciar] = useTransition();
@@ -16,7 +17,12 @@ export function BotonSalir() {
       disabled={pendiente}
       onClick={() =>
         iniciar(async () => {
-          await authClient.signOut();
+          try {
+            await authClient.signOut();
+          } finally {
+            // Aunque falle la red: la ruta guardada en el teléfono no debe quedar para el siguiente usuario.
+            await borrarDatosDelOperador();
+          }
           router.replace("/entrar");
           router.refresh();
         })

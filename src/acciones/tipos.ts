@@ -19,7 +19,10 @@ export type CodigoConflicto =
   | "capacidades_cambiaron"
   | "solicitud_asignada"
   | "hora_vencida"
-  | "jornada_con_rutas";
+  | "jornada_con_rutas"
+  | "evento_distinto"
+  | "ruta_cambiada"
+  | "operacion_avanzo";
 
 /** Un conflicto puede traer su motivo (texto para la pantalla); los conflictos de versión de los Planes 1 y 2 no lo traen. */
 export type Resultado<T> =

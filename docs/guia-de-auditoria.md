@@ -6,7 +6,7 @@ Para quien revise el proyecto (una persona u otro modelo, por ejemplo Codex). El
 
 1. `docs/superpowers/specs/2026-10-07-recycling-solution-piloto-design.md` (revisión 2) — qué debe hacer el sistema.
 2. `docs/superpowers/plans/2026-10-07-hoja-de-ruta.md` — qué hito se está revisando y su lista de aceptación.
-3. El plan detallado del hito, en `docs/superpowers/plans/` (para el Plan 1, el v2 del 2026-10-13; para el Plan 4, el del 2026-10-15). Su sección "Review Focus" lista las entradas riesgosas que deben tener prueba.
+3. El plan detallado del hito, en `docs/superpowers/plans/` (para el Plan 1, el v2 del 2026-10-13; para los Planes 4 a 6, los del 2026-10-15). Su sección "Review Focus" lista las entradas riesgosas que deben tener prueba.
 4. `docs/operacion.md` — cómo se levanta, respalda y muda el sistema.
 
 ## Cómo ejecutar
@@ -47,6 +47,11 @@ Cada una debe cumplirse siempre. Si alguna falla, es un hallazgo.
 | 19 | Validar un plan es todo o nada y vuelve a comprobar, con todo bloqueado, versiones, habilitación de clientes (incluida la privacidad), disponibilidad, capacidades de la flota y la hora actual | `src/acciones/plan.nucleo.ts` (orden de bloqueos del Plan 4, §4); pruebas `datos_cambiaron`, `cliente_no_habilitado`, `capacidades_cambiaron` y `hora_vencida` |
 | 20 | Toda corrida del motor queda en `ejecuciones_motor`, aunque falle, se agote el tiempo o no se pueda guardar el plan, sin datos personales en el mensaje; `rs_app` no puede cambiarla ni borrarla | Pruebas de generar en `src/acciones/plan.nucleo.test.ts` y de permisos en `src/datos/plan4.integracion.test.ts` |
 | 21 | Un ajuste manual nunca deja un plan que rompa capacidad, ventanas, turno o tipo de unidad | `ajustarPlan` comprueba con `validarPlan(…, { ajustadoAMano: true })`, que reconstruye cada ruta sin usar la admisión; pruebas de propiedades en `src/motor/ajustes.test.ts` |
+| 22 | Un evento del operador se aplica a lo sumo una vez (evento_id único, huella) y un rechazo siempre queda guardado para conciliarse; un operador solo opera su jornada, también al repetir | `src/acciones/operador.nucleo.ts`; pruebas de idempotencia secuencial y simultánea en `operador.nucleo.test.ts` y `plan5.integracion.test.ts` |
+| 23 | La máquina de eventos es exhaustiva: nada después de check_out, orden por secuencia, odómetro no decreciente, una sola parada en sitio o en servicio | Propiedades de `src/dominio/operacion/operacion.test.ts` |
+| 24 | Un re-ruteo no toca lo congelado (completado, no atendido, en sitio, viaje en curso) ni cambia de unidad, viaje u orden las admitidas; se rechaza si la operación avanzó mientras se revisaba | `src/acciones/reruteo.nucleo.ts`, `src/motor/admitidas.test.ts`, pruebas de re-ruteo y operacion_avanzo |
+| 25 | Lo que /operador guarda en el teléfono (ruta, cola, caché) es de un solo usuario y se borra al cerrar sesión, aunque falle la red | `public/sw-operador.js`, `src/components/sesion/registrar-sw-operador.tsx`, `boton-salir.tsx` |
+| 26 | Cada indicador reporta su tamaño de muestra y un dato faltante no cuenta como cero; el CSV no contiene contactos ni teléfonos y neutraliza fórmulas | `src/indicadores/indicadores.test.ts` (valores a mano), `src/consultas/indicadores.nucleo.test.ts` |
 
 ## Qué intentar romper
 

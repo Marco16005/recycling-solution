@@ -92,6 +92,12 @@ export async function subirVersionUsuario(tx: Tx, id: string): Promise<number> {
   return fila.version;
 }
 
+/** Ficha de operador ligada al usuario, o null. */
+export async function operadorDeUsuario(bd: BD | Tx, usuarioId: string): Promise<string | null> {
+  const [fila] = await bd.select({ operadorId: usuarios.operadorId }).from(usuarios).where(eq(usuarios.id, usuarioId));
+  return fila?.operadorId ?? null;
+}
+
 /** Fichas de operador activas sin usuario ligado. */
 export async function operadoresSinUsuario(bd: BD | Tx): Promise<{ id: string; nombre: string; activo: boolean }[]> {
   return bd

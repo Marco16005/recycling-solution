@@ -1,84 +1,35 @@
 import { z } from "zod";
-import type { Tx } from "@/datos/bd";
 import { registrarEvento } from "@/datos/bitacora";
-import { bloquearClientesCompartido, leerCartera, leerClientesPorId } from "@/datos/clientes";
+import { bloquearClientesCompartido, leerCartera } from "@/datos/clientes";
 import { bloquearConfiguracionCompartido, leerConfiguracionCompleta, type ConfiguracionCompleta } from "@/datos/configuracion";
 import { bloquearUnidadesYOperadores, leerCatalogo, leerOperadores, leerUnidades } from "@/datos/flota";
-import { bloquearJornadasDelDia, leerJornadas, type JornadaGuardada } from "@/datos/jornadas";
+import { bloquearJornadasDelDia, leerJornadas } from "@/datos/jornadas";
 import {
-  bloquearSolicitudes, conParadaVigente, descartarPropuesto, fijarRevisionIniciada, guardarAjuste, hayValidado, insertarEjecucion,
-  insertarPlan, insertarRutas, leerPlan, leerPlanParaCambiar, marcarDescartado, marcarValidado, posponerSolicitudes,
-  programarSolicitudes, propuestoDeFecha, tomarCandadoDeCatalogoFlota, tomarCandadoDeFecha, type NuevaEjecucion, type NuevaRuta,
-  type PlanGuardado,
+  bloquearSolicitudes, fijarRevisionIniciada, guardarAjuste, hayValidado, insertarRutas, leerPlan, marcarDescartado, marcarValidado,
+  posponerSolicitudes, programarSolicitudes, propuestoDeFecha, tomarCandadoDeCatalogoFlota, tomarCandadoDeFecha,
 } from "@/datos/planes";
 import { leerSolicitudesParaCola } from "@/datos/solicitudes";
-import { diaSemanaDeFecha, motivosDeBloqueoCliente } from "@/dominio/clientes/habilitacion";
-import type { ClienteGuardado } from "@/dominio/clientes/tipos";
-import { motivosNoDisponibleOperador, motivosNoDisponibleUnidad } from "@/dominio/flota/disponibilidad";
-import type { OperadorGuardado, UnidadGuardada } from "@/dominio/flota/tipos";
-import {
-  capacidadMaximaPorTipo, construirEntrada, ErrorDeEntrada, instanteDeMinutos, MARGEN_REVISION_MIN, minutoEnMexico, minutosDeHora,
-} from "@/dominio/plan/entrada";
+import { diaSemanaDeFecha } from "@/dominio/clientes/habilitacion";
+import { construirEntrada, ErrorDeEntrada, MARGEN_REVISION_MIN, minutoEnMexico } from "@/dominio/plan/entrada";
 import type { VersionesPlan } from "@/dominio/plan/tipos";
 import { colaDelDia, siguienteDiaOperacion } from "@/dominio/solicitudes/cola";
 import { fechaEnMexico } from "@/dominio/tiempo";
-import { ajustarPlan, distanciaKm, generarPlan, validarPlan, type AjusteManual, type EntradaPlan, type Plan, type ResultadoAjuste } from "@/motor";
+import { ajustarPlan, generarPlan, validarPlan, type AjusteManual, type EntradaPlan, type ResultadoAjuste } from "@/motor";
+import {
+  comprobarValidacion, conflicto, disponibleOperador, disponibleUnidad, ejecutarYGuardar, esFallo, LIMITE_MOTOR_MS, porVersion,
+  propuestoEnVersion, rutasParaGuardar, solicitudesRuteadas, validarIdYVersionDePlan, ValidacionRechazada,
+} from "./plan-comun";
 import { permitir } from "./autorizacion";
-import type { CodigoConflicto, Contexto, Resultado } from "./tipos";
-import { esDuplicado, fechaSchema, idSchema, invalido, versionSchema, type Fallo } from "./validacion";
+import { validarReruteo } from "./reruteo.nucleo";
+import type { Contexto, Resultado } from "./tipos";
+import { esDuplicado, fechaSchema, idSchema, invalido, type Fallo } from "./validacion";
+
+export { LIMITE_MOTOR_MS };
 
 /**
  * Plan del día (Plan 4, §3.3 y §4). Generar, iniciar la revisión, ajustar y descartar: permiso planes.generar;
  * validar: planes.validar. Los conflictos llevan su motivo (CodigoConflicto).
  */
-
-/** Una corrida más larga cuenta como tiempo agotado y su plan no se guarda (el motor es síncrono: no se interrumpe). */
-export const LIMITE_MOTOR_MS = 30_000;
-
-const conflicto = (codigo: CodigoConflicto, texto: string): Fallo => ({ ok: false, error: "conflicto", motivo: { codigo, texto } });
-
-/** Nombre y código del error, sin mensaje: nunca datos personales en la bitácora ni en ejecuciones_motor. */
-function errorSaneado(error: unknown): string {
-  const nombre = error instanceof Error ? error.name : "Error";
-  const codigo = (error as { code?: unknown } | null)?.code;
-  return (typeof codigo === "string" ? `${nombre}:${codigo}` : nombre).slice(0, 200);
-}
-
-const hhmmDeMinutos = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-
-function validarIdYVersionDePlan(planId: unknown, versionEsperada: unknown): { id: string; version: number } | Fallo {
-  const id = idSchema.safeParse(planId);
-  if (!id.success) return { ok: false, error: "no_encontrado" };
-  const version = versionSchema.safeParse(versionEsperada);
-  if (!version.success) return invalido({ _: ["Falta la versión del plan"] });
-  return { id: id.data, version: version.data };
-}
-
-/** El plan bloqueado, si sigue propuesto y en la versión esperada. */
-async function propuestoEnVersion(tx: Tx, id: string, version: number): Promise<PlanGuardado | Fallo> {
-  const plan = await leerPlanParaCambiar(tx, id);
-  if (plan === null) return { ok: false, error: "no_encontrado" };
-  if (plan.estado === "validado") return conflicto("plan_validado_existente", "Este plan ya se validó");
-  if (plan.estado === "descartado") return conflicto("generacion_adelantada", "Esta propuesta se descartó; abre la vigente");
-  if (plan.version !== version) return { ok: false, error: "conflicto" };
-  return plan;
-}
-
-const esFallo = (x: unknown): x is Fallo => typeof x === "object" && x !== null && "ok" in x && (x as { ok: unknown }).ok === false;
-
-const disponibleUnidad = (u: UnidadGuardada | undefined, catalogo: Parameters<typeof motivosNoDisponibleUnidad>[1], fecha: string) =>
-  u !== undefined && motivosNoDisponibleUnidad(u, catalogo, fecha).length === 0;
-const disponibleOperador = (o: OperadorGuardado | undefined, catalogo: Parameters<typeof motivosNoDisponibleOperador>[1], fecha: string) =>
-  o !== undefined && motivosNoDisponibleOperador(o, catalogo, fecha).length === 0;
-
-const porVersion = <T extends { id: string; version: number }>(xs: T[]) => Object.fromEntries(xs.map((x) => [x.id, x.version]));
-
-function mismasVersiones(guardadas: Record<string, number>, actuales: Record<string, number>): boolean {
-  const a = Object.keys(guardadas);
-  return a.length === Object.keys(actuales).length && a.every((id) => actuales[id] === guardadas[id]);
-}
-
-const solicitudesRuteadas = (plan: Plan) => plan.rutas.flatMap((r) => r.viajes.flatMap((v) => v.paradas.map((p) => p.solicitudId)));
 
 // ---------- Generar
 
@@ -103,73 +54,14 @@ export async function generarPlanDelDia(ctx: Contexto, fecha: unknown): Promise<
   if (esFallo(leida)) return leida;
   const { entrada, versiones, esperado } = leida;
 
-  // El motor corre fuera de toda transacción; el tiempo se mide aquí, con reloj monotónico (K7).
-  const inicio = performance.now();
-  let plan: Plan | null = null;
-  let errorMotor: string | null = null;
-  try {
-    plan = generarPlan(entrada);
-  } catch (error) {
-    errorMotor = errorSaneado(error);
-    console.error("[plan] el motor falló", errorMotor);
-  }
-  const duracionMs = performance.now() - inicio;
-  const ejecucion: Omit<NuevaEjecucion, "planId" | "resultado" | "error"> = {
-    fecha: dia.data,
-    inicioEn: ctx.ahora,
-    finEn: new Date(ctx.ahora.getTime() + duracionMs),
-    duracionMs,
-    versionMotor: plan?.versionMotor ?? "desconocida",
-    usuarioId,
-  };
-
-  if (plan === null) {
-    await registrarEjecucionSinPlan(ctx, { ...ejecucion, resultado: "error", error: errorMotor });
-    return invalido({ _: ["El motor no pudo generar el plan. Intenta de nuevo; si se repite, avisa al administrador."] });
-  }
-  if (duracionMs > LIMITE_MOTOR_MS) {
-    await registrarEjecucionSinPlan(ctx, { ...ejecucion, resultado: "tiempo_agotado", error: null });
-    return invalido({ _: ["El motor tardó demasiado y su resultado se descartó. Intenta de nuevo."] });
-  }
-
-  const generado = plan;
-  try {
-    const r = await ctx.bd.transaction(async (tx): Promise<Resultado<{ planId: string }>> => {
-      await tomarCandadoDeFecha(tx, dia.data);
-      if (await hayValidado(tx, dia.data)) {
-        return conflicto("plan_validado_existente", "La fecha ya tiene un plan validado; los cambios del día se hacen con el re-ruteo");
-      }
-      const vigente = await propuestoDeFecha(tx, dia.data);
-      if ((vigente?.id ?? null) !== (esperado?.id ?? null) || (vigente?.version ?? null) !== (esperado?.version ?? null)) {
-        return conflicto("generacion_adelantada", "Otra generación o un ajuste se guardó mientras el motor calculaba; revisa el plan vigente");
-      }
-      if (vigente !== null) {
-        await descartarPropuesto(tx, vigente.id, ctx.ahora);
-        await registrarEvento(tx, { usuarioId, entidad: "plan", entidadId: vigente.id, accion: "descartar_por_regeneracion", campos: ["estado"] });
-      }
-      const planId = await insertarPlan(tx, {
-        fecha: dia.data, generadoEn: ctx.ahora, generadoPor: usuarioId, semilla: entrada.parametros.semilla,
-        versionMotor: generado.versionMotor, entrada, versiones, resultado: generado,
-      });
-      await insertarEjecucion(tx, { ...ejecucion, resultado: "ok", error: null, planId });
-      await registrarEvento(tx, { usuarioId, entidad: "plan", entidadId: planId, accion: "generar", campos: [] });
-      return { ok: true, valor: { planId } };
-    });
-    if (!r.ok) await registrarEjecucionSinPlan(ctx, { ...ejecucion, resultado: "ok", error: null });
-    return r;
-  } catch (error) {
-    const saneado = errorSaneado(error);
-    console.error("[plan] no se pudo guardar la propuesta", saneado);
-    await registrarEjecucionSinPlan(ctx, { ...ejecucion, resultado: "ok", error: `guardado:${saneado}`.slice(0, 200) });
-    return invalido({ _: ["No se pudo guardar el plan. Intenta de nuevo; si se repite, avisa al administrador."] });
-  }
-}
-
-/** La ejecución sobrevive al fallo o al rechazo del guardado: va en su propia transacción, con su bitácora. */
-async function registrarEjecucionSinPlan(ctx: Contexto, e: Omit<NuevaEjecucion, "planId">): Promise<void> {
-  await ctx.bd.transaction(async (tx) => {
-    const id = await insertarEjecucion(tx, { ...e, planId: null });
-    await registrarEvento(tx, { usuarioId: e.usuarioId, entidad: "ejecucion_motor", entidadId: id, accion: "ejecutar", campos: ["resultado"] });
+  return ejecutarYGuardar(ctx, {
+    fecha: dia.data, usuarioId, entrada, versiones, esperado,
+    correr: (e) => generarPlan(e),
+    antesDeGuardar: async (tx) =>
+      (await hayValidado(tx, dia.data))
+        ? conflicto("plan_validado_existente", "La fecha ya tiene un plan validado; los cambios del día se hacen con el re-ruteo")
+        : null,
+    accion: "generar",
   });
 }
 
@@ -295,13 +187,15 @@ export async function ajustarPlanDelDia(ctx: Contexto, planId: unknown, versionE
       ajusteMotor = validado.data;
     }
 
-    const r = ajustarPlan(plan.entrada, plan.resultado, ajusteMotor);
+    // En un re-ruteo, las admitidas no se mueven ni se posponen (Plan 5, §3.2).
+    const restricciones = plan.restricciones ? { admitidas: plan.restricciones.admitidas } : undefined;
+    const r = ajustarPlan(plan.entrada, plan.resultado, ajusteMotor, restricciones);
     if (!r.ok && r.error === "no_factible") {
       const folio = plan.entrada.solicitudes.find((s) => s.id === r.solicitudId)?.folio;
       return invalido({ _: [`No se puede: ${TEXTO_CAUSA[r.causa]}${folio ? ` (${folio})` : ""}`] });
     }
     if (!r.ok) return invalido({ _: ["El ajuste no es válido para este plan"] });
-    const errores = validarPlan(r.entrada, r.plan, { ajustadoAMano: true });
+    const errores = validarPlan(r.entrada, r.plan, { ajustadoAMano: true, restricciones });
     if (errores.length > 0) {
       console.error("[plan] un ajuste aceptado no pasó la validación", errores.length);
       return invalido({ _: ["No se pudo aplicar el ajuste. Avisa al administrador."] });
@@ -342,13 +236,6 @@ export async function descartarPlan(ctx: Contexto, planId: unknown, versionEsper
 
 const confirmacionSchema = z.object({ requisitosConfirmados: z.literal(true) });
 
-/** Error interno que revierte toda la validación; se traduce fuera de la transacción. */
-class ValidacionRechazada extends Error {
-  constructor(readonly fallo: Fallo) {
-    super("validación rechazada");
-  }
-}
-
 /** entrada: { requisitosConfirmados: true }. Todo en una transacción; las comprobaciones van antes de cualquier escritura. */
 export async function validarPlanDelDia(
   ctx: Contexto,
@@ -368,6 +255,8 @@ export async function validarPlanDelDia(
   const usuarioId = permiso.usuario.id;
 
   try {
+    // Un re-ruteo tiene su propia rama (Plan 5, §4): reemplaza al validado y acepta las ya asignadas no congeladas.
+    if (leido.tipo === "re_ruteo") return await validarReruteo(ctx, usuarioId, leido, ids.version);
     return await ctx.bd.transaction(async (tx): Promise<Resultado<{ programadas: number; pospuestas: number }>> => {
       // Orden estable de bloqueos (Plan 4, §4).
       const fecha = leido.fecha;
@@ -413,139 +302,3 @@ export async function validarPlanDelDia(
     throw error;
   }
 }
-
-/** Todas las comprobaciones de la validación, con todo ya bloqueado. null si se puede validar. */
-async function comprobarValidacion(
-  tx: Tx,
-  plan: PlanGuardado,
-  jornadas: JornadaGuardada[],
-  clienteIds: string[],
-  solicitudes: Awaited<ReturnType<typeof bloquearSolicitudes>>,
-  ruteadas: string[],
-  ahora: Date,
-): Promise<Fallo | null> {
-  const { fecha, entrada, versiones } = plan;
-  if (plan.revisionIniciadaEn === null) return invalido({ _: ["Abre el plan para revisarlo antes de validar"] });
-  if (fecha < fechaEnMexico(ahora)) return invalido({ _: ["La fecha del plan ya pasó"] });
-
-  const cambiaron = (texto: string) => conflicto("datos_cambiaron", `${texto} desde que se generó la propuesta; regenérala`);
-  if (!mismasVersiones(versiones.jornadas, porVersion(jornadas))) return cambiaron("Cambiaron las jornadas del día");
-
-  const unidades = await leerUnidades(tx, jornadas.map((j) => j.unidadId));
-  const operadores = await leerOperadores(tx, jornadas.map((j) => j.operadorId));
-  if (!mismasVersiones(versiones.unidades, porVersion(unidades)) || !mismasVersiones(versiones.operadores, porVersion(operadores))) {
-    return cambiaron("Cambiaron unidades u operadores del día");
-  }
-  const enUso = new Set(entrada.unidades.map((u) => u.id));
-  const catalogoUnidad = await leerCatalogo(tx, "unidad");
-  const catalogoOperador = await leerCatalogo(tx, "operador");
-  const porUnidad = new Map(unidades.map((u) => [u.id, u]));
-  const porOperador = new Map(operadores.map((o) => [o.id, o]));
-  for (const j of jornadas.filter((j) => enUso.has(j.id))) {
-    if (!disponibleUnidad(porUnidad.get(j.unidadId), catalogoUnidad, fecha) || !disponibleOperador(porOperador.get(j.operadorId), catalogoOperador, fecha)) {
-      return cambiaron("Una unidad u operador del plan dejó de estar disponible");
-    }
-  }
-
-  const config = await leerConfiguracionCompleta(tx);
-  if (config.version !== versiones.configuracion) return cambiaron("Cambió la configuración");
-  const clientes = await leerClientesPorId(tx, clienteIds);
-  if (!mismasVersiones(versiones.clientes, porVersion(clientes))) return cambiaron("Cambiaron datos de clientes");
-  const clienteDe = new Map(entrada.solicitudes.map((s) => [s.id, s.clienteId]));
-  const porCliente = new Map<string, ClienteGuardado>(clientes.map((c) => [c.id, c]));
-  const aEscribir = new Set([...ruteadas, ...plan.resultado.pospuestas.map((p) => p.solicitudId)]);
-  // Ruteadas y pospuestas: posponer la de un cliente que ya no está habilitado también sería escribir sobre datos viejos.
-  for (const id of new Set([...aEscribir].map((s) => clienteDe.get(s)!))) {
-    const cliente = porCliente.get(id);
-    if (!cliente || motivosDeBloqueoCliente(cliente, fecha, config.versionAvisoPrivacidad).length > 0) {
-      return conflicto("cliente_no_habilitado", `${cliente?.nombre ?? "Un cliente"} ya no se puede programar (por ejemplo, retiró su consentimiento); regenera la propuesta`);
-    }
-  }
-
-  const activas = await leerUnidades(tx);
-  const maximas = capacidadMaximaPorTipo(activas.filter((u) => u.activo));
-  const guardadas = entrada.parametros.capacidadMaximaPorTipoKg;
-  if (Object.keys(guardadas).some((t) => maximas[t as keyof typeof maximas] !== guardadas[t as keyof typeof guardadas])) {
-    return conflicto("capacidades_cambiaron", "Cambió la capacidad de la flota desde que se generó la propuesta; regenérala");
-  }
-
-  if (solicitudes.length !== entrada.solicitudes.length) return cambiaron("Una solicitud ya no existe");
-  for (const s of solicitudes) {
-    if (s.version !== versiones.solicitudes[s.id]) {
-      return s.estado === "programada" || s.estado === "en_ruta"
-        ? conflicto("solicitud_asignada", "Una de las solicitudes ya quedó asignada en otro plan; regenera la propuesta")
-        : cambiaron("Cambió una solicitud");
-    }
-    if (aEscribir.has(s.id) && (s.estado !== "pendiente" || s.proximaFechaElegible > fecha)) return cambiaron("Cambió una solicitud");
-  }
-  if ((await conParadaVigente(tx, ruteadas)).length > 0) {
-    return conflicto("solicitud_asignada", "Una de las solicitudes ya quedó asignada en otro plan; regenera la propuesta");
-  }
-
-  if (fecha === fechaEnMexico(ahora)) {
-    const ahoraMin = minutoEnMexico(ahora);
-    const salidas = plan.resultado.rutas.flatMap((r) => r.viajes.map((v) => v.salidaMin));
-    if (salidas.some((m) => m < ahoraMin)) {
-      return conflicto("hora_vencida", "La hora avanzó y hay salidas en el pasado: actualiza los horarios, revisa y valida");
-    }
-  }
-
-  const errores = validarPlan(entrada, plan.resultado, { ajustadoAMano: plan.ajustes.length > 0 });
-  if (errores.length > 0) {
-    console.error("[plan] la propuesta guardada no pasó la validación del motor", errores.length);
-    throw new ValidacionRechazada(invalido({ _: ["La propuesta no es consistente. Regenérala; si se repite, avisa al administrador."] }));
-  }
-  return null;
-}
-
-/** Rutas y paradas del plan, con horas en Ciudad de México, contrafactual por solicitud y rendimiento congelado. */
-function rutasParaGuardar(plan: PlanGuardado, jornadas: JornadaGuardada[], unidades: Map<string, UnidadGuardada>, ahora: Date): NuevaRuta[] {
-  const { fecha, entrada } = plan;
-  const p = entrada.parametros;
-  const solicitudes = new Map(entrada.solicitudes.map((s) => [s.id, s]));
-  const porJornada = new Map(jornadas.map((j) => [j.id, j]));
-  const instante = (m: number) => instanteDeMinutos(fecha, m);
-  const nuevas: NuevaRuta[] = [];
-  for (const ruta of plan.resultado.rutas) {
-    const jornada = porJornada.get(ruta.unidadId)!;
-    const unidad = unidades.get(jornada.unidadId)!;
-    let disponible = instante(minutosDeHora(jornada.disponibleDesde));
-    for (const viaje of ruta.viajes) {
-      const paradas = viaje.paradas.map((parada) => {
-        const s = solicitudes.get(parada.solicitudId)!;
-        return {
-          solicitudId: parada.solicitudId,
-          secuencia: parada.secuencia,
-          ventanaInicio: hhmmDeMinutos(parada.ventana.inicioMin),
-          ventanaFin: hhmmDeMinutos(parada.ventana.finMin),
-          llegadaEstimada: instante(parada.llegadaMin),
-          inicioEstimado: instante(parada.inicioServicioMin),
-          finEstimado: instante(parada.finServicioMin),
-          esperaMin: parada.esperaMin,
-          cargaKg: s.cargaKg,
-          kmDesdeAnterior: parada.kmDesdeAnterior,
-          // El método actual: un viaje redondo patio–cliente–patio por solicitud (como el resumen del motor).
-          kmContrafactual: 2 * distanciaKm(p.patio, s.ubicacion, p.factorCircuidad),
-        };
-      });
-      nuevas.push({
-        jornadaId: jornada.id,
-        numeroViaje: viaje.numero,
-        salidaEstimada: instante(viaje.salidaMin),
-        regresoEstimado: instante(viaje.regresoPatioMin),
-        finDescargaEstimado: instante(viaje.finDescargaMin),
-        cargaKg: viaje.cargaKg,
-        kmEstimados: viaje.km,
-        kmContrafactual: paradas.reduce((suma, x) => suma + x.kmContrafactual, 0),
-        rendimientoKmLUsado: unidad.rendimientoKmL,
-        disponibleParaSalirEn: disponible,
-        asignadaEn: ahora,
-        paradas,
-      });
-      // El siguiente viaje queda disponible al terminar la descarga de este (el Plan 5 pone el real).
-      disponible = instante(viaje.finDescargaMin);
-    }
-  }
-  return nuevas;
-}
-

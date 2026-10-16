@@ -198,6 +198,9 @@ En el VPS, con `crontab -e` (a las 17:00, al cierre del turno):
 
 ```
 0 17 * * * cd /ruta/recycling-solution && docker compose --profile respaldo run --rm respaldo >> respaldos/respaldo.log 2>&1
+5 17 * * * cd /ruta/recycling-solution && docker compose run --rm bootstrap npm run instantanea-k5 >> respaldos/k5.log 2>&1
 ```
+
+La segunda línea guarda la instantánea diaria de K5 para la serie del panel (Plan 6). Si un día no corre, la primera consulta del panel de ese día la toma; un día sin ninguna de las dos queda como hueco en la serie.
 
 Copiar la carpeta `respaldos/` fuera del VPS al menos una vez por semana (otra computadora o almacenamiento externo).

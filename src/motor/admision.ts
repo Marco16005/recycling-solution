@@ -1,8 +1,9 @@
 import { distanciaKm, minutosDeTraslado } from "./geometria";
 import { compararTexto, ordenarFifo } from "./orden";
 import { agruparZonas } from "./zonas";
+import { ErrorAdmitidas } from "./tipos";
 import { validarPlan } from "./validacion";
-import type { Diagnostico, EntradaPlan, Plan, RutaPlan, SolicitudMotor, UnidadMotor, ViajePlan } from "./tipos";
+import type { Diagnostico, EntradaPlan, Plan, RestriccionesPlan, RutaPlan, SolicitudMotor, UnidadMotor, ViajePlan } from "./tipos";
 
 const diagnosticoVacio = (): Diagnostico => ({ capacidad: 0, ventana: 0, finDeTurno: 0, afectaAOtra: 0 });
 type Calculo = { ruta: RutaPlan } | { causa: keyof Diagnostico; afectaAOtra: boolean };
@@ -51,7 +52,7 @@ function calcular(
   return { ruta: { unidadId: unidad.id, viajes: resultado } };
 }
 
-export function generarPlan(entrada: EntradaPlan): Plan {
+export function generarPlan(entrada: EntradaPlan, restricciones?: RestriccionesPlan): Plan {
   const solicitudes = new Map(entrada.solicitudes.map(s => [s.id, s]));
   if (solicitudes.size !== entrada.solicitudes.length) throw new Error("Solicitudes repetidas en la entrada");
   if (new Set(entrada.unidades.map(u => u.id)).size !== entrada.unidades.length)
@@ -60,13 +61,31 @@ export function generarPlan(entrada: EntradaPlan): Plan {
   if (!(p.velocidadKmh > 0) || !Number.isFinite(p.velocidadKmh) || !(p.factorCircuidad >= 1)
     || !Number.isFinite(p.factorCircuidad) || p.descargaMin < 0) throw new Error("Parámetros de traslado inválidos");
   const unidades = [...entrada.unidades].sort((a, b) => compararTexto(a.id, b.id));
+  const admitidas = new Set<string>();
+  for (const [unidadId, viajes] of Object.entries(restricciones?.admitidas ?? {})) {
+    const u = unidades.find(u => u.id === unidadId);
+    if (!u) throw new ErrorAdmitidas(unidadId, "Unidad desconocida");
+    for (const viaje of viajes) {
+      if (!viaje.length) throw new ErrorAdmitidas(unidadId, "Viaje admitido vacío");
+      for (const id of viaje) {
+        const solicitud = solicitudes.get(id);
+        if (!solicitud || admitidas.has(id)) throw new ErrorAdmitidas(unidadId, "Solicitud desconocida o repetida");
+        if (!solicitud.tiposUnidadAdmitidos.includes(u.tipo)) throw new ErrorAdmitidas(unidadId, "Tipo no admitido");
+        if (solicitud.cargaKg > Math.max(0, ...solicitud.tiposUnidadAdmitidos.map(t => p.capacidadMaximaPorTipoKg[t])))
+          throw new ErrorAdmitidas(unidadId, "Solicitud físicamente bloqueada");
+        admitidas.add(id);
+      }
+    }
+  }
   let rutas: RutaPlan[] = unidades.map(u => {
     if (u.cargaActualKg < 0 || u.cargaActualKg > u.capacidadKg) throw new Error(`Carga inicial inválida: ${u.id}`);
-    const calculo = calcular(entrada, u, u.cargaActualKg > 0 ? [[]] : [], solicitudes);
+    const fijadas = restricciones?.admitidas[u.id];
+    const calculo = calcular(entrada, u, fijadas?.length ? fijadas : u.cargaActualKg > 0 ? [[]] : [], solicitudes);
+    if (!("ruta" in calculo) && fijadas?.length) throw new ErrorAdmitidas(u.id, calculo.causa);
     if (!("ruta" in calculo)) throw new Error(`El regreso obligatorio de ${u.id} no cabe en el turno`);
     return calculo.ruta;
   });
-  const fifo = ordenarFifo(entrada.solicitudes);
+  const fifo = ordenarFifo(entrada.solicitudes.filter(s => !admitidas.has(s.id)));
   const zonas = agruparZonas(fifo.map(s => s.ubicacion), unidades.length, p.patio, p.semilla);
   const plan: Plan = { versionMotor: "1.0.0", rutas: [], pospuestas: [], bloqueadas: [], traza: [],
     resumen: { ruteadas: 0, pospuestas: 0, bloqueadas: 0, km: 0, minutosTraslado: 0,
@@ -138,7 +157,7 @@ export function generarPlan(entrada: EntradaPlan): Plan {
   }
   plan.resumen.pospuestas = plan.pospuestas.length;
   plan.resumen.bloqueadas = plan.bloqueadas.length;
-  const errores = validarPlan(entrada, plan);
+  const errores = validarPlan(entrada, plan, { restricciones });
   if (errores.length) throw new Error(`Plan inválido: ${errores.join("; ")}`);
   return plan;
 }

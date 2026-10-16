@@ -22,7 +22,8 @@
     "alta-usuario": "tsx scripts/alta-usuario.mts",
     "desactivar-usuario": "tsx scripts/desactivar-usuario.mts",
     "restablecer-clave": "tsx scripts/restablecer-clave.mts",
-    "publicar-aviso": "tsx scripts/publicar-aviso.mts"
+    "publicar-aviso": "tsx scripts/publicar-aviso.mts",
+    "instantanea-k5": "tsx scripts/instantanea-k5.mts"
   },
   "dependencies": {
     "@base-ui/react": "1.9.0",

@@ -2,11 +2,13 @@ import { eq } from "drizzle-orm";
 import type { BD } from "../bd";
 import { insertarCliente } from "../clientes";
 import { leerConfiguracion } from "../configuracion";
-import { configuracion } from "../esquema";
+import { configuracion, user, usuarios } from "../esquema";
 import { insertarOperador, insertarUnidad, registrarEntregaAvisoSiVersion } from "../flota";
 import { insertarJornada } from "../jornadas";
 import { insertarMovimientoPrivacidad } from "../privacidad";
 import { insertarSolicitud } from "../solicitudes";
+import { randomUUID } from "node:crypto";
+import type { UsuarioSesion } from "@/seguridad/permisos";
 import { clienteDePrueba } from "./datos-ejemplo";
 import { operadorDePrueba, unidadDePrueba } from "./flota-ejemplo";
 
@@ -62,4 +64,12 @@ export async function solicitudPendiente(bd: BD, clienteId: string, registradoPo
       fechaSolicitada, canal: "telefono", cargaEstimadaKg: null, notas: null, capturaInicioEn: null, capturaFinEn: registradaEn,
     }),
   );
+}
+
+/** Usuario con rol operador ligado a una ficha de operador existente (la de una jornada). */
+export async function usuarioOperadorDe(bd: BD, operadorId: string): Promise<UsuarioSesion> {
+  const authUserId = randomUUID();
+  await bd.insert(user).values({ id: authUserId, name: "Operador de prueba", email: `${authUserId}@prueba.local`, emailVerified: true });
+  const [fila] = await bd.insert(usuarios).values({ authUserId, nombre: "Operador de prueba", rol: "operador", operadorId }).returning();
+  return { id: fila.id, nombre: fila.nombre, rol: fila.rol, activo: fila.activo };
 }

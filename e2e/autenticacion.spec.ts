@@ -30,8 +30,10 @@ test("el registro público está cerrado", async ({ request, baseURL }) => {
   expect(respuesta.status()).toBe(400);
 });
 
-test("el operador no tiene acceso a despacho en el Plan 1", async ({ page }) => {
+test("el operador entra a su ruta y no tiene acceso a despacho", async ({ page }) => {
   await intentarEntrar(page, "operador");
+  await expect(page).toHaveURL(/\/operador$/);
+  await page.goto("/despacho/clientes");
   await expect(page).toHaveURL(/\/sin-acceso$/);
 });
 

@@ -1,3 +1,4 @@
+import { puede } from "@/seguridad/permisos";
 import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -14,6 +15,11 @@ async function SesionDespacho() {
       <BotonSalir />
     </div>
   );
+}
+
+async function NavegacionConPermisos() {
+  const usuario = await usuarioDeLaSesion();
+  return <NavegacionDespacho puedeVerPanel={puede(usuario, "indicadores.ver")} />;
 }
 
 export default function DespachoLayout({ children }: { children: React.ReactNode }) {
@@ -46,7 +52,7 @@ export default function DespachoLayout({ children }: { children: React.ReactNode
           </Suspense>
         </div>
         <Suspense fallback={<p className="px-4 py-2 text-sm">Cargando navegación…</p>}>
-          <NavegacionDespacho />
+          <NavegacionConPermisos />
         </Suspense>
       </header>
       <main id="contenido" className="mx-auto max-w-6xl px-4 py-8 sm:px-8 sm:py-10">

@@ -1,11 +1,11 @@
 import { permitir } from "@/acciones/autorizacion";
 import type { Contexto, Resultado } from "@/acciones/tipos";
-import { fechaSchema } from "@/acciones/validacion";
+import { fechaSchema, idSchema } from "@/acciones/validacion";
 import { leerCartera, leerClientesPorId } from "@/datos/clientes";
 import { leerConfiguracionCompleta } from "@/datos/configuracion";
 import { leerCatalogo, leerOperadores, leerUnidades } from "@/datos/flota";
 import { leerJornadas } from "@/datos/jornadas";
-import { leerPlanVigente, ultimaEjecucion } from "@/datos/planes";
+import { leerPlan, leerPlanVigente, propuestoDeFecha, ultimaEjecucion } from "@/datos/planes";
 import { leerSolicitudesParaCola } from "@/datos/solicitudes";
 import { requisitosPorJornada } from "@/dominio/plan/entrada";
 import { colaDelDia } from "@/dominio/solicitudes/cola";
@@ -49,6 +49,12 @@ export interface VistaPlan {
   planId: string | null;
   estado: "sin_plan" | "propuesto" | "validado";
   version: number | null;
+  /** inicial o re_ruteo (Plan 5). */
+  tipo: "inicial" | "re_ruteo";
+  /** En el validado de hoy: la propuesta de re-ruteo pendiente de revisar, si hay. */
+  reruteoPropuesto: { planId: string } | null;
+  /** En un re-ruteo: solicitudes congeladas (lo hecho y los viajes en curso), que no se pueden ajustar. */
+  congeladas: string[];
   generadoEn: Date | null;
   revisionIniciada: boolean;
   /** Cuántos ajustes manuales tiene; 0 si es el plan del motor. */
@@ -71,14 +77,20 @@ export interface VistaPlan {
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 
 /** Permiso planes.ver. El validado de la fecha o, si no hay, el propuesto vigente. fecha: "AAAA-MM-DD" o undefined para hoy. */
-export async function obtenerPlan(ctx: Contexto, fecha: unknown): Promise<Resultado<VistaPlan>> {
+export async function obtenerPlan(ctx: Contexto, fecha: unknown, planId?: unknown): Promise<Resultado<VistaPlan>> {
   const permiso = permitir(ctx, "planes.ver");
   if (!permiso.ok) return permiso;
   const dia = fecha === undefined ? fechaEnMexico(ctx.ahora) : fechaSchema.safeParse(fecha).data;
   if (dia === undefined) return { ok: false, error: "invalido", campos: { fecha: ["Fecha no válida"] } };
 
+  const pedido = planId === undefined ? undefined : idSchema.safeParse(planId).data;
+  if (planId !== undefined && pedido === undefined) return { ok: false, error: "no_encontrado" };
+
   const datos = await leerInstantanea(ctx.bd, async (tx) => {
-    const plan = await leerPlanVigente(tx, dia);
+    const elegido = pedido ? await leerPlan(tx, pedido) : null;
+    if (pedido && (elegido === null || elegido.fecha !== dia || elegido.estado === "descartado")) return null;
+    const plan = elegido ?? (await leerPlanVigente(tx, dia));
+    const reruteo = plan?.estado === "validado" ? await propuestoDeFecha(tx, dia) : null;
     const clienteIds = plan ? [...new Set(plan.entrada.solicitudes.map((s) => s.clienteId))] : [];
     return {
       plan,
@@ -92,8 +104,10 @@ export async function obtenerPlan(ctx: Contexto, fecha: unknown): Promise<Result
       // Para contar las solicitudes listas que no entraron a la propuesta.
       solicitudes: plan?.estado === "propuesto" ? await leerSolicitudesParaCola(tx, dia) : [],
       cartera: plan?.estado === "propuesto" ? await leerCartera(tx) : [],
+      reruteo,
     };
   });
+  if (datos === null) return { ok: false, error: "no_encontrado" };
 
   const { plan, config } = datos;
   // Con plan, el patio y las ubicaciones son los de su instantánea: kilómetros y horas se calcularon con ellos.
@@ -104,6 +118,9 @@ export async function obtenerPlan(ctx: Contexto, fecha: unknown): Promise<Result
   const base = {
     fecha: dia, patio, estiloMapaUrl: estiloMapaUrl(), puedeGenerar,
     ultimaEjecucion: datos.ejecucion,
+    tipo: plan?.tipo ?? ("inicial" as const),
+    reruteoPropuesto: datos.reruteo ? { planId: datos.reruteo.id } : null,
+    congeladas: plan?.restricciones?.congeladas ?? [],
   };
   if (plan === null) {
     return {
@@ -172,7 +189,7 @@ export async function obtenerPlan(ctx: Contexto, fecha: unknown): Promise<Result
     ok: true,
     valor: {
       ...base,
-      planId: plan.id, estado: plan.estado === "validado" ? "validado" : "propuesto", version: plan.version, generadoEn: plan.generadoEn,
+      planId: plan.id, estado: plan.estado === "propuesto" ? "propuesto" : "validado", version: plan.version, generadoEn: plan.generadoEn,
       revisionIniciada: plan.revisionIniciadaEn !== null, ajustes: plan.ajustes.length,
       unidades: vistaUnidades,
       pospuestas: plan.resultado.pospuestas.map((p) => ({
