@@ -77,7 +77,7 @@ test("operador: jornada, idempotencia, rechazo, cola sin señal e incidente con 
   // El viaje ya en curso debe sobrevivir completo a la retirada de la otra jornada.
   await page.getByRole("button", { name: "Reportar incidente", exact: true }).click();
   const formulario = page.getByRole("form", { name: "Reportar incidente", exact: true });
-  await formulario.getByLabel("Tipo", { exact: true }).selectOption("cierre_vial");
+  await formulario.getByRole("combobox", { name: "Tipo", exact: true }).selectOption("cierre_vial");
   await formulario.getByLabel("Descripción").fill("Cierre sintético de acceso E2E");
   await formulario.getByRole("button", { name: "Enviar incidente" }).click();
   await sinPendientes(page);

@@ -47,7 +47,8 @@ export async function propuestoEnVersion(tx: Tx, id: string, version: number): P
   const plan = await leerPlanParaCambiar(tx, id);
   if (plan === null) return { ok: false, error: "no_encontrado" };
   if (plan.estado === "validado") return conflicto("plan_validado_existente", "Este plan ya se validó");
-  if (plan.estado === "descartado") return conflicto("generacion_adelantada", "Esta propuesta se descartó; abre la vigente");
+  // Solo una propuesta se cambia: un plan descartado o reemplazado es historial.
+  if (plan.estado !== "propuesto") return conflicto("generacion_adelantada", "Esta propuesta ya no está vigente; abre la del día");
   if (plan.version !== version) return { ok: false, error: "conflicto" };
   return plan;
 }

@@ -15,7 +15,7 @@ import type { EventoEntrada, TipoEvento } from "@/dominio/operacion/tipos";
 import type { UsuarioSesion } from "@/seguridad/permisos";
 import { conciliarEvento, resolverIncidente } from "./operacion.nucleo";
 import { registrarEventoOperador, reportarIncidente } from "./operador.nucleo";
-import { generarPlanDelDia, iniciarRevision, validarPlanDelDia } from "./plan.nucleo";
+import { ajustarPlanDelDia, generarPlanDelDia, iniciarRevision, validarPlanDelDia } from "./plan.nucleo";
 import { generarReruteo } from "./reruteo.nucleo";
 import type { Contexto, Resultado } from "./tipos";
 
@@ -205,5 +205,64 @@ describe("operación del día", () => {
     expect(await validarPlanDelDia(ctx(despachador, a(53)), planId, p.version, { requisitosConfirmados: true })).toMatchObject({
       ok: false, error: "conflicto", motivo: { codigo: "operacion_avanzo" },
     });
+  });
+
+  it("check_in responde ya con la jornada actualizada", async () => {
+    const r = valor(await enviar(evento("check_in", a(55))));
+    expect(r.estado.checkInEn).not.toBeNull();
+  });
+
+  it("un rechazo con una parada que no existe también queda guardado, y repetirlo responde lo mismo", async () => {
+    valor(await enviar(evento("check_in", a(55))));
+    const e = evento("llegada", a(60), { rutaId: randomUUID(), paradaId: randomUUID(), versionRuta: 1 });
+    expect(valor(await enviar(e))).toMatchObject({ resultado: "rechazado", repetido: false });
+    const [guardado] = await bd.select().from(eventosOperador).where(eq(eventosOperador.eventoId, e.eventoId));
+    expect(guardado).toMatchObject({ resultado: "rechazado", rutaId: null, paradaId: null });
+    expect(valor(await enviar(e, a(61)))).toMatchObject({ resultado: "rechazado", repetido: true });
+  });
+
+  it("en una propuesta de re-ruteo no se puede posponer una admitida; un plan reemplazado no se ajusta", async () => {
+    const viajeA = (await rutaDe(operadorA)).viajes[0];
+    valor(await enviar(evento("check_in", a(55))));
+    valor(await enviar(evento("salida_patio", a(60), { rutaId: viajeA.rutaId, versionRuta: viajeA.version, odometroKm: 100 })));
+    const [base] = await bd.select().from(planes).where(eq(planes.estado, "validado"));
+    // Nadie deja de estar disponible: el viaje de B, que no ha salido, queda como admitidas.
+    const { planId } = valor(await generarReruteo(ctx(despachador, a(65)), base.id, base.version, { jornadasNoDisponibles: [] }));
+    const [p] = await bd.select().from(planes).where(eq(planes.id, planId));
+    const admitida = (p.restricciones as { admitidas: Record<string, string[][]> }).admitidas[jornadaB.jornadaId][0][0];
+    expect(await ajustarPlanDelDia(ctx(despachador, a(66)), planId, p.version, { tipo: "posponer", solicitudId: admitida })).toMatchObject({ ok: false, error: "invalido" });
+
+    valor(await iniciarRevision(ctx(despachador, a(66)), planId));
+    const [p2] = await bd.select().from(planes).where(eq(planes.id, planId));
+    valor(await validarPlanDelDia(ctx(despachador, a(67)), planId, p2.version, { requisitosConfirmados: true }));
+    const [reemplazado] = await bd.select().from(planes).where(eq(planes.id, base.id));
+    expect(reemplazado.estado).toBe("reemplazado");
+    const cualquiera = (reemplazado.resultado.rutas.flatMap((r) => r.viajes.flatMap((v) => v.paradas)))[0].solicitudId;
+    expect(await ajustarPlanDelDia(ctx(despachador, a(68)), base.id, reemplazado.version, { tipo: "posponer", solicitudId: cualquiera })).toMatchObject({
+      ok: false, error: "conflicto",
+    });
+  });
+
+  it("una jornada que ya hizo check-out no recibe trabajo en un re-ruteo", async () => {
+    const viaje = (await rutaDe(operadorA)).viajes[0];
+    const r = { rutaId: viaje.rutaId, versionRuta: viaje.version };
+    let t = 55;
+    const paso = async (tipo: TipoEvento, cambios: Partial<EventoEntrada> = {}) => expect(valor(await enviar(evento(tipo, a((t += 5)), cambios))).resultado).toBe("aplicado");
+    await paso("check_in");
+    await paso("salida_patio", { ...r, odometroKm: 1 });
+    for (const p of viaje.paradas) {
+      await paso("llegada", { ...r, paradaId: p.paradaId });
+      await paso("inicio_servicio", { ...r, paradaId: p.paradaId });
+      await paso("fin_servicio", { ...r, paradaId: p.paradaId });
+    }
+    await paso("regreso_patio", { ...r, odometroKm: 2 });
+    await paso("fin_descarga", r);
+    await paso("check_out");
+    const c = await clienteHabilitado(bd, "Cartonera Tardía", 0.005);
+    await solicitudPendiente(bd, c.id, despachador.id, FECHA_PLAN, a(t));
+    const [base] = await bd.select().from(planes).where(eq(planes.estado, "validado"));
+    const { planId } = valor(await generarReruteo(ctx(despachador, a(t + 5)), base.id, base.version, { jornadasNoDisponibles: [] }));
+    const [p] = await bd.select().from(planes).where(eq(planes.id, planId));
+    expect(p.entrada.unidades.map((u) => u.id)).toEqual([jornadaB.jornadaId]);
   });
 });

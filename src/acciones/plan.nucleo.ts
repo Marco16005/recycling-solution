@@ -187,13 +187,15 @@ export async function ajustarPlanDelDia(ctx: Contexto, planId: unknown, versionE
       ajusteMotor = validado.data;
     }
 
-    const r = ajustarPlan(plan.entrada, plan.resultado, ajusteMotor);
+    // En un re-ruteo, las admitidas no se mueven ni se posponen (Plan 5, §3.2).
+    const restricciones = plan.restricciones ? { admitidas: plan.restricciones.admitidas } : undefined;
+    const r = ajustarPlan(plan.entrada, plan.resultado, ajusteMotor, restricciones);
     if (!r.ok && r.error === "no_factible") {
       const folio = plan.entrada.solicitudes.find((s) => s.id === r.solicitudId)?.folio;
       return invalido({ _: [`No se puede: ${TEXTO_CAUSA[r.causa]}${folio ? ` (${folio})` : ""}`] });
     }
     if (!r.ok) return invalido({ _: ["El ajuste no es válido para este plan"] });
-    const errores = validarPlan(r.entrada, r.plan, { ajustadoAMano: true });
+    const errores = validarPlan(r.entrada, r.plan, { ajustadoAMano: true, restricciones });
     if (errores.length > 0) {
       console.error("[plan] un ajuste aceptado no pasó la validación", errores.length);
       return invalido({ _: ["No se pudo aplicar el ajuste. Avisa al administrador."] });

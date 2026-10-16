@@ -17,6 +17,30 @@ self.addEventListener("activate", (evento) => {
   );
 });
 
+// La primera visita ya ocurrió cuando el worker se activa: la pantalla le manda su dirección y los recursos que cargó
+// (solo del mismo origen) para dejarlos guardados y poder recargar sin señal desde el primer día.
+self.addEventListener("message", (evento) => {
+  const datos = evento.data;
+  if (!datos || datos.tipo !== "precargar" || !Array.isArray(datos.urls)) return;
+  evento.waitUntil(
+    (async () => {
+      const cache = await caches.open(CACHE);
+      for (const texto of datos.urls) {
+        try {
+          const url = new URL(texto, self.location.origin);
+          if (url.origin !== self.location.origin) continue;
+          const pantalla = url.pathname.startsWith("/operador");
+          if (!pantalla && !url.pathname.startsWith("/_next/static/")) continue;
+          const respuesta = await fetch(url, { credentials: "same-origin" });
+          if (respuesta.ok) await cache.put(pantalla ? url.pathname : url.href, respuesta);
+        } catch {
+          // Lo que no se pudo guardar ahora se guarda en la siguiente navegación con señal.
+        }
+      }
+    })(),
+  );
+});
+
 self.addEventListener("fetch", (evento) => {
   const peticion = evento.request;
   if (peticion.method !== "GET") return;

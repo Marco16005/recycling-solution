@@ -193,6 +193,13 @@ export async function eventoPorId(bd: Conexion, eventoId: string): Promise<FilaE
   return e ?? null;
 }
 
+/** Las referencias que existen de verdad; las demás, null (para guardar un rechazo sin romper las llaves foráneas). */
+export async function referenciasExistentes(bd: Conexion, rutaId: string | null, paradaId: string | null): Promise<{ rutaId: string | null; paradaId: string | null }> {
+  const ruta = rutaId ? (await bd.select({ id: rutas.id }).from(rutas).where(eq(rutas.id, rutaId)))[0] : undefined;
+  const parada = paradaId ? (await bd.select({ id: paradas.id }).from(paradas).where(eq(paradas.id, paradaId)))[0] : undefined;
+  return { rutaId: ruta?.id ?? null, paradaId: parada?.id ?? null };
+}
+
 export async function insertarEvento(tx: Tx, e: typeof eventosOperador.$inferInsert): Promise<void> {
   await tx.insert(eventosOperador).values(e);
 }

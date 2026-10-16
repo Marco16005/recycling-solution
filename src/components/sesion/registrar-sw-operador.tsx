@@ -17,9 +17,17 @@ export function RegistrarSwOperador({ usuarioId }: { usuarioId: string }) {
       // Sin acceso a localStorage no hay nada que purgar.
     }
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register(`/sw-operador.js?u=${encodeURIComponent(usuarioId)}`, { scope: "/operador" }).catch(() => {
-      // Sin service worker (por ejemplo, sin HTTPS) la pantalla sigue funcionando con conexión.
-    });
+    navigator.serviceWorker
+      .register(`/sw-operador.js?u=${encodeURIComponent(usuarioId)}`, { scope: "/operador" })
+      .then(async () => {
+        // Que la primera visita ya quede guardada: esta pantalla y los archivos que cargó.
+        const listo = await navigator.serviceWorker.ready;
+        const recursos = performance.getEntriesByType("resource").map((r) => r.name).filter((n) => n.startsWith(location.origin));
+        listo.active?.postMessage({ tipo: "precargar", urls: [location.pathname, ...recursos] });
+      })
+      .catch(() => {
+        // Sin service worker (por ejemplo, sin HTTPS) la pantalla sigue funcionando con conexión.
+      });
   }, [usuarioId]);
   return null;
 }

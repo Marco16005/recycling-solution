@@ -84,7 +84,9 @@ export async function generarReruteo(ctx: Contexto, planBaseId: unknown, version
   const disponibles: typeof jornadas = [];
   for (const j of jornadas) {
     const estado = estados.get(j.id)!;
+    // Una jornada que ya hizo check-out no puede recibir trabajo (terminalidad, invariante 23).
     const disponible =
+      estado.checkOutEn === null &&
       !noDisponibles.has(j.id) &&
       disponibleUnidad(unidades.get(j.unidadId), leida.catalogoUnidad, base.fecha) &&
       disponibleOperador(operadores.get(j.operadorId), leida.catalogoOperador, base.fecha);
@@ -188,11 +190,13 @@ export async function validarReruteo(
     await bloquearConfiguracionCompartido(tx);
     const ahora = (ctx.reloj ?? (() => ctx.ahora))();
 
+    const enUso = new Set(plan.entrada.unidades.map((u) => u.id));
     for (const j of jornadas) {
       const jo = await leerJornadaOperacion(tx, j.id);
       if (!jo || jo.versionOperacion !== versiones.operacion[j.id]) {
         return conflicto("operacion_avanzo", "La operación avanzó mientras se revisaba el re-ruteo (nuevos eventos o cancelaciones); vuelve a generarlo");
       }
+      if (enUso.has(j.id) && jo.checkOutEn !== null) return conflicto("datos_cambiaron", "Una jornada del re-ruteo ya terminó; vuelve a generarlo");
     }
 
     // Parada vigente de cada solicitud en el plan operativo.

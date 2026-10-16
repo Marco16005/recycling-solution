@@ -4,7 +4,7 @@ import { registrarEvento } from "@/datos/bitacora";
 import { leerConfiguracionCompleta } from "@/datos/configuracion";
 import {
   bloquearJornada, bloquearSolicitudesDeParadas, estadoDeJornada, eventoPorId, incidentePorEvento, insertarEvento, insertarIncidente,
-  leerJornadaOperacion, marcarDisponibilidad, marcarJornada, marcarParada, marcarRuta, solicitudAlSiguienteDia, solicitudAtendida,
+  leerJornadaOperacion, marcarDisponibilidad, referenciasExistentes, marcarJornada, marcarParada, marcarRuta, solicitudAlSiguienteDia, solicitudAtendida,
   solicitudDeParada, solicitudesEnRuta, subirVersionOperacion, type FilaEvento, type JornadaOperacion,
 } from "@/datos/operacion";
 import { tomarCandadoDeFecha } from "@/datos/planes";
@@ -86,7 +86,9 @@ export async function registrarEventoOperador(ctx: Contexto, evento: unknown): P
         versionRuta: e.versionRuta, odometroKm: e.odometroKm, motivo: e.motivo, huella, usuarioId,
       };
       if (!r.ok) {
-        await insertarEvento(tx, { ...fila, resultado: "rechazado", motivoRechazo: r.motivo.slice(0, 300) });
+        // El rechazo se guarda siempre (decisión 9): una ruta o parada que no existe se guarda vacía; la huella conserva lo recibido.
+        const referencias = await referenciasExistentes(tx, e.rutaId, e.paradaId);
+        await insertarEvento(tx, { ...fila, ...referencias, resultado: "rechazado", motivoRechazo: r.motivo.slice(0, 300) });
         await registrarEvento(tx, { usuarioId, entidad: "jornada", entidadId: j.id, accion: `evento_rechazado_${e.tipo}`, campos: [] });
         return { ok: true, valor: { resultado: "rechazado", motivo: r.motivo, repetido: false, estado } };
       }
@@ -95,7 +97,9 @@ export async function registrarEventoOperador(ctx: Contexto, evento: unknown): P
       await insertarEvento(tx, { ...fila, resultado: "aplicado", motivoRechazo: null });
       await subirVersionOperacion(tx, j.id);
       await registrarEvento(tx, { usuarioId, entidad: "jornada", entidadId: j.id, accion: `evento_${e.tipo}`, campos });
-      return { ok: true, valor: { resultado: "aplicado", motivo: null, repetido: false, estado: await estadoDeJornada(tx, j) } };
+      // Con los efectos ya aplicados (check-in y check-out cambian la jornada).
+      const actualizada = (await leerJornadaOperacion(tx, j.id)) ?? j;
+      return { ok: true, valor: { resultado: "aplicado", motivo: null, repetido: false, estado: await estadoDeJornada(tx, actualizada) } };
     });
   } catch (error) {
     // Dos envíos del mismo evento a la vez: el otro ya lo guardó; se responde como repetido.
