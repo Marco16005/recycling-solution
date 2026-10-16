@@ -1,7 +1,7 @@
 # Plan 7 — Calles reales y alertas en vivo (diseño)
 
 - **Fecha:** 2026-10-15.
-- **Revisión:** 2. Incorpora los 15 hallazgos de Codex sobre la revisión 1; las respuestas están en §13.
+- **Revisión:** 2.1. Incorpora los 15 hallazgos de Codex sobre la revisión 1 y el primero de su revisión de la 2 (§13).
 - **Base:** `main` en f6e4140, con los Planes 1 a 6 validados.
 - **Decisiones del usuario (2026-10-15):**
   - nada de gasto: ni tráfico de pago ni Google Routes, TomTom o HERE;
@@ -24,7 +24,9 @@
    - **ventana en riesgo:** la parada empezaría después del cierre de su ventana (ejemplo: "cierra 13:00, llegaría 13:25");
    - **fuera de turno:** el viaje terminaría de descargar después del fin de turno;
    - **atraso:** la llegada proyectada va al menos `umbral_atraso_min` (supuesto: 15) después de la estimada. Es informativa.
-   Arriba aparece un resumen ("3 paradas en riesgo") con acceso al re-ruteo. Cada alerta dice si la parada está en el viaje en curso, que no se mueve (avisar al cliente, incidente o no atendida), o en un viaje futuro, que se puede liberar.
+   Arriba aparece un resumen ("3 paradas en riesgo") con acceso al re-ruteo. Cada alerta dice si la parada está en el viaje en curso o en uno futuro:
+   - **viaje futuro:** se puede liberar;
+   - **viaje en curso:** no se reacomoda mientras la unidad siga disponible (avisar al cliente o marcarla no atendida). Si la unidad ya no puede seguir (avería), se registra el incidente y se re-rutea con la jornada como no disponible: sus pendientes, también las del viaje en curso, se reubican, como en el Plan 5.
 7. **Liberar en el re-ruteo.** El despachador puede liberar paradas pendientes de viajes **futuros**. Liberar retira el compromiso de unidad, viaje y orden: el motor reubica la parada en orden FIFO donde quepa, sea en la misma unidad, en otra o como pospuesta. El despachador revisa la propuesta y puede ajustarla con "mover", como hoy. Lo congelado del Plan 5 no cambia.
 8. **Frontera viva.**
    - La unidad con viaje en curso queda libre al fin de descarga **proyectado** de ese viaje.
@@ -50,7 +52,7 @@
 | 6 | Cada ruta guarda su **modelo de tiempos** (`rutas.tiempos`): sus puntos, la submatriz de minutos libres entre ellos, las horas pico, el fin de turno y la descarga con que se planeó | Proyecta de forma reproducible aunque cambie la configuración, también en jornadas con rutas de varios planes. Resuelve los tramos nuevos cuando se omite una parada. Deja el dato estimado contra el real para calibrar en el piloto |
 | 7 | Alertas calculadas al consultar, sin guardarse. El umbral de atraso es el vigente | Son función pura de eventos y modelos guardados, así que se pueden reconstruir. El umbral es preferencia de pantalla, no parte del modelo |
 | 8 | Enlaces a Waze y Google Maps, sin API | Tráfico en vivo para el chofer, sin costo y sin contrato |
-| 9 | El viaje en curso no se reacomoda ni se libera | Se conserva la decisión del Plan 5: la unidad ya salió con ese viaje |
+| 9 | El viaje en curso de una jornada **disponible** no se reacomoda ni se libera. Una jornada no disponible conserva la regla del Plan 5: sus pendientes, también las del viaje en curso, pasan a `aReubicar` | Así lo hace el código actual (`fronteraDeReruteo`): una unidad que sigue en ruta ya salió con ese viaje, y una averiada ya no lo puede terminar |
 | 10 | Coordenadas con identidad exacta: misma latitud y longitud, sin redondear | Dos coordenadas distintas nunca comparten fila, y la regresión contra la versión 1 queda exacta |
 
 ## 3. Arquitectura y flujo
@@ -145,7 +147,7 @@ Una `no_atendida` cerrada sin llegada no prueba que la unidad estuvo ahí: se su
 ### 4.4 Re-ruteo
 
 - **Frontera.** `fronteraDeReruteo` toma el `libreDesdeMin` de una unidad con viaje en curso del fin de descarga proyectado de ese viaje (§4.3).
-- **Liberar.** `liberadas: solicitudId[]` (opcional) admite solo paradas vigentes y pendientes de viajes futuros de jornadas disponibles. Cualquier otra es `invalido`: del viaje en curso, cerrada, en sitio o de una jornada no disponible.
+- **Liberar.** `liberadas: solicitudId[]` (opcional) admite solo paradas vigentes y pendientes de viajes futuros de jornadas disponibles. Cualquier otra es `invalido`: del viaje en curso, cerrada, en sitio o de una jornada no disponible (esas ya se reubican todas).
   - Las liberadas salen de sus `admitidas` y pasan a `aReubicar`. La acción junta `aReubicar` de **todas** las jornadas, disponibles o no.
   - Un viaje futuro que queda vacío desaparece y los siguientes se renumeran. Las admitidas son viajes futuros que aún no salen, así que su número no tiene identidad física. Lo que se protege es la unidad y el orden relativo: `[[A], [B]]` con A liberada queda `[[B]]`.
   - `planes.restricciones` guarda `{ admitidas, liberadas }`. Validar compara contra lo guardado.
@@ -290,3 +292,4 @@ OSRM corre en la propia máquina: ninguna coordenada sale. Al tocar "Navegar con
 | 13 | Rendimiento y límite de puntos | §3: índice por evaluación, prueba de menos de un segundo, límite de 400 con motivo y `consulta_mapa_ms` aparte de K7 |
 | 14 | Pruebas que distingan fallas | §6 y §8: isla, pin lejano, servidor falso para fallas globales, reloj controlado y suite completa con OSRM |
 | 15 | Reparto incompleto | §10: `src/dominio/plan`, `src/datos/operacion.ts`, `docs/legal` y `src/traslados` en AGENTS.md |
+| R2-1 | (Revisión de la revisión 2, interrumpida por la cuota de Codex.) El diseño decía que el viaje en curso nunca se mueve, pero el código reubica sus pendientes si la jornada deja de estar disponible | §1.6, §2.9 y §4.4: la regla aplica solo a jornadas disponibles; las no disponibles conservan la regla del Plan 5 |
