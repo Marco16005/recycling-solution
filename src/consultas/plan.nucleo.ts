@@ -1,3 +1,4 @@
+import type { InfoTraslados } from "@/dominio/plan/tipos";
 import { permitir } from "@/acciones/autorizacion";
 import type { Contexto, Resultado } from "@/acciones/tipos";
 import { fechaSchema, idSchema } from "@/acciones/validacion";
@@ -40,6 +41,8 @@ export interface ViajeVista {
   capacidadKg: number;
   km: number;
   paradas: ParadaVista[];
+  /** Plan 7: recorrido por calle ([lng, lat]); recto si OSRM no respondió; otroMapa si se dibujó con otro mapa que el del plan. */
+  trazo: { coordenadas: [number, number][]; recto: boolean; mapa: string | null; otroMapa: boolean };
 }
 
 export interface UnidadEnPlan { jornadaId: string; unidad: UnidadResumen; operador: OperadorResumen; viajes: ViajeVista[] }
@@ -72,6 +75,10 @@ export interface VistaPlan {
   puedeGenerar: boolean;
   puedeValidar: boolean;
   estiloMapaUrl: string;
+  /** Plan 7: con qué tiempos se planeó; null en planes anteriores o sin plan. */
+  traslados: InfoTraslados | null;
+  /** Plan 7: clientes cuyo pin quedó a más de UMBRAL_PIN_M de una calle. */
+  pinesARevisar: { clienteId: string; nombre: string; distanciaM: number }[];
 }
 
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
@@ -121,6 +128,8 @@ export async function obtenerPlan(ctx: Contexto, fecha: unknown, planId?: unknow
     tipo: plan?.tipo ?? ("inicial" as const),
     reruteoPropuesto: datos.reruteo ? { planId: datos.reruteo.id } : null,
     congeladas: plan?.restricciones?.congeladas ?? [],
+    traslados: plan?.versiones.traslados ?? null,
+    pinesARevisar: [] as VistaPlan["pinesARevisar"],
   };
   if (plan === null) {
     return {
@@ -153,6 +162,9 @@ export async function obtenerPlan(ctx: Contexto, fecha: unknown, planId?: unknow
       viajes: ruta.viajes.map((v) => ({
         numero: v.numero, salida: hhmm(v.salidaMin), regreso: hhmm(v.regresoPatioMin), finDescarga: hhmm(v.finDescargaMin),
         cargaKg: v.cargaKg, capacidadKg: capacidad.get(ruta.unidadId) ?? 0, km: v.km,
+        // P7-7 lo dibuja por calle; mientras, en línea recta como antes del Plan 7.
+        trazo: { coordenadas: [patio!, ...v.paradas.map((p) => solicitudes.get(p.solicitudId)!.ubicacion), patio!].map((c) => [c.lng, c.lat] as [number, number]),
+          recto: true, mapa: null, otroMapa: false },
         paradas: v.paradas.map((p) => {
           const c = clienteDe(p.solicitudId);
           const { ubicacion } = solicitudes.get(p.solicitudId)!;

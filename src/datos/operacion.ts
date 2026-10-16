@@ -128,7 +128,10 @@ function comoViaje(r: { ruta: FilaRuta; paradas: FilaParada[] }): ViajeOperacion
       llegadaEn: iso(p.llegadaEn),
       inicioServicioEn: iso(p.inicioServicioEn),
       cierreEn: iso(p.cierreEn),
+      ventanaInicio: p.ventanaInicio.slice(0, 5),
+      ventanaFin: p.ventanaFin.slice(0, 5),
     })),
+    tiempos: null,
   };
 }
 

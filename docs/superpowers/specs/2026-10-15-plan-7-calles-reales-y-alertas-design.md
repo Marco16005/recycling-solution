@@ -292,4 +292,5 @@ OSRM corre en la propia máquina: ninguna coordenada sale. Al tocar "Navegar con
 | 13 | Rendimiento y límite de puntos | §3: índice por evaluación, prueba de menos de un segundo, límite de 400 con motivo y `consulta_mapa_ms` aparte de K7 |
 | 14 | Pruebas que distingan fallas | §6 y §8: isla, pin lejano, servidor falso para fallas globales, reloj controlado y suite completa con OSRM |
 | 15 | Reparto incompleto | §10: `src/dominio/plan`, `src/datos/operacion.ts`, `docs/legal` y `src/traslados` en AGENTS.md |
+| Plan | La revisión del plan de implementación (2026-10-16) precisa liberadas por parada vigente, rutas sin `tiempos` acotadas por `ahora`, segundos en los hitos, invalidación de la caché de trazos, `liberable` con los criterios de la acción y la tolerancia del techo | Plan 7, §4 |
 | R2-1 | (Revisión de la revisión 2, interrumpida por la cuota de Codex.) El diseño decía que el viaje en curso nunca se mueve, pero el código reubica sus pendientes si la jornada deja de estar disponible | §1.6, §2.9 y §4.4: la regla aplica solo a jornadas disponibles; las no disponibles conservan la regla del Plan 5 |

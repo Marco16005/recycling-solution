@@ -150,6 +150,7 @@ export async function generarReruteo(ctx: Contexto, planBaseId: unknown, version
     },
     reruteo: { planBaseId: base.id, restricciones },
     accion: "generar_reruteo",
+    consultaMapaMs: null,
   });
 }
 

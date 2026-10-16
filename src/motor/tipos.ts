@@ -16,6 +16,44 @@ export interface ParametrosMotor {
   /** Mayor capacidad entre las unidades activas del catálogo de cada tipo, disponibles hoy o no. 0 si no hay de ese tipo. */
   capacidadMaximaPorTipoKg: Record<TipoUnidad, number>;
   semilla: number;
+  /** Plan 7, §4.2. Ausente o [] = sin franjas (planes 1.0.0). */
+  horasPico?: FranjaPico[];
+}
+
+/** Entre inicioMin y finMin los traslados avanzan a 1/factor de su velocidad libre. Sin traslapes; factor en [1, 3]. */
+export interface FranjaPico { inicioMin: number; finMin: number; factor: number }
+
+/**
+ * Matriz dirigida de traslados por calle (Plan 7, §4.1). Fila = origen, columna = destino, en el orden de puntos.
+ * Puntos con identidad exacta, sin repetidos. Diagonal 0; valores finitos y no negativos.
+ */
+export interface MatrizTraslados {
+  puntos: Coordenada[];
+  km: number[][];
+  /** Minutos sin horas pico, ya con el factor de camión. */
+  minLibres: number[][];
+  /** Por punto: metros hasta la calle donde OSRM lo ajustó. */
+  ajusteM: number[];
+  /** Pares [origen, destino] que OSRM no resolvió y se llenaron con la fórmula. */
+  aproximados: [number, number][];
+  /** data_version de OSRM. */
+  mapa: string;
+}
+
+export interface Tramo { km: number; minLibres: number }
+
+export interface Traslados {
+  tramo(origen: Coordenada, destino: Coordenada): Tramo;
+  /** Minuto entero de llegada saliendo en salidaMin (entero), con las horas pico de la entrada. */
+  llegada(origen: Coordenada, destino: Coordenada, salidaMin: number): number;
+}
+
+/** Un punto que no está en la matriz, franjas inválidas o una matriz mal formada. */
+export class ErrorTraslados extends Error {
+  constructor(public readonly causa: "punto_faltante" | "franjas_invalidas" | "matriz_invalida") {
+    super(`Traslados: ${causa}`);
+    this.name = "ErrorTraslados";
+  }
 }
 
 /** Limita el INICIO del servicio: se puede llegar antes y esperar a que abra; el servicio puede terminar después del fin. */
@@ -53,6 +91,8 @@ export interface EntradaPlan {
   solicitudes: SolicitudMotor[]; // sin repetidas; en re-ruteo, sin las congeladas
   unidades: UnidadMotor[];
   parametros: ParametrosMotor;
+  /** Plan 7, §4.1. Ausente = fórmula anterior (haversine × circuidad). */
+  traslados?: MatrizTraslados;
 }
 
 /** Por unidad (id de jornada): viajes ya admitidos, conservando viaje y orden relativo. */

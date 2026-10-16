@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { fechaEnMexico } from "../tiempo";
-import type { EstadoJornada, EventoEntrada } from "./tipos";
+import type { EstadoJornada, EventoEntrada, OpcionesProyeccion } from "./tipos";
 export type * from "./tipos";
 
 const rechazar = (motivo: string) => ({ ok: false as const, motivo });
@@ -24,10 +24,13 @@ export function huellaEvento(evento: EventoEntrada): string {
  * Los minutos se redondean hacia arriba para nunca liberar antes del instante calculado;
  * pueden superar 1440 si la descarga estimada más retraso cae al día siguiente.
  */
-export function fronteraDeReruteo(estado: EstadoJornada, disponible: boolean, ahora: string):
+export function fronteraDeReruteo(estado: EstadoJornada, disponible: boolean, ahora: string,
+  /** Plan 7, §4.4 (P7-3): liberadas y frontera proyectada. Hasta entonces se ignoran. */
+  opciones?: { liberadas: ReadonlySet<string> } & Omit<OpcionesProyeccion, "ahora">):
   | { ok: true; congeladas: string[]; viajeEnCurso: string | null; retrasoMin: number; libreDesdeMin: number;
-      admitidas: string[][]; aReubicar: string[] }
+      admitidas: string[][]; aReubicar: string[]; liberadas: string[] }
   | { ok: false; motivo: string } {
+  void opciones;
   const instante = Date.parse(ahora);
   if (!Number.isFinite(instante) || fechaEnMexico(new Date(instante)) !== estado.fecha) return rechazar("Hora fuera de la jornada");
   const enCurso = estado.viajes.find(v => v.salidaPatioEn && !v.descargaFinEn);
@@ -66,8 +69,9 @@ export function fronteraDeReruteo(estado: EstadoJornada, disponible: boolean, ah
   const minutoAhora = parte("hour") * 60 + parte("minute") + parte("second") / 60 + (instante % 1000) / 60_000;
   const libre = disponible && enCurso ? Math.max(instante, Date.parse(enCurso.finDescargaEstimado) + retrasoMin * 60_000) : instante;
   return { ok: true, congeladas, viajeEnCurso: enCurso?.rutaId ?? null, retrasoMin,
-    libreDesdeMin: Math.ceil(minutoAhora + (libre - instante) / 60_000), admitidas, aReubicar };
+    libreDesdeMin: Math.ceil(minutoAhora + (libre - instante) / 60_000), admitidas, aReubicar, liberadas: [] };
 }
 
 export { aplicarEvento } from "./transiciones";
+export { proyectarJornada } from "./proyeccion";
 export { siguienteAccion } from "./siguiente-accion";

@@ -1,4 +1,5 @@
-/** Contratos de operación del Plan 5, §3.1. Horas ISO de la jornada. */
+/** Contratos de operación del Plan 5, §3.1, y de proyección del Plan 7, §2.3. Horas ISO de la jornada. */
+import type { FranjaPico } from "@/motor";
 export type TipoEvento = "check_in" | "salida_patio" | "llegada" | "inicio_servicio" | "fin_servicio"
   | "no_atendida" | "regreso_patio" | "fin_descarga" | "check_out";
 export type EstadoParada = "pendiente" | "en_sitio" | "en_servicio" | "completada" | "no_atendida"
@@ -9,6 +10,8 @@ export interface ParadaOperacion {
   paradaId: string; solicitudId: string; secuencia: number; estado: EstadoParada; vigente: boolean;
   llegadaEstimada: string; inicioEstimado: string; finEstimado: string;
   llegadaEn: string | null; inicioServicioEn: string | null; cierreEn: string | null;
+  /** HH:MM (Plan 7). */
+  ventanaInicio: string; ventanaFin: string;
 }
 
 export interface ViajeOperacion {
@@ -17,7 +20,45 @@ export interface ViajeOperacion {
   salidaPatioEn: string | null; regresoPatioEn: string | null; descargaFinEn: string | null;
   odometroInicioKm: number | null;
   paradas: ParadaOperacion[]; // En secuencia.
+  /** Modelo de tiempos con que se planeó (Plan 7); null en rutas anteriores. */
+  tiempos: TiemposRuta | null;
 }
+
+/** Modelo de tiempos con que se planeó una ruta (Plan 7, §2.6). */
+export interface TiemposRuta {
+  /** "patio" y los solicitudId de la ruta, en el orden del plan. */
+  puntos: string[];
+  /** Dirigida, entre esos puntos. */
+  minLibres: number[][];
+  /** Las del plan de origen; [] si no tenía. */
+  horasPico: FranjaPico[];
+  turnoFinMin: number;
+  descargaMin: number;
+}
+
+export type TipoAlerta = "ventana_en_riesgo" | "fuera_de_turno" | "atraso";
+export interface AlertaOperacion {
+  tipo: TipoAlerta; rutaId: string;
+  /** null en fuera_de_turno y en atraso de salida. */
+  paradaId: string | null;
+  /** Cuánto se pasa (entero, ≥ 1). */
+  minutos: number;
+  enViajeEnCurso: boolean;
+}
+export interface ParadaProyectada {
+  paradaId: string; llegada: string; inicio: string; fin: string;
+  /** La ubicación anterior se supuso (tras una no atendida sin llegada). */
+  ubicacionSupuesta: boolean;
+}
+export interface ViajeProyectado {
+  rutaId: string; salida: string; regreso: string; finDescarga: string;
+  /** Ruta sin tiempos: estimaciones desplazadas por el retraso observado. */
+  aproximada: boolean;
+  /** Solo vigentes no cerradas. */
+  paradas: ParadaProyectada[];
+}
+export interface ProyeccionJornada { jornadaId: string; viajes: ViajeProyectado[]; alertas: AlertaOperacion[] }
+export interface OpcionesProyeccion { ahora: string; umbralAtrasoMin: number; turnoFinMin: number; descargaMin: number }
 
 /** La acción arma el estado con todo bloqueado, sobre las rutas operativas de todos los planes. */
 export interface EstadoJornada {

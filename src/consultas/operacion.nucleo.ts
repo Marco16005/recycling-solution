@@ -4,6 +4,7 @@ import { fechaSchema } from "@/acciones/validacion";
 import { leerOperadores, leerUnidades } from "@/datos/flota";
 import { leerJornadas } from "@/datos/jornadas";
 import { estadoDeJornada, eventosRechazadosSinConciliar, incidentesAbiertos, leerJornadaOperacion, ultimoEventoAplicado } from "@/datos/operacion";
+import type { AlertaOperacion, TipoAlerta } from "@/dominio/operacion";
 import { fechaEnMexico } from "@/dominio/tiempo";
 import { puede } from "@/seguridad/permisos";
 import { leerInstantanea } from "./instantanea";
@@ -14,6 +15,15 @@ export interface SeguimientoJornada {
   avance: { completadas: number; noAtendidas: number; pendientes: number; enSitio: number };
   ultimoEvento: { tipo: string; en: Date } | null;
   checkIn: boolean; checkOut: boolean;
+  /** Plan 7: horas proyectadas y alertas de la jornada. */
+  proyeccion: { paradas: ParadaEnSeguimiento[]; alertas: AlertaOperacion[]; aproximada: boolean };
+}
+/** Plan 7, §2.5. Horas HH:MM en Ciudad de México. */
+export interface ParadaEnSeguimiento {
+  paradaId: string; solicitudId: string; folio: string; cliente: string;
+  ventana: { inicio: string; fin: string };
+  llegadaEstimada: string; llegadaProyectada: string;
+  enViajeEnCurso: boolean; liberable: boolean; ubicacionSupuesta: boolean;
 }
 export interface VistaSeguimiento {
   fecha: string;
@@ -22,6 +32,8 @@ export interface VistaSeguimiento {
   eventosRechazados: { eventoId: string; jornadaId: string; tipo: string; ocurridoEn: Date; motivoRechazo: string | null }[];
   puedeResolver: boolean;
   puedeConciliar: boolean;
+  /** Plan 7: cuántas alertas hay de cada tipo en el día. */
+  resumenAlertas: Record<TipoAlerta, number>;
 }
 
 /** Permiso operacion.ver. fecha: "AAAA-MM-DD" o undefined para hoy. */
@@ -55,6 +67,8 @@ export async function seguimiento(ctx: Contexto, fecha?: unknown): Promise<Resul
         ultimoEvento: ultimo,
         checkIn: estado.checkInEn !== null,
         checkOut: estado.checkOutEn !== null,
+        // P7-7 la calcula con proyectarJornada.
+        proyeccion: { paradas: [], alertas: [], aproximada: false },
       });
     }
     return {
@@ -66,6 +80,7 @@ export async function seguimiento(ctx: Contexto, fecha?: unknown): Promise<Resul
         eventosRechazados: await eventosRechazadosSinConciliar(tx, dia),
         puedeResolver: puede(permiso.usuario, "incidentes.resolver"),
         puedeConciliar: puede(permiso.usuario, "operacion.conciliar"),
+        resumenAlertas: { ventana_en_riesgo: 0, fuera_de_turno: 0, atraso: 0 },
       },
     };
   });

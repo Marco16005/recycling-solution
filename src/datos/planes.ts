@@ -30,7 +30,11 @@ export async function tomarCandadoDeCatalogoFlota(tx: Tx, modo: "compartido" | "
 }
 
 /** Restricciones de un plan de re-ruteo: jornadas que dejaron de estar disponibles, viajes conservados y paradas congeladas. */
-export interface RestriccionesReruteo { jornadasNoDisponibles: string[]; admitidas: Record<string, string[][]>; congeladas: string[] }
+export interface RestriccionesReruteo {
+  jornadasNoDisponibles: string[]; admitidas: Record<string, string[][]>; congeladas: string[];
+  /** Plan 7: paradas de viajes futuros liberadas por el despachador. Ausente en planes anteriores. */
+  liberadas?: string[];
+}
 
 /** Un ajuste manual con su autor y su hora (planes.ajustes). */
 export interface AjusteRegistrado { ajuste: AjusteManual; por: string; en: string }

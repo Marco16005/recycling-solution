@@ -62,6 +62,7 @@ export async function generarPlanDelDia(ctx: Contexto, fecha: unknown): Promise<
         ? conflicto("plan_validado_existente", "La fecha ya tiene un plan validado; los cambios del día se hacen con el re-ruteo")
         : null,
     accion: "generar",
+    consultaMapaMs: null,
   });
 }
 

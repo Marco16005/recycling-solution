@@ -63,12 +63,12 @@ Cinco entradas o fallas que la especificación implica y que una persona encontr
 | P7-0 | Claude (la parte de Codex reasignada el 2026-10-15 porque Codex no tenía cuota; Codex la revisa) | Contratos compilables de §2, AGENTS.md (`src/traslados`) y código de conflicto `frontera_vencida` | — |
 | P7-1 | Claude | Migración `0008`, esquema, permisos y persistencia (`tiempos`, `restricciones.liberadas`, `consulta_mapa_ms`, configuración) | P7-0 |
 | P7-2 | Codex | Motor: `crearTraslados`, `llegadaConHorasPico`, matriz, versiones, resumen y fixtures `1.0.0` | P7-0 |
-| P7-3 | Codex | Dominio: `construirEntrada` con horas pico, `proyectarJornada` y `fronteraDeReruteo` con liberadas y frontera proyectada | P7-0 |
+| P7-3 | Codex | Dominio: `construirEntrada` con horas pico, `proyectarJornada` y `fronteraDeReruteo` con liberadas y frontera proyectada | P7-0; P7-2 para validar y cerrar |
 | P7-4 | Claude | Infraestructura: imagen del mapa, servicio `osrm`, `preparar-mapa.sh`, mapa sintético y `docs/operacion.md` | — |
 | P7-5 | Claude | `src/traslados`: matriz con respaldo, trazos y caché, contra OSRM real (mapa sintético) y un servidor falso | P7-0, P7-4 |
 | P7-6 | Claude | Acciones: generar y re-rutear con matriz y `consulta_mapa_ms`, `rutasParaGuardar` (contrafactual y `tiempos`), liberadas y frontera viva | P7-1, P7-2, P7-3, P7-5 |
 | P7-7 | Claude | Consultas: seguimiento con proyección y alertas; `obtenerPlan` con fuente de tiempos, pins y trazos | P7-1, P7-3, P7-5 |
-| P7-8 | Claude | Configuración: acción y formulario (factor camión, horas pico, umbral) | P7-1 |
+| P7-8 | Claude | Configuración: acción y formulario (factor camión, horas pico, umbral) | P7-1, P7-2 (`validarFranjas`) |
 | P7-9 | Codex | Pantallas: plan, seguimiento con alertas y "Liberar", y botones de navegación del operador | P7-0 (contratos); P7-6 y P7-7 para probar |
 | P7-10 | Codex escribe, Claude ejecuta | e2e con OSRM y el mapa sintético; suite completa en verde | P7-4 a P7-9 |
 | P7-11 | Ambos | Guía de auditoría, aviso para operadores, trazabilidad en la especificación, hoja de ruta, revisión cruzada y `verificar-todo.sh` sobre el mismo commit | todas |
@@ -266,14 +266,16 @@ export interface ParadaEnSeguimiento {
 Desde `.worktrees/claude-plan-4` (o `codex-plan-4` con `-p rs-codex-plan-7`):
 
 ```bash
-C="docker compose -p rs-claude-plan-7 -f compose.yaml -f compose.test.yaml"
-$C run --rm unit npm run tipos                                        # tipos
-$C run --rm unit npx vitest run --project unidad src/motor            # unidad, por carpeta o archivo
-$C run --rm integration npx vitest run --project integracion src/traslados
-$C run --rm --build e2e                                               # punta a punta
-$C down -v --remove-orphans                                           # limpiar
-scripts/verificar-todo.sh                                             # todo, al cierre
+c() { docker compose -p rs-claude-plan-7 -f compose.yaml -f compose.test.yaml "$@"; }   # zsh no parte variables en palabras
+c run --rm unit npm run tipos                                        # tipos
+c run --rm unit npx vitest run --project unidad src/motor            # unidad, por carpeta o archivo
+c run --rm integration npx vitest run --project integracion src/traslados
+c run --rm --build e2e                                               # punta a punta
+c down -v --remove-orphans                                           # limpiar
+scripts/verificar-todo.sh                                            # todo, al cierre
 ```
+
+En los pasos, `$C …` significa `c …`.
 
 ---
 
@@ -402,7 +404,7 @@ export function llegadaConHorasPico(salidaMin: number, minLibres: number, franja
     if (restante <= cabe) { t += restante * factor; restante = 0; }
     else { restante -= cabe; t = limite; }
   }
-  return Math.ceil(Math.round(t * 1e6) / 1e6);   // redondeo estable antes del techo
+  return Math.ceil(t - 1e-9);   // tolerancia ε = 1e-9 min (§4.5 de este plan): 450 + 10 × 1.3 = 463.000000000000002 → 463
 }
 ```
 
@@ -701,3 +703,18 @@ it("re-ruteo encadenado con liberadas: el segundo parte de lo vigente en todas l
   - formato de hallazgo de la guía.
 - [ ] **Paso 3.** Correr `scripts/verificar-todo.sh` sobre el mismo commit. Esperado: "Verificación completa: todo en verde.".
 - [ ] **Paso 4.** Veredicto de ambos; merge `--no-ff` a `main`; etiqueta `plan-7-validado`. No se sube a ningún remoto sin preguntar.
+
+## 4. Respuesta a la revisión del plan por Codex (2026-10-16)
+
+Codex revisó el diseño 2.1 y este plan contra el código. Confirmó R2-1 y las cuentas a mano de `llegadaConHorasPico` y de la proyección. Sus 8 hallazgos quedan resueltos así; mandan sobre el texto de las tareas.
+
+| # | Hallazgo | Resolución |
+|---|---|---|
+| 1 | Liberaciones encadenadas: una jornada vieja puede tener la misma solicitud como `reasignada` histórica y rechazar una liberación válida | P7-6: la acción resuelve primero la parada **vigente** de cada `solicitudId` liberada y entrega a cada `fronteraDeReruteo` solo las de su jornada. P7-3: la frontera solo considera paradas vigentes para liberar e ignora las históricas. Prueba en P7-6: re-ruteo encadenado donde la solicitud liberada estuvo antes `reasignada` en otra jornada |
+| 2 | Rutas sin `tiempos`: desplazar por el retraso no acota cada hito por `ahora` | P7-3: en rutas sin `tiempos`, los tramos son las diferencias entre estimaciones consecutivas (salida→llegada, inicio→fin, etc.). Se encadenan desde el último hito real y cada hito pendiente queda en `max(encadenado, ahora)`. Prueba: ruta antigua con salida puntual, sin llegadas y el reloj después del fin estimado de descarga |
+| 3 | Precisión: los eventos traen segundos | P7-3: los hitos reales se convierten a minutos fraccionarios de Ciudad de México (con segundos y milisegundos) y se conservan intactos en la salida. La salida de cada tramo proyectado es `Math.ceil(minuto fraccionario)`, así que nunca se proyecta antes. Los minutos pueden pasar de 1440 tras medianoche. Pruebas: salida 08:00:30 con tramo de 20 da llegada 08:21; milisegundos; cruce de medianoche |
+| 4 | Caché de trazos sin invalidación al cambiar el mapa | P7-5: `trazosDeViajes` guarda la versión vigente aprendida de la última respuesta de OSRM. Si tiene más de 60 s, la renueva con `/nearest` (1 s de plazo) antes de usar la caché. La llave es `versión|car|coordenadas`. Si la sonda falla, no se usa la caché y se dibuja recto. Prueba: un servidor falso cambia `data_version` y, pasados los 60 s (reloj falso), deja de dar el trazo viejo |
+| 5 | `liberable` en pantalla contra lo que acepta la acción | P7-7: `liberable` usa los mismos criterios que `generarReruteo`: jornada sin check-out, unidad y operador disponibles en el catálogo y parada pendiente vigente de un viaje que no ha salido. P7-9: al marcar una jornada como no disponible en el formulario, sus casillas "Liberar" se desmarcan y deshabilitan |
+| 6 | El redondeo de referencia `Math.round(t × 1e6)` adelanta tramos diminutos | P7-2: `Math.ceil(t − 1e-9)` con tolerancia formal ε = 1e-9 min. Pruebas nuevas: `[480, 0.0000001, pico, 481]` y `[450, 10, pico, 463]` |
+| 7 | Dependencias de `validarFranjas` y `llegadaConHorasPico` | §1: P7-3 y P7-8 dependen de P7-2 para validar y cerrar |
+| 8 | `$C` no se parte en palabras en zsh | §3: función `c()` |

@@ -254,6 +254,8 @@ export interface Generacion {
   antesDeGuardar: (tx: Tx) => Promise<Fallo | null>;
   reruteo?: NuevaPlan["reruteo"];
   accion: "generar" | "generar_reruteo";
+  /** Plan 7: lo que tardó la consulta del mapa (K7, aparte de duracion_ms); null si no hubo consulta. */
+  consultaMapaMs: number | null;
 }
 
 /**
