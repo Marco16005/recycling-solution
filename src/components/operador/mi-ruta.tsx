@@ -89,12 +89,16 @@ export function MiRuta({ usuarioId, inicial }: { usuarioId: string; inicial: Vis
             // Releer: el operador puede haber agregado eventos durante la petición.
             lote = JSON.parse(localStorage.getItem(llave)!);
             if (!respuesta.ok) {
-              setMensaje(respuesta.error === "conflicto" ? respuesta.motivo?.texto ?? "Conflicto: llama al despachador."
-                : respuesta.error === "invalido" ? Object.values(respuesta.campos).flat().join(". ")
-                : "No se pudo autorizar el envío. Conservamos la cola; llama al despachador.");
-              return;
-            }
-            if ("estado" in respuesta.valor) {
+              if (respuesta.error === "no_autenticado" || respuesta.error === "no_autorizado") {
+                setMensaje("No se pudo autorizar el envío. Conservamos la cola; llama al despachador.");
+                return;
+              }
+              const motivo = respuesta.error === "conflicto" ? respuesta.motivo?.texto ?? "Conflicto al enviar el evento."
+                : respuesta.error === "invalido" ? Object.values(respuesta.campos).flat().join(". ") || "El evento no es válido."
+                : "No se encontró la jornada del evento.";
+              if (!lote.rechazados.some(r => r.eventoId === primero.entrada.eventoId))
+                lote.rechazados.push({ eventoId: primero.entrada.eventoId, motivo });
+            } else if ("estado" in respuesta.valor) {
               lote.vista.estado = respuesta.valor.estado;
               if (respuesta.valor.resultado === "rechazado" && !lote.rechazados.some(r => r.eventoId === primero.entrada.eventoId))
                 lote.rechazados.push({ eventoId: primero.entrada.eventoId, motivo: respuesta.valor.motivo ?? "Evento rechazado" });

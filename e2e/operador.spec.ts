@@ -44,8 +44,25 @@ test("operador: jornada, idempotencia, rechazo, cola sin señal e incidente con 
   await expect(page.getByText("Tocar en caseta").first()).toBeVisible();
   await expect(page.getByRole("link", { name: "Abrir mapa" }).first()).toHaveAttribute("href", /^geo:/);
 
-  // Sin recarga offline: el SW requiere origen seguro y se verifica por separado.
+  // ready no implica que el mensaje de precarga haya terminado: espera también la caché.
+  await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+  await expect.poll(() => page.evaluate(async () => {
+    if (!navigator.serviceWorker.controller) return false;
+    const nombres = (await caches.keys()).filter(n => n.startsWith("rs-operador-"));
+    if (nombres.length !== 1) return false;
+    const cache = await caches.open(nombres[0]);
+    const urls = [location.pathname, ...performance.getEntriesByType("resource").map(r => r.name)
+      .filter(n => new URL(n).origin === location.origin && new URL(n).pathname.startsWith("/_next/static/"))];
+    return (await Promise.all(urls.map(url => cache.match(url)))).every(Boolean);
+  }), { timeout: 30_000 }).toBe(true);
+  const paradasGuardadas = (await guardado(page)).vista.viajes.flatMap(v => v.paradas);
+  expect(paradasGuardadas.length).toBeGreaterThan(0);
   await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Mi ruta" })).toBeVisible();
+  await expect(page.getByRole("status")).toContainText("Sin conexión");
+  for (const parada of paradasGuardadas)
+    await expect(page.getByRole("article", { name: `Parada ${parada.folio}`, exact: true })).toContainText(parada.cliente.nombre);
   await page.getByRole("button", { name: "Llegué al patio", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("1 eventos por enviar");
   const encolado = (await guardado(page)).cola[0];
@@ -64,6 +81,24 @@ test("operador: jornada, idempotencia, rechazo, cola sin señal e incidente con 
   await sinPendientes(page);
   expect((await guardado(page)).vista.estado!.checkInEn).toBe(checkIn);
   expect((await guardado(page)).rechazados).toHaveLength(0);
+
+  // Un conflicto y una entrada inválida no deben bloquear el evento válido que sigue.
+  await context.setOffline(true);
+  const invalido = { ...encolado.entrada, eventoId: crypto.randomUUID(), ocurridoEn: "fecha inválida" };
+  const viajeInicial = (await guardado(page)).vista.estado!.viajes[0];
+  const llegada: EventoEntrada = { ...encolado.entrada, eventoId: crypto.randomUUID(), tipo: "llegada",
+    ocurridoEn: new Date().toISOString(), rutaId: viajeInicial.rutaId, versionRuta: viajeInicial.version,
+    paradaId: viajeInicial.paradas[0].paradaId };
+  await insertarEvento(page, { ...encolado.entrada, motivo: "Contenido distinto" });
+  await insertarEvento(page, invalido);
+  await insertarEvento(page, llegada);
+  expect((await guardado(page)).cola).toHaveLength(3);
+  await context.setOffline(false);
+  await sinPendientes(page);
+  expect((await guardado(page)).rechazados.map(r => r.eventoId)).toEqual([encolado.entrada.eventoId, invalido.eventoId]);
+  await expect(page.getByRole("region", { name: "Eventos rechazados" })).toContainText("Llama al despachador");
+  expect((await guardado(page)).vista.estado!.checkInEn).toBe(checkIn);
+  expect((await guardado(page)).vista.estado!.viajes[0].paradas[0].estado).toBe("en_sitio");
 
   const antes = (await guardado(page)).vista.estado!;
   const viaje = antes.viajes[0];
