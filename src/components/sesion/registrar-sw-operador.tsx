@@ -19,11 +19,20 @@ export function RegistrarSwOperador({ usuarioId }: { usuarioId: string }) {
     if (!("serviceWorker" in navigator)) return;
     navigator.serviceWorker
       .register(`/sw-operador.js?u=${encodeURIComponent(usuarioId)}`, { scope: "/operador" })
-      .then(async () => {
-        // Que la primera visita ya quede guardada: esta pantalla y los archivos que cargó.
-        const listo = await navigator.serviceWorker.ready;
+      .then(async (registro) => {
+        // Que la primera visita ya quede guardada: esta pantalla y los archivos que cargó. No se usa
+        // navigator.serviceWorker.ready: si se llegó desde /entrar sin recargar, el documento nació fuera del alcance
+        // /operador y ready no se resuelve nunca.
+        const trabajador = registro.active ?? registro.waiting ?? registro.installing;
+        if (!trabajador) return;
+        if (trabajador.state !== "activated") {
+          await new Promise<void>((resolver) => {
+            const revisar = () => trabajador.state === "activated" && resolver();
+            trabajador.addEventListener("statechange", revisar);
+          });
+        }
         const recursos = performance.getEntriesByType("resource").map((r) => r.name).filter((n) => n.startsWith(location.origin));
-        listo.active?.postMessage({ tipo: "precargar", urls: [location.pathname, ...recursos] });
+        trabajador.postMessage({ tipo: "precargar", urls: [location.pathname, ...recursos] });
       })
       .catch(() => {
         // Sin service worker (por ejemplo, sin HTTPS) la pantalla sigue funcionando con conexión.
