@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { fechaEnMexico } from "../tiempo";
+import { proyectarJornada } from "./proyeccion";
 import type { EstadoJornada, EventoEntrada, OpcionesProyeccion } from "./tipos";
 export type * from "./tipos";
 
@@ -22,24 +23,29 @@ export function huellaEvento(evento: EventoEntrada): string {
  * Conserva cierres históricos incluso no vigentes; excluye reasignadas y omitidas.
  * El último hito se elige por instante real (empates por orden operativo).
  * Los minutos se redondean hacia arriba para nunca liberar antes del instante calculado;
- * pueden superar 1440 si la descarga estimada más retraso cae al día siguiente.
+ * pueden superar 1440 si la descarga proyectada cae al día siguiente.
  */
 export function fronteraDeReruteo(estado: EstadoJornada, disponible: boolean, ahora: string,
-  /** Plan 7, §4.4 (P7-3): liberadas y frontera proyectada. Hasta entonces se ignoran. */
   opciones?: { liberadas: ReadonlySet<string> } & Omit<OpcionesProyeccion, "ahora">):
   | { ok: true; congeladas: string[]; viajeEnCurso: string | null; retrasoMin: number; libreDesdeMin: number;
       admitidas: string[][]; aReubicar: string[]; liberadas: string[] }
   | { ok: false; motivo: string } {
-  void opciones;
   const instante = Date.parse(ahora);
   if (!Number.isFinite(instante) || fechaEnMexico(new Date(instante)) !== estado.fecha) return rechazar("Hora fuera de la jornada");
   const enCurso = estado.viajes.find(v => v.salidaPatioEn && !v.descargaFinEn);
   if (!disponible && estado.viajes.some(v => v.paradas.some(p => activa(p.estado))))
     return rechazar("Cierra la parada en sitio o en servicio antes de retirar la jornada");
-  const congeladas: string[] = [], admitidas: string[][] = [], aReubicar: string[] = [];
+  const congeladas: string[] = [], admitidas: string[][] = [], aReubicar: string[] = [], liberadas: string[] = [];
   for (const viaje of estado.viajes) {
     const futuras: string[] = [];
     for (const p of viaje.paradas) {
+      if (p.vigente && opciones?.liberadas.has(p.solicitudId)) {
+        if (!disponible || estado.checkOutEn || viaje.salidaPatioEn || p.estado !== "pendiente")
+          return rechazar("Solo se pueden liberar paradas pendientes de viajes futuros de jornadas disponibles");
+        liberadas.push(p.solicitudId);
+        aReubicar.push(p.solicitudId);
+        continue;
+      }
       if (p.estado === "completada" || p.estado === "no_atendida") congeladas.push(p.solicitudId);
       else if (p.vigente && !cerrada(p.estado)) {
         if (disponible && viaje === enCurso) congeladas.push(p.solicitudId);
@@ -67,9 +73,15 @@ export function fronteraDeReruteo(estado: EstadoJornada, disponible: boolean, ah
     hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(new Date(instante));
   const parte = (tipo: string) => Number(partes.find(p => p.type === tipo)!.value);
   const minutoAhora = parte("hour") * 60 + parte("minute") + parte("second") / 60 + (instante % 1000) / 60_000;
-  const libre = disponible && enCurso ? Math.max(instante, Date.parse(enCurso.finDescargaEstimado) + retrasoMin * 60_000) : instante;
+  const proyeccion = disponible && enCurso ? proyectarJornada(estado, {
+    ahora, umbralAtrasoMin: opciones?.umbralAtrasoMin ?? 15,
+    turnoFinMin: opciones?.turnoFinMin ?? 1440,
+    descargaMin: opciones?.descargaMin ?? Math.max(0,
+      (Date.parse(enCurso.finDescargaEstimado) - Date.parse(enCurso.regresoEstimado)) / 60000),
+  }).viajes.find(v => v.rutaId === enCurso.rutaId) : undefined;
+  const libre = proyeccion ? Math.max(instante, Date.parse(proyeccion.finDescarga)) : instante;
   return { ok: true, congeladas, viajeEnCurso: enCurso?.rutaId ?? null, retrasoMin,
-    libreDesdeMin: Math.ceil(minutoAhora + (libre - instante) / 60_000), admitidas, aReubicar, liberadas: [] };
+    libreDesdeMin: Math.ceil(minutoAhora + (libre - instante) / 60_000), admitidas, aReubicar, liberadas };
 }
 
 export { aplicarEvento } from "./transiciones";

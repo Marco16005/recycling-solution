@@ -191,18 +191,18 @@ describe("frontera", () => {
     expect(fronteraDeReruteo(s, true, hora(600))).toMatchObject({ congeladas: ["s00"], viajeEnCurso: null, libreDesdeMin: 600 });
   });
   it.each([
-    ["llegada", 502, 12], ["inicio", 502, 7], ["cierre", 522, 12],
-  ] as const)("calcula el retraso del último hito: %s", (hito, minuto, retraso) => {
+    ["llegada", 502, 12, 615], ["inicio", 502, 7, 600], ["cierre", 522, 12, 592],
+  ] as const)("calcula el retraso del último hito: %s", (hito, minuto, retraso, libre) => {
     const s = estado(), v = s.viajes[0], p = v.paradas[0]; v.salidaPatioEn = hora(480);
     if (hito === "llegada") p.llegadaEn = hora(minuto);
     if (hito === "inicio") { p.llegadaEn = hora(500); p.inicioServicioEn = hora(minuto); }
     if (hito === "cierre") { p.estado = "completada"; p.cierreEn = hora(minuto); }
-    expect(fronteraDeReruteo(s, true, hora(530))).toMatchObject({ retrasoMin: retraso, libreDesdeMin: 580 + retraso });
+    expect(fronteraDeReruteo(s, true, hora(530))).toMatchObject({ retrasoMin: retraso, libreDesdeMin: libre });
   });
   it("redondea disponibilidad hacia arriba y conserva minutos del día siguiente", () => {
     const s = estado(), v = s.viajes[0];
     v.salidaPatioEn = hora(480.5); v.finDescargaEstimado = hora(1440);
-    expect(fronteraDeReruteo(s, true, hora(500))).toMatchObject({ retrasoMin: 0.5, libreDesdeMin: 1441 });
+    expect(fronteraDeReruteo(s, true, hora(500))).toMatchObject({ retrasoMin: 0.5, libreDesdeMin: 1450 });
   });
   it("sin viaje iniciado admite futuros; rechaza ahora inválido", () => {
     expect(fronteraDeReruteo(estado(), true, hora())).toMatchObject({ admitidas: [["s00", "s01"], ["s10", "s11"]], libreDesdeMin: 480 });

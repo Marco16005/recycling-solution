@@ -1,4 +1,5 @@
-import { distanciaKm, minutosDeTraslado } from "./geometria";
+import { crearTraslados } from "./traslados";
+import { ErrorTraslados, type Traslados } from "./tipos";
 import { validarPlan } from "./validacion";
 import type { AjusteManual, CausaNoFactible, EntradaPlan, Plan, RestriccionesPlan, ResultadoAjuste, ResultadoRecalculo, ViajePlan } from "./tipos";
 
@@ -8,6 +9,11 @@ const invalida = (detalle: string): Extract<ResultadoRecalculo, { error: "entrad
 /** Recalcula las secuencias dadas con las reglas de admisión, sin reordenarlas. Solo plan inicial. */
 export function recalcularRuta(entrada: EntradaPlan, unidadId: string, viajes: string[][]): ResultadoRecalculo {
   const p = entrada.parametros;
+  let t: Traslados;
+  try { t = crearTraslados(entrada); } catch (error) {
+    if (error instanceof ErrorTraslados) return invalida(error.message);
+    throw error;
+  }
   const unidad = entrada.unidades.find(u => u.id === unidadId);
   if (!unidad) return invalida("Unidad desconocida");
   const solicitudes = new Map(entrada.solicitudes.map(s => [s.id, s]));
@@ -37,8 +43,8 @@ export function recalcularRuta(entrada: EntradaPlan, unidadId: string, viajes: s
       if (!s.tiposUnidadAdmitidos.includes(unidad.tipo)) return noFactible("tipoNoAdmitido", id);
       viaje.cargaKg += s.cargaKg;
       if (viaje.cargaKg > unidad.capacidadKg) return noFactible("capacidad", id);
-      const km = distanciaKm(origen, s.ubicacion, p.factorCircuidad);
-      const llegada = hora + minutosDeTraslado(km, p.velocidadKmh);
+      const km = t.tramo(origen, s.ubicacion).km;
+      const llegada = t.llegada(origen, s.ubicacion, hora);
       const ventana = [...s.ventanas].sort((a, b) => a.inicioMin - b.inicioMin || a.finMin - b.finMin)
         .find(v => Math.max(llegada, v.inicioMin) <= v.finMin);
       if (!ventana) return noFactible("ventana", id);
@@ -51,9 +57,9 @@ export function recalcularRuta(entrada: EntradaPlan, unidadId: string, viajes: s
       viaje.km += km;
       origen = s.ubicacion;
     }
-    const regresoKm = distanciaKm(origen, p.patio, p.factorCircuidad);
+    const regresoKm = t.tramo(origen, p.patio).km;
     viaje.km += regresoKm;
-    viaje.regresoPatioMin = hora + minutosDeTraslado(regresoKm, p.velocidadKmh);
+    viaje.regresoPatioMin = t.llegada(origen, p.patio, hora);
     hora = viaje.finDescargaMin = viaje.regresoPatioMin + p.descargaMin;
     if (hora > p.turnoFinMin) return noFactible("finDeTurno", null);
     resultado.push(viaje);
@@ -117,17 +123,23 @@ export function ajustarPlan(entrada: EntradaPlan, plan: Plan, ajuste: AjusteManu
     km: 0, minutosTraslado: 0, kmMetodoActual: 0, minutosTrasladoMetodoActual: 0 };
   const porId = new Map(entrada.solicitudes.map(s => [s.id, s]));
   const p = entrada.parametros;
-  for (const ruta of rutas) for (const viaje of ruta.viajes) {
-    resumen.km += viaje.km;
-    for (const parada of viaje.paradas) {
-      const s = porId.get(parada.solicitudId)!;
-      const km = distanciaKm(p.patio, s.ubicacion, p.factorCircuidad);
-      resumen.ruteadas++;
-      resumen.kmMetodoActual += 2 * km;
-      resumen.minutosTrasladoMetodoActual += 2 * minutosDeTraslado(km, p.velocidadKmh);
-      resumen.minutosTraslado += minutosDeTraslado(parada.kmDesdeAnterior, p.velocidadKmh);
+  const t = crearTraslados(nuevaEntrada);
+  for (const ruta of rutas) {
+    let origen = nuevaEntrada.unidades.find(u => u.id === ruta.unidadId)!.ubicacionInicial;
+    for (const viaje of ruta.viajes) {
+      resumen.km += viaje.km;
+      for (const parada of viaje.paradas) {
+        const s = porId.get(parada.solicitudId)!;
+        const ida = t.tramo(p.patio, s.ubicacion), vuelta = t.tramo(s.ubicacion, p.patio);
+        resumen.ruteadas++;
+        resumen.kmMetodoActual += ida.km + vuelta.km;
+        resumen.minutosTrasladoMetodoActual += Math.ceil(ida.minLibres) + Math.ceil(vuelta.minLibres);
+        resumen.minutosTraslado += Math.ceil(t.tramo(origen, s.ubicacion).minLibres);
+        origen = s.ubicacion;
+      }
+      resumen.minutosTraslado += Math.ceil(t.tramo(origen, p.patio).minLibres);
+      origen = p.patio;
     }
-    resumen.minutosTraslado += viaje.regresoPatioMin - (viaje.paradas.at(-1)?.finServicioMin ?? viaje.salidaMin);
   }
   const nuevo = { ...plan, rutas, pospuestas, resumen };
   if (validarPlan(nuevaEntrada, nuevo, { ajustadoAMano: true, restricciones }).length) return invalida("El ajuste produce un plan inválido");
