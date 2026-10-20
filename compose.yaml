@@ -65,5 +65,33 @@ services:
     depends_on:
       db: { condition: service_healthy }
 
+  # Plan 7: mapa de calles. Se prepara una vez con scripts/preparar-mapa.sh (perfil preparar-mapa) y osrm lo sirve solo a
+  # la red interna (sin puertos publicados). Sin el perfil mapa, la aplicación planea con la fórmula aproximada.
+  mapa-preparar:
+    build: { context: ./infra/mapa }
+    image: rs-mapa:v26.9.0
+    profiles: ["preparar-mapa"]
+    entrypoint: ["preparar-mapa"]
+    environment:
+      MAPA_FECHA: ${MAPA_FECHA:-}
+      MAPA_CAJA: ${MAPA_CAJA:--100.65,20.45,-100.05,20.85}
+    volumes:
+      - mapa_datos:/mapa
+
+  osrm:
+    build: { context: ./infra/mapa }
+    image: rs-mapa:v26.9.0
+    profiles: ["mapa"]
+    command: ["osrm-routed", "--algorithm", "mld", "--max-table-size", "400", "--port", "5000", "/mapa/mapa.osrm"]
+    volumes:
+      - mapa_datos:/mapa:ro
+    healthcheck:
+      # Cualquier respuesta JSON de OSRM (también NoSegment) indica que el servicio está arriba.
+      test: ["CMD-SHELL", "curl -s http://127.0.0.1:5000/nearest/v1/driving/-100.3,20.62 | grep -q '\"code\"'"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
 volumes:
   db_datos: {}
+  mapa_datos: {}

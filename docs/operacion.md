@@ -204,3 +204,29 @@ En el VPS, con `crontab -e` (a las 17:00, al cierre del turno):
 La segunda línea guarda la instantánea diaria de K5 para la serie del panel (Plan 6). Si un día no corre, la primera consulta del panel de ese día la toma; un día sin ninguna de las dos queda como hueco en la serie.
 
 Copiar la carpeta `respaldos/` fuera del VPS al menos una vez por semana (otra computadora o almacenamiento externo).
+
+## 10. Mapa de calles (OSRM, Plan 7)
+
+El motor planea con distancias y tiempos por calle real que calcula OSRM, un servicio de rutas libre que corre en un contenedor propio. Ninguna coordenada sale de la máquina. Sin el mapa, el sistema sigue funcionando con la fórmula aproximada (línea recta × factor de circuidad) y el plan lo avisa.
+
+### Preparar el mapa (una vez, y al actualizarlo)
+
+1. En `.env`, poner `MAPA_FECHA` con un extracto **fechado** de México listado en <https://download.geofabrik.de/north-america/mexico.html> (por ejemplo `261019`). `MAPA_CAJA` ya trae la zona de Querétaro y El Marqués (`-100.65,20.45,-100.05,20.85`, en el orden oeste,sur,este,norte); se cambia si la operación crece.
+2. Correr `scripts/preparar-mapa.sh`. El script:
+   - descarga unos 620 MB y verifica su md5;
+   - recorta la caja y procesa el recorte, y luego borra el extracto completo;
+   - es idempotente: con la misma fecha y caja no repite nada.
+3. Activar el perfil: `COMPOSE_PROFILES=mapa` (o `caddy,mapa`) y `OSRM_URL=http://osrm:5000` en `.env`.
+4. Levantar todo con `docker compose up -d`.
+
+El plan del día muestra "Tiempos por calle (mapa geofabrik-mexico-AAMMDD …)". Si dice "Tiempos aproximados", el motivo explica qué falló: sin configurar, sin respuesta, respuesta inválida, error de OSRM o demasiados puntos.
+
+**Actualizar.** Se recomienda una vez al mes: cambiar `MAPA_FECHA`, volver a correr el script y luego `docker compose restart osrm`. Los planes ya guardados conservan su matriz y el mapa con que se planearon. Los trazos de un plan viejo dibujados con un mapa nuevo se marcan "dibujado con otro mapa".
+
+**Preparar en otra máquina.** Si el VPS anda corto de memoria o de red, se prepara en otra computadora con Docker y se copia el volumen `mapa_datos` como en la §6.
+
+**Memoria.** `osrm` tiene un límite de `LIMITE_MEMORIA_OSRM` (256m por omisión). Medición con el recorte por omisión: ver la nota al final de esta sección.
+
+**Atribución.** Los datos del mapa son © colaboradores de OpenStreetMap, con licencia ODbL. La atribución aparece en el mapa de la aplicación y en el aviso de privacidad.
+
+**Navegación del operador.** Los botones "Navegar con Waze" y "Navegar con Google Maps" de `/operador` abren esas aplicaciones en el teléfono con el destino de la parada. La aplicación no las consulta. Al tocarlos, el teléfono envía el destino a ese proveedor; así lo dice el aviso para operadores.

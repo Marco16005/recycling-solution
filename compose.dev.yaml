@@ -10,6 +10,7 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Falta BETTER_AUTH_SECRET en .env}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       MAPA_ESTILO_URL: ${MAPA_ESTILO_URL:-https://tiles.openfreemap.org/styles/liberty}
+      OSRM_URL: ${OSRM_URL:-}
     volumes:
       - .:/app
       - modulos:/app/node_modules

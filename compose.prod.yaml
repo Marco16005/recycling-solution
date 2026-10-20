@@ -16,6 +16,8 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Falta BETTER_AUTH_SECRET en .env}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Falta BETTER_AUTH_URL en .env}
       MAPA_ESTILO_URL: ${MAPA_ESTILO_URL:-https://tiles.openfreemap.org/styles/liberty}
+      # Plan 7: con el perfil mapa activo, http://osrm:5000; vacío = tiempos aproximados (fórmula).
+      OSRM_URL: ${OSRM_URL:-}
     ports:
       - "127.0.0.1:${PUERTO_WEB_LOCAL:-3001}:3000"
     depends_on:
@@ -23,6 +25,10 @@ services:
       bootstrap: { condition: service_completed_successfully }
     restart: unless-stopped
     mem_limit: ${LIMITE_MEMORIA_WEB:-512m}
+
+  osrm:
+    restart: unless-stopped
+    mem_limit: ${LIMITE_MEMORIA_OSRM:-256m}
 
   proxy:
     image: caddy:2.11.6-alpine
