@@ -1,3 +1,5 @@
+import { validarFranjas } from "@/motor/traslados";
+import { ErrorTraslados } from "@/motor/tipos";
 import type { EntradaPlan, Plan, VentanaMin } from "@/motor/tipos";
 import { diaSemanaDeFecha } from "../clientes/habilitacion";
 import { cargaEfectivaKg } from "../solicitudes/cola";
@@ -81,6 +83,12 @@ export function construirEntrada(datos: {
   configuracion: ConfiguracionPlan;
 }): EntradaPlan {
   const c = datos.configuracion;
+  const horasPico = (c.horasPico ?? []).map(f => {
+    if (!/^\d{2}:\d{2}$/.test(f.inicio) || !/^\d{2}:\d{2}$/.test(f.fin))
+      throw new ErrorTraslados("franjas_invalidas");
+    return { inicioMin: minutosDeHora(f.inicio), finMin: minutosDeHora(f.fin), factor: f.factor };
+  });
+  if (validarFranjas(horasPico)) throw new ErrorTraslados("franjas_invalidas");
   if (c.patioLat === null || c.patioLng === null) throw new ErrorDeEntrada("sin_patio");
   medianocheUtc(datos.fecha);
   const hoy = fechaEnMexico(datos.ahora);
@@ -100,7 +108,7 @@ export function construirEntrada(datos: {
     unidades: datos.jornadas.map(j => ({ id: j.jornadaId, tipo: j.unidad.tipo, capacidadKg: j.unidad.capacidadKg,
       ubicacionInicial: { ...patio }, libreDesdeMin: Math.max(minutosDeHora(j.disponibleDesde), instanteMin), cargaActualKg: 0 })),
     parametros: { patio, turnoInicioMin, turnoFinMin: minutosDeHora(c.turnoFin), velocidadKmh: c.velocidadKmh,
-      factorCircuidad: c.factorCircuidad, descargaMin: c.descargaMin,
+      factorCircuidad: c.factorCircuidad, descargaMin: c.descargaMin, horasPico,
       capacidadMaximaPorTipoKg: capacidadMaximaPorTipo(datos.unidadesActivas), semilla: semillaDeFecha(datos.fecha) },
   };
 }

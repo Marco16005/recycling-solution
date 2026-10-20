@@ -1,4 +1,5 @@
-import { distanciaKm, minutosDeTraslado } from "./geometria";
+import { crearTraslados } from "./traslados";
+import { ErrorTraslados, type Traslados } from "./tipos";
 import type { EntradaPlan, Plan, RestriccionesPlan, RutaPlan, SolicitudMotor, UnidadMotor, ViajePlan } from "./tipos";
 
 /** Comparación estructural sin depender del orden de las claves de un objeto. */
@@ -39,6 +40,11 @@ function segundosUtc(iso: string): number {
  */
 export function validarPlan(entrada: EntradaPlan, plan: Plan,
   opciones?: { ajustadoAMano?: boolean; restricciones?: RestriccionesPlan }): string[] {
+  let t: Traslados;
+  try { t = crearTraslados(entrada); } catch (error) {
+    if (error instanceof ErrorTraslados) return [error.message];
+    throw error;
+  }
   const manual = opciones?.ajustadoAMano === true;
   const errores: string[] = [];
   const restricciones = opciones?.restricciones?.admitidas ?? {};
@@ -69,7 +75,9 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
   const unidades = new Map(flota.map(u => [u.id, u]));
   if (porId.size !== entrada.solicitudes.length) errores.push("Entrada con solicitudes repetidas");
   if (unidades.size !== flota.length) errores.push("Entrada con unidades repetidas");
-  if (plan.versionMotor !== "1.0.0") errores.push("Versión de motor desconocida");
+  if (plan.versionMotor !== "1.0.0" && plan.versionMotor !== "1.1.0") errores.push("Versión de motor desconocida");
+  if (plan.versionMotor === "1.0.0" && (entrada.traslados !== undefined || p.horasPico !== undefined))
+    errores.push("La versión 1.0.0 no admite matriz ni horas pico");
   const bloqueada = (s: SolicitudMotor) => s.cargaKg
     > s.tiposUnidadAdmitidos.reduce((max, t) => Math.max(max, p.capacidadMaximaPorTipoKg[t]), 0);
 
@@ -87,8 +95,8 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
         if (!s || bloqueada(s) || !s.tiposUnidadAdmitidos.includes(u.tipo)) return;
         v.cargaKg += s.cargaKg;
         if (v.cargaKg > u.capacidadKg) return;
-        const distancia = distanciaKm(lugar, s.ubicacion, p.factorCircuidad);
-        const llegada = disponible + minutosDeTraslado(distancia, p.velocidadKmh);
+        const distancia = t.tramo(lugar, s.ubicacion).km;
+        const llegada = t.llegada(lugar, s.ubicacion, disponible);
         let inicio = Infinity;
         let ventanaElegida: SolicitudMotor["ventanas"][number] | undefined;
         for (const ventana of s.ventanas) {
@@ -108,9 +116,9 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
         v.km += distancia;
         lugar = s.ubicacion;
       }
-      const retorno = distanciaKm(lugar, p.patio, p.factorCircuidad);
+      const retorno = t.tramo(lugar, p.patio).km;
       v.km += retorno;
-      v.regresoPatioMin = disponible + minutosDeTraslado(retorno, p.velocidadKmh);
+      v.regresoPatioMin = t.llegada(lugar, p.patio, disponible);
       v.finDescargaMin = v.regresoPatioMin + p.descargaMin;
       if (!Number.isFinite(v.finDescargaMin) || v.finDescargaMin > p.turnoFinMin) return;
       disponible = v.finDescargaMin;
@@ -260,15 +268,13 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
         resumen.ruteadas++;
         const s = porId.get(parada.solicitudId);
         if (!s) continue;
-        resumen.minutosTraslado += minutosDeTraslado(
-          distanciaKm(origen, s.ubicacion, p.factorCircuidad), p.velocidadKmh
-        );
+        resumen.minutosTraslado += Math.ceil(t.tramo(origen, s.ubicacion).minLibres);
         origen = s.ubicacion;
-        const km = distanciaKm(p.patio, s.ubicacion, p.factorCircuidad);
-        resumen.kmMetodoActual += 2 * km;
-        resumen.minutosTrasladoMetodoActual += 2 * minutosDeTraslado(km, p.velocidadKmh);
+        const ida = t.tramo(p.patio, s.ubicacion), vuelta = t.tramo(s.ubicacion, p.patio);
+        resumen.kmMetodoActual += ida.km + vuelta.km;
+        resumen.minutosTrasladoMetodoActual += Math.ceil(ida.minLibres) + Math.ceil(vuelta.minLibres);
       }
-      resumen.minutosTraslado += minutosDeTraslado(distanciaKm(origen, p.patio, p.factorCircuidad), p.velocidadKmh);
+      resumen.minutosTraslado += Math.ceil(t.tramo(origen, p.patio).minLibres);
       origen = p.patio;
     }
   }

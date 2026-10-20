@@ -1,4 +1,5 @@
-import { distanciaKm, minutosDeTraslado } from "./geometria";
+import { crearTraslados, VERSION_MOTOR } from "./traslados";
+import type { Traslados } from "./tipos";
 import { compararTexto, ordenarFifo } from "./orden";
 import { agruparZonas } from "./zonas";
 import { ErrorAdmitidas } from "./tipos";
@@ -11,7 +12,7 @@ type Calculo = { ruta: RutaPlan } | { causa: keyof Diagnostico; afectaAOtra: boo
 /** Recalcula desde el origen libre, nunca desde los horarios de la propuesta anterior. */
 function calcular(
   entrada: EntradaPlan, unidad: UnidadMotor, viajes: string[][],
-  solicitudes: Map<string, SolicitudMotor>, nueva?: string
+  solicitudes: Map<string, SolicitudMotor>, t: Traslados, nueva?: string
 ): Calculo {
   const p = entrada.parametros;
   let hora = Math.max(entrada.instanteMin, unidad.libreDesdeMin, p.turnoInicioMin);
@@ -27,8 +28,8 @@ function calcular(
     };
     for (const id of ids) {
       const s = solicitudes.get(id)!;
-      const km = distanciaKm(origen, s.ubicacion, p.factorCircuidad);
-      const llegada = hora + minutosDeTraslado(km, p.velocidadKmh);
+      const km = t.tramo(origen, s.ubicacion).km;
+      const llegada = t.llegada(origen, s.ubicacion, hora);
       const ventana = [...s.ventanas].sort((a, b) => a.inicioMin - b.inicioMin || a.finMin - b.finMin)
         .find(v => Math.max(llegada, v.inicioMin) <= v.finMin);
       if (!ventana) return { causa: "ventana", afectaAOtra: id !== nueva };
@@ -40,9 +41,9 @@ function calcular(
       viaje.km += km;
       origen = s.ubicacion;
     }
-    const regresoKm = distanciaKm(origen, p.patio, p.factorCircuidad);
+    const regresoKm = t.tramo(origen, p.patio).km;
     viaje.km += regresoKm;
-    viaje.regresoPatioMin = hora + minutosDeTraslado(regresoKm, p.velocidadKmh);
+    viaje.regresoPatioMin = t.llegada(origen, p.patio, hora);
     hora = viaje.finDescargaMin = viaje.regresoPatioMin + p.descargaMin;
     if (hora > p.turnoFinMin) return { causa: "finDeTurno",
       afectaAOtra: ids.some(id => id !== nueva) || viajes.slice(i + 1).some(v => v.length > 0) };
@@ -58,6 +59,7 @@ export function generarPlan(entrada: EntradaPlan, restricciones?: RestriccionesP
   if (new Set(entrada.unidades.map(u => u.id)).size !== entrada.unidades.length)
     throw new Error("Unidades repetidas en la entrada");
   const p = entrada.parametros;
+  const t = crearTraslados(entrada);
   if (!(p.velocidadKmh > 0) || !Number.isFinite(p.velocidadKmh) || !(p.factorCircuidad >= 1)
     || !Number.isFinite(p.factorCircuidad) || p.descargaMin < 0) throw new Error("Parámetros de traslado inválidos");
   const unidades = [...entrada.unidades].sort((a, b) => compararTexto(a.id, b.id));
@@ -80,14 +82,14 @@ export function generarPlan(entrada: EntradaPlan, restricciones?: RestriccionesP
   let rutas: RutaPlan[] = unidades.map(u => {
     if (u.cargaActualKg < 0 || u.cargaActualKg > u.capacidadKg) throw new Error(`Carga inicial inválida: ${u.id}`);
     const fijadas = restricciones?.admitidas[u.id];
-    const calculo = calcular(entrada, u, fijadas?.length ? fijadas : u.cargaActualKg > 0 ? [[]] : [], solicitudes);
+    const calculo = calcular(entrada, u, fijadas?.length ? fijadas : u.cargaActualKg > 0 ? [[]] : [], solicitudes, t);
     if (!("ruta" in calculo) && fijadas?.length) throw new ErrorAdmitidas(u.id, calculo.causa);
     if (!("ruta" in calculo)) throw new Error(`El regreso obligatorio de ${u.id} no cabe en el turno`);
     return calculo.ruta;
   });
   const fifo = ordenarFifo(entrada.solicitudes.filter(s => !admitidas.has(s.id)));
   const zonas = agruparZonas(fifo.map(s => s.ubicacion), unidades.length, p.patio, p.semilla);
-  const plan: Plan = { versionMotor: "1.0.0", rutas: [], pospuestas: [], bloqueadas: [], traza: [],
+  const plan: Plan = { versionMotor: VERSION_MOTOR, rutas: [], pospuestas: [], bloqueadas: [], traza: [],
     resumen: { ruteadas: 0, pospuestas: 0, bloqueadas: 0, km: 0, minutosTraslado: 0,
       kmMetodoActual: 0, minutosTrasladoMetodoActual: 0 } };
   for (const [indice, s] of fifo.entries()) {
@@ -110,7 +112,7 @@ export function generarPlan(entrada: EntradaPlan, restricciones?: RestriccionesP
       const ids = rutas[c.i].viajes.map(v => v.paradas.map(parada => parada.solicitudId));
       if (nuevo) ids.push([]);
       ids[viaje].splice(posicion, 0, s.id);
-      const calculo = calcular(entrada, c.u, ids, solicitudes, s.id);
+      const calculo = calcular(entrada, c.u, ids, solicitudes, t, s.id);
       if (!("ruta" in calculo)) {
         diagnostico[calculo.causa]++;
         if (calculo.afectaAOtra) diagnostico.afectaAOtra++;
@@ -142,18 +144,22 @@ export function generarPlan(entrada: EntradaPlan, restricciones?: RestriccionesP
     }
   }
   plan.rutas = rutas;
-  for (const ruta of rutas) for (const viaje of ruta.viajes) {
-    plan.resumen.km += viaje.km;
-    for (const parada of viaje.paradas) {
-      const s = solicitudes.get(parada.solicitudId)!;
-      const kmActual = distanciaKm(p.patio, s.ubicacion, p.factorCircuidad);
-      plan.resumen.ruteadas++;
-      plan.resumen.kmMetodoActual += 2 * kmActual;
-      plan.resumen.minutosTrasladoMetodoActual += 2 * minutosDeTraslado(kmActual, p.velocidadKmh);
-      plan.resumen.minutosTraslado += minutosDeTraslado(parada.kmDesdeAnterior, p.velocidadKmh);
+  for (const ruta of rutas) {
+    let origen = unidades.find(u => u.id === ruta.unidadId)!.ubicacionInicial;
+    for (const viaje of ruta.viajes) {
+      plan.resumen.km += viaje.km;
+      for (const parada of viaje.paradas) {
+        const s = solicitudes.get(parada.solicitudId)!;
+        const ida = t.tramo(p.patio, s.ubicacion), vuelta = t.tramo(s.ubicacion, p.patio);
+        plan.resumen.ruteadas++;
+        plan.resumen.kmMetodoActual += ida.km + vuelta.km;
+        plan.resumen.minutosTrasladoMetodoActual += Math.ceil(ida.minLibres) + Math.ceil(vuelta.minLibres);
+        plan.resumen.minutosTraslado += Math.ceil(t.tramo(origen, s.ubicacion).minLibres);
+        origen = s.ubicacion;
+      }
+      plan.resumen.minutosTraslado += Math.ceil(t.tramo(origen, p.patio).minLibres);
+      origen = p.patio;
     }
-    // Usar los tiempos evita redondear un resto de distancias con error de coma flotante.
-    plan.resumen.minutosTraslado += viaje.regresoPatioMin - (viaje.paradas.at(-1)?.finServicioMin ?? viaje.salidaMin);
   }
   plan.resumen.pospuestas = plan.pospuestas.length;
   plan.resumen.bloqueadas = plan.bloqueadas.length;
