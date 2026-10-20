@@ -1,10 +1,15 @@
 import { permitir } from "@/acciones/autorizacion";
 import type { Contexto, Resultado } from "@/acciones/tipos";
 import { fechaSchema } from "@/acciones/validacion";
-import { leerOperadores, leerUnidades } from "@/datos/flota";
+import { leerClientesPorId } from "@/datos/clientes";
+import { leerConfiguracionCompleta } from "@/datos/configuracion";
+import { leerCatalogo, leerOperadores, leerUnidades } from "@/datos/flota";
+import { solicitudesPorId } from "@/datos/solicitudes";
+import { disponibleOperador, disponibleUnidad } from "@/acciones/plan-comun";
+import { minutoEnMexico, minutosDeHora } from "@/dominio/plan/entrada";
 import { leerJornadas } from "@/datos/jornadas";
 import { estadoDeJornada, eventosRechazadosSinConciliar, incidentesAbiertos, leerJornadaOperacion, ultimoEventoAplicado } from "@/datos/operacion";
-import type { AlertaOperacion, TipoAlerta } from "@/dominio/operacion";
+import { proyectarJornada, type AlertaOperacion, type EstadoJornada, type ProyeccionJornada, type TipoAlerta } from "@/dominio/operacion";
 import { fechaEnMexico } from "@/dominio/tiempo";
 import { puede } from "@/seguridad/permisos";
 import { leerInstantanea } from "./instantanea";
@@ -47,11 +52,25 @@ export async function seguimiento(ctx: Contexto, fecha?: unknown): Promise<Resul
     const jornadas = await leerJornadas(tx, dia);
     const unidades = new Map((await leerUnidades(tx, jornadas.map((j) => j.unidadId))).map((u) => [u.id, u]));
     const operadores = new Map((await leerOperadores(tx, jornadas.map((j) => j.operadorId))).map((o) => [o.id, o]));
-    const porJornada: SeguimientoJornada[] = [];
+    const config = await leerConfiguracionCompleta(tx);
+    const catalogoUnidad = await leerCatalogo(tx, "unidad");
+    const catalogoOperador = await leerCatalogo(tx, "operador");
+    const opciones = { ahora: ctx.ahora.toISOString(), umbralAtrasoMin: config.umbralAtrasoMin, turnoFinMin: minutosDeHora(config.turnoFin), descargaMin: config.descargaMin };
+    const leidos: { j: (typeof jornadas)[number]; estado: EstadoJornada; proyeccion: ProyeccionJornada }[] = [];
     for (const j of jornadas) {
       const operacion = await leerJornadaOperacion(tx, j.id);
       if (!operacion) continue;
       const estado = await estadoDeJornada(tx, operacion);
+      leidos.push({ j, estado, proyeccion: proyectarJornada(estado, opciones) });
+    }
+    // Folio y cliente de las paradas proyectadas, en una sola lectura.
+    const ids = [...new Set(leidos.flatMap(({ estado }) => estado.viajes.flatMap((v) => v.paradas.map((p) => p.solicitudId))))];
+    const solicitudes = new Map((await solicitudesPorId(tx, ids)).map((s) => [s.id, s]));
+    const clientes = new Map((await leerClientesPorId(tx, [...new Set([...solicitudes.values()].map((s) => s.clienteId))])).map((c) => [c.id, c]));
+    const resumenAlertas: Record<TipoAlerta, number> = { ventana_en_riesgo: 0, fuera_de_turno: 0, atraso: 0 };
+
+    const porJornada: SeguimientoJornada[] = [];
+    for (const { j, estado, proyeccion } of leidos) {
       const paradas = estado.viajes.flatMap((v) => v.paradas);
       const ultimo = await ultimoEventoAplicado(tx, j.id);
       porJornada.push({
@@ -67,9 +86,20 @@ export async function seguimiento(ctx: Contexto, fecha?: unknown): Promise<Resul
         ultimoEvento: ultimo,
         checkIn: estado.checkInEn !== null,
         checkOut: estado.checkOutEn !== null,
-        // P7-7 la calcula con proyectarJornada.
-        proyeccion: { paradas: [], alertas: [], aproximada: false },
+        proyeccion: {
+          paradas: paradasEnSeguimiento(estado, proyeccion, {
+            // Mismos criterios que generarReruteo para liberar (Plan 7, §4 del plan, hallazgo 5).
+            disponible: estado.checkOutEn === null
+              && disponibleUnidad(unidades.get(j.unidadId), catalogoUnidad, dia)
+              && disponibleOperador(operadores.get(j.operadorId), catalogoOperador, dia),
+            folio: (id) => solicitudes.get(id)?.folio ?? "",
+            cliente: (id) => clientes.get(solicitudes.get(id)?.clienteId ?? "")?.nombre ?? "",
+          }),
+          alertas: proyeccion.alertas,
+          aproximada: proyeccion.viajes.some((v) => v.aproximada),
+        },
       });
+      for (const alerta of proyeccion.alertas) resumenAlertas[alerta.tipo] += 1;
     }
     return {
       ok: true,
@@ -80,8 +110,39 @@ export async function seguimiento(ctx: Contexto, fecha?: unknown): Promise<Resul
         eventosRechazados: await eventosRechazadosSinConciliar(tx, dia),
         puedeResolver: puede(permiso.usuario, "incidentes.resolver"),
         puedeConciliar: puede(permiso.usuario, "operacion.conciliar"),
-        resumenAlertas: { ventana_en_riesgo: 0, fuera_de_turno: 0, atraso: 0 },
+        resumenAlertas,
       },
     };
   });
+}
+
+const hhmm = (instante: string) => {
+  const m = minutoEnMexico(new Date(instante));
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+};
+
+/** Las paradas vigentes no cerradas de la jornada, con su hora estimada y la proyectada. */
+function paradasEnSeguimiento(
+  estado: EstadoJornada,
+  proyeccion: ProyeccionJornada,
+  datos: { disponible: boolean; folio: (solicitudId: string) => string; cliente: (solicitudId: string) => string },
+): ParadaEnSeguimiento[] {
+  const proyectadas = new Map(proyeccion.viajes.flatMap((v) => v.paradas.map((p) => [p.paradaId, p])));
+  const salida: ParadaEnSeguimiento[] = [];
+  for (const viaje of estado.viajes) {
+    const enCurso = viaje.salidaPatioEn !== null && viaje.descargaFinEn === null;
+    for (const p of viaje.paradas) {
+      const proyectada = proyectadas.get(p.paradaId);
+      if (!proyectada) continue;
+      salida.push({
+        paradaId: p.paradaId, solicitudId: p.solicitudId, folio: datos.folio(p.solicitudId), cliente: datos.cliente(p.solicitudId),
+        ventana: { inicio: p.ventanaInicio, fin: p.ventanaFin },
+        llegadaEstimada: hhmm(p.llegadaEstimada), llegadaProyectada: hhmm(proyectada.llegada),
+        enViajeEnCurso: enCurso,
+        liberable: datos.disponible && viaje.salidaPatioEn === null && p.vigente && p.estado === "pendiente",
+        ubicacionSupuesta: proyectada.ubicacionSupuesta,
+      });
+    }
+  }
+  return salida;
 }
