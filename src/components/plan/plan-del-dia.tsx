@@ -20,6 +20,19 @@ const motivos = {
   carga_mayor_a_capacidad_compatible: "La carga supera la capacidad de todas las unidades compatibles.",
 };
 const numero = (n: number) => n.toLocaleString("es-MX", { maximumFractionDigits: 1 });
+const motivosAproximados = {
+  sin_configurar: "mapa de calles sin configurar",
+  sin_respuesta: "el servicio de mapas no respondió",
+  respuesta_invalida: "el servicio de mapas devolvió una respuesta no válida",
+  error_osrm: "el servicio de mapas no pudo calcular los recorridos",
+  demasiados_puntos: "se superó el límite de puntos del mapa",
+};
+function textoTiempos(traslados: VistaPlan["traslados"]) {
+  if (!traslados) return "Tiempos aproximados: plan anterior a los tiempos por calle";
+  if (traslados.fuente === "aproximado") return `Tiempos aproximados: ${traslados.motivo ? motivosAproximados[traslados.motivo] : "sin información del motivo"}`;
+  if (traslados.paresAproximados > 0) return `Tiempos por calle; ${traslados.paresAproximados} pares aproximados`;
+  return `Tiempos por calle (mapa ${traslados.mapa ?? "sin identificador"})`;
+}
 const instante = (fecha: Date) => new Date(fecha).toLocaleString("es-MX", {
   timeZone: "America/Mexico_City", dateStyle: "medium", timeStyle: "short",
 });
@@ -92,6 +105,7 @@ function ContenidoPlan({ vista }: { vista: VistaPlan }) {
       {vista.tipo === "re_ruteo" && <p className="rounded-lg border p-3">Propuesta de re-ruteo · {vista.congeladas.length} solicitudes congeladas conservadas en sus rutas originales, sin ajustes. <Link className="underline" href={`/despacho/plan?fecha=${vista.fecha}`}>Volver al plan vigente</Link></p>}
       <SelectorFecha fecha={vista.fecha} ruta="/despacho/plan" />
       {vista.generadoEn && <p className="text-sm text-muted-foreground">Generado: {instante(vista.generadoEn)} · Ajustes: {vista.ajustes}</p>}
+      {vista.estado !== "sin_plan" && <p className="w-fit rounded-lg border bg-muted px-3 py-2 text-sm font-medium">{textoTiempos(vista.traslados)}</p>}
       <p className="text-sm text-muted-foreground">{vista.ultimaEjecucion
         ? `Última ejecución del motor: ${instante(vista.ultimaEjecucion.en)} · ${{ ok: "Correcta", error: "Error", tiempo_agotado: "Tiempo agotado" }[vista.ultimaEjecucion.resultado]} · ${numero(vista.ultimaEjecucion.duracionMs)} ms`
         : "Sin ejecuciones del motor para esta fecha."}</p>
@@ -120,6 +134,12 @@ function ContenidoPlan({ vista }: { vista: VistaPlan }) {
           <tr><th scope="row" className="p-3">Un viaje por cliente</th><td className="p-3">{numero(resumen.kmMetodoActual)}</td><td className="p-3">{numero(resumen.minutosTrasladoMetodoActual)}</td></tr></tbody>
       </table></div>
       <p className="text-xs text-muted-foreground">Estimaciones de distancia y tiempo; no son resultados de recorridos reales.</p>
+    </section>}
+    {vista.pinesARevisar.length > 0 && <section aria-label="Pins por revisar" className="space-y-3 rounded-xl border p-4">
+      <h2 className="text-xl font-semibold">Pins por revisar</h2>
+      <ul className="list-inside list-disc space-y-2 text-sm">{vista.pinesARevisar.map(p => <li key={p.clienteId}>
+        <Link className="underline" href={`/despacho/clientes/${p.clienteId}`}>{p.nombre}</Link>: revisa el pin, a {numero(p.distanciaM)} m de la calle.
+      </li>)}</ul>
     </section>}
     {vista.estado !== "sin_plan" && <MapaPlan vista={vista} />}
     <fieldset disabled={bloqueado} className="min-w-0 space-y-6" aria-label="Detalle y ajustes del plan">
