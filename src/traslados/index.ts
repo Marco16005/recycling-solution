@@ -1,5 +1,6 @@
-import type { InfoTraslados } from "@/dominio/plan/tipos";
-import type { Coordenada, EntradaPlan, MatrizTraslados } from "@/motor";
+import type { InfoTraslados, MotivoAproximado } from "@/dominio/plan/tipos";
+import { distanciaKm, type Coordenada, type EntradaPlan, type MatrizTraslados } from "@/motor";
+import { coordenadasDeRuta, leerCercano, leerTabla, pedir } from "./osrm";
 
 /**
  * Traslados por calle con OSRM (Plan 7, §2.4). Fuera del motor: aquí sí hay red. Lo implementa Claude en P7-5.
@@ -22,13 +23,65 @@ export interface ResultadoMatriz { matriz: MatrizTraslados | null; info: InfoTra
 
 /** Patio, ubicaciones de solicitudes y ubicación inicial de unidades, sin repetir (identidad exacta), en ese orden. */
 export function puntosDeEntrada(entrada: EntradaPlan): Coordenada[] {
-  void entrada;
-  throw new Error("pendiente: P7-5");
+  const vistos = new Set<string>();
+  const puntos: Coordenada[] = [];
+  for (const p of [entrada.parametros.patio, ...entrada.solicitudes.map((s) => s.ubicacion), ...entrada.unidades.map((u) => u.ubicacionInicial)]) {
+    const llave = `${p.lat}|${p.lng}`;
+    if (vistos.has(llave)) continue;
+    vistos.add(llave);
+    puntos.push({ lat: p.lat, lng: p.lng });
+  }
+  return puntos;
 }
 
+const aproximado = (motivo: MotivoAproximado, consultaMs: number | null): ResultadoMatriz =>
+  ({ matriz: null, info: { fuente: "aproximado", motivo, mapa: null, paresAproximados: 0 }, consultaMs });
+
+/**
+ * Matriz dirigida por calle desde OSRM /table. Sin URL, con demasiados puntos o con una falla de la petición completa, no
+ * hay matriz y el motor usa la fórmula anterior; el motivo queda en info. Una celda sin ruta (calles desconectadas) se
+ * llena con la fórmula anterior, sin factor de camión, y queda en aproximados.
+ */
 export async function matrizDeTraslados(puntos: Coordenada[], opciones: OpcionesOsrm): Promise<ResultadoMatriz> {
-  void puntos; void opciones;
-  throw new Error("pendiente: P7-5");
+  if (!opciones.url) return aproximado("sin_configurar", null);
+  if (puntos.length > LIMITE_PUNTOS) return aproximado("demasiados_puntos", null);
+  const inicio = performance.now();
+  const base = opciones.url.replace(/\/+$/, "");
+  // /table exige al menos dos coordenadas; con un solo punto (el patio de un plan vacío) basta saber su ajuste y el mapa.
+  const url = puntos.length === 1
+    ? `${base}/nearest/v1/driving/${coordenadasDeRuta(puntos)}`
+    : `${base}/table/v1/driving/${coordenadasDeRuta(puntos)}?annotations=distance,duration`;
+  const respuesta = await pedir(opciones.fetch ?? fetch, url, opciones.plazoMs ?? 5000);
+  const consultaMs = performance.now() - inicio;
+  if (!respuesta.ok) return aproximado(respuesta.falla, consultaMs);
+  const tabla = puntos.length === 1 ? leerCercano(respuesta.cuerpo) : leerTabla(respuesta.cuerpo, puntos.length);
+  if (tabla === null) return aproximado("respuesta_invalida", consultaMs);
+
+  const { velocidadKmh, factorCircuidad } = opciones.respaldo;
+  const n = puntos.length;
+  const km: number[][] = [], minLibres: number[][] = [], aproximados: [number, number][] = [];
+  for (let i = 0; i < n; i++) {
+    km.push([]); minLibres.push([]);
+    for (let j = 0; j < n; j++) {
+      const metros = tabla.distancias[i][j], segundos = tabla.duraciones[i][j];
+      if (i === j) { km[i].push(0); minLibres[i].push(0); continue; }
+      if (metros === null || segundos === null) {
+        // Misma expresión que el motor sin matriz (Plan 7, §2.1).
+        const k = distanciaKm(puntos[i], puntos[j], factorCircuidad);
+        km[i].push(k); minLibres[i].push((k * 60) / velocidadKmh);
+        aproximados.push([i, j]);
+        continue;
+      }
+      km[i].push(metros / 1000);
+      minLibres[i].push((segundos / 60) * opciones.factorCamion);
+    }
+  }
+  const mapa = tabla.version ?? "desconocido";
+  return {
+    matriz: { puntos: puntos.map((p) => ({ lat: p.lat, lng: p.lng })), km, minLibres, ajusteM: tabla.ajusteM, aproximados, mapa },
+    info: { fuente: "osrm", motivo: null, mapa, paresAproximados: aproximados.length },
+    consultaMs,
+  };
 }
 
 /** Agrega la matriz a la entrada (si la hay). */
@@ -36,12 +89,4 @@ export function conTraslados(entrada: EntradaPlan, r: ResultadoMatriz): EntradaP
   return r.matriz ? { ...entrada, traslados: r.matriz } : entrada;
 }
 
-/** [lng, lat], como GeoJSON. */
-export interface Trazo { coordenadas: [number, number][]; mapa: string | null; recto: boolean }
-
-export async function trazosDeViajes(viajes: Coordenada[][], opciones: {
-  url: string | undefined; fetch?: typeof fetch; plazoMs?: number; totalMs?: number; concurrencia?: number;
-}): Promise<Trazo[]> {
-  void opciones;
-  return viajes.map((puntos) => ({ coordenadas: puntos.map((p) => [p.lng, p.lat]), mapa: null, recto: true }));
-}
+export { reiniciarCacheDeTrazos, trazosDeViajes, type Trazo } from "./trazos";
