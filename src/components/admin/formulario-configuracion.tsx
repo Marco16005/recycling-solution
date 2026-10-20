@@ -19,8 +19,10 @@ const SelectorUbicacion = dynamic(() => import("@/components/clientes/selector-u
 type Valores = Omit<ConfiguracionVista, "version" | "versionAvisoPrivacidad" | "estiloMapaUrl">;
 
 const CAMPOS_NUMERICOS: { campo: keyof Valores; titulo: string; paso: string }[] = [
-  { campo: "velocidadKmh", titulo: "Velocidad promedio (km/h)", paso: "1" },
-  { campo: "factorCircuidad", titulo: "Factor de circuidad (calles contra línea recta)", paso: "0.05" },
+  { campo: "factorCamion", titulo: "Factor de camión (tiempos de auto del mapa × factor)", paso: "0.05" },
+  { campo: "umbralAtrasoMin", titulo: "Avisar atraso a partir de (min)", paso: "1" },
+  { campo: "velocidadKmh", titulo: "Velocidad promedio (km/h, respaldo sin mapa)", paso: "1" },
+  { campo: "factorCircuidad", titulo: "Factor de circuidad (respaldo sin mapa: calles contra línea recta)", paso: "0.05" },
   { campo: "descargaMin", titulo: "Descarga en el patio (min por viaje)", paso: "1" },
   { campo: "cargaPorOmisionKg", titulo: "Carga por omisión si no hay estimación (kg)", paso: "50" },
   { campo: "diasParaAtrasada", titulo: "Días de operación para marcar una solicitud atrasada", paso: "1" },
@@ -134,6 +136,47 @@ export function FormularioConfiguracion({ configuracion }: { configuracion: Conf
           </div>
         ))}
       </section>
+
+      <fieldset className="space-y-3 rounded-xl border bg-background p-5">
+        <legend className="px-1 text-lg font-semibold">Horas pico</legend>
+        <p className="text-sm text-muted-foreground">
+          En cada franja, los traslados tardan factor veces más que con calles libres. Valores supuestos hasta calibrarlos en el
+          piloto con los tiempos reales de la flota.
+        </p>
+        {valores.horasPico.length === 0 && <p className="text-sm">Sin franjas: los traslados no cambian con la hora.</p>}
+        <ul className="space-y-3">
+          {valores.horasPico.map((franja, i) => {
+            const fijar = (cambios: Partial<typeof franja>) =>
+              cambiar("horasPico", valores.horasPico.map((f, j) => (j === i ? { ...f, ...cambios } : f)));
+            return (
+              <li key={i} className="grid items-end gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]" aria-label={`Franja ${i + 1}`}>
+                <div className="space-y-2">
+                  <Label htmlFor={`pico-inicio-${i}`}>Inicio</Label>
+                  <Input id={`pico-inicio-${i}`} type="time" value={franja.inicio} onChange={(e) => fijar({ inicio: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`pico-fin-${i}`}>Fin</Label>
+                  <Input id={`pico-fin-${i}`} type="time" value={franja.fin} onChange={(e) => fijar({ fin: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`pico-factor-${i}`}>Factor</Label>
+                  <Input id={`pico-factor-${i}`} type="number" step="0.05" min="1" max="3" value={String(franja.factor)}
+                    onChange={(e) => fijar({ factor: Number(e.target.value) })} />
+                </div>
+                <Button type="button" variant="outline" onClick={() => cambiar("horasPico", valores.horasPico.filter((_, j) => j !== i))}>
+                  Quitar
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+        {valores.horasPico.length < 6 && (
+          <Button type="button" variant="outline" onClick={() => cambiar("horasPico", [...valores.horasPico, { inicio: "07:00", fin: "08:00", factor: 1.2 }])}>
+            Agregar franja
+          </Button>
+        )}
+        {error("horasPico")}
+      </fieldset>
 
       <fieldset className="space-y-3 rounded-xl border bg-background p-5">
         <legend className="px-1 text-lg font-semibold">Días de operación</legend>
