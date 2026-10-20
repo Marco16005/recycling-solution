@@ -2,7 +2,7 @@ import { permitir } from "@/acciones/autorizacion";
 import type { Contexto, Resultado } from "@/acciones/tipos";
 import { leerConfiguracionCompleta } from "@/datos/configuracion";
 import { estiloMapaUrl } from "./mapa";
-import type { LineaBase } from "@/datos/configuracion";
+import type { FranjaHoraPico, LineaBase } from "@/datos/configuracion";
 
 /** Horas "HH:MM"; diasOperacion: 0 = domingo … 6 = sábado. */
 export interface ConfiguracionVista {
@@ -10,6 +10,8 @@ export interface ConfiguracionVista {
   velocidadKmh: number; factorCircuidad: number; descargaMin: number; cargaPorOmisionKg: number;
   diasOperacion: number[]; diasParaAtrasada: number; versionAvisoPrivacidad: string; version: number;
   lineaBase: LineaBase;
+  /** Plan 7: tiempos de auto × factor, franjas de hora pico (HH:MM) y umbral de alerta de atraso. */
+  factorCamion: number; horasPico: FranjaHoraPico[]; umbralAtrasoMin: number;
   estiloMapaUrl: string;
 }
 
