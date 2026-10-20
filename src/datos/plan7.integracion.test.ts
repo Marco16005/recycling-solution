@@ -63,7 +63,8 @@ describe("modelo del Plan 7 con Postgres real (migración 0008)", () => {
   }
 
   function ruta(tiempos: TiemposRuta | null, numeroViaje: number, solicitudId: string): NuevaRuta {
-    const h = (hhmm: string) => new Date(`2026-10-15T${hhmm}:00-06:00`);
+    // Cada viaje sale tres horas después del anterior: la secuencia operativa ordena por salida estimada.
+    const h = (hhmm: string) => new Date(Date.parse(`2026-10-15T${hhmm}:00-06:00`) + (numeroViaje - 1) * 3 * 3_600_000);
     return {
       jornadaId, numeroViaje, salidaEstimada: h("08:00"), regresoEstimado: h("09:45"), finDescargaEstimado: h("10:05"),
       cargaKg: 800, kmEstimados: 12, kmContrafactual: 20, rendimientoKmLUsado: 3, disponibleParaSalirEn: h("08:00"), asignadaEn: AHORA,

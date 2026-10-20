@@ -225,7 +225,12 @@ El plan del día muestra "Tiempos por calle (mapa geofabrik-mexico-AAMMDD …)".
 
 **Preparar en otra máquina.** Si el VPS anda corto de memoria o de red, se prepara en otra computadora con Docker y se copia el volumen `mapa_datos` como en la §6.
 
-**Memoria.** `osrm` tiene un límite de `LIMITE_MEMORIA_OSRM` (256m por omisión). Medición con el recorte por omisión: ver la nota al final de esta sección.
+**Memoria y disco.** Medición del 2026-10-20 con el extracto `261019` y la caja por omisión:
+- `osrm` sirviendo: 63 MiB, por debajo de su límite `LIMITE_MEMORIA_OSRM` (256m por omisión);
+- preparación: pico de 84 MB y unos 15 minutos con la descarga;
+- mapa procesado: 86 MB en el volumen.
+
+Ejemplo real: del centro de Querétaro a El Marqués, 24.5 km y 24 min en auto, antes del factor de camión.
 
 **Atribución.** Los datos del mapa son © colaboradores de OpenStreetMap, con licencia ODbL. La atribución aparece en el mapa de la aplicación y en el aviso de privacidad.
 

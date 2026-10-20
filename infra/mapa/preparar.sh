@@ -52,6 +52,7 @@ osrm-extract -p /opt/car.lua --data_version "$id" $extra "$entrada"
 osrm-partition mapa.osrm
 osrm-customize mapa.osrm
 rm -f "$entrada"
-[ "$modo" = real ] && rm -f "mexico-${MAPA_FECHA}.osm.pbf"
+# Sin restos de extractos (también de descargas cortadas de otras fechas): el volumen solo guarda el mapa procesado.
+[ "$modo" = real ] && rm -f mexico-*.osm.pbf mexico-*.osm.pbf.parcial mexico-*.osm.pbf.md5
 printf '%s' "$id" > mapa.id
 echo "Mapa listo: $id"
