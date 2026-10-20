@@ -59,6 +59,18 @@ test("operador: jornada, idempotencia, rechazo, cola sin señal e incidente con 
   }), { timeout: 30_000 }).toBe(true);
   const paradasGuardadas = (await guardado(page)).vista.viajes.flatMap(v => v.paradas);
   expect(paradasGuardadas.length).toBeGreaterThan(0);
+  for (const parada of paradasGuardadas) {
+    const articulo = page.getByRole("article", { name: `Parada ${parada.folio}`, exact: true });
+    expect(parada.cliente.lat).not.toBeNull();
+    expect(parada.cliente.lng).not.toBeNull();
+    const destino = `${parada.cliente.lat},${parada.cliente.lng}`;
+    const waze = articulo.getByRole("link", { name: "Navegar con Waze", exact: true });
+    const google = articulo.getByRole("link", { name: "Navegar con Google Maps", exact: true });
+    await expect(waze).toBeVisible();
+    await expect(waze).toHaveAttribute("href", `https://waze.com/ul?ll=${destino}&navigate=yes`);
+    await expect(google).toBeVisible();
+    await expect(google).toHaveAttribute("href", `https://www.google.com/maps/dir/?api=1&destination=${destino}&travelmode=driving`);
+  }
   await context.setOffline(true);
   await page.reload();
   await expect(page.getByRole("heading", { name: "Mi ruta" })).toBeVisible();
@@ -131,7 +143,31 @@ test("operador: jornada, idempotencia, rechazo, cola sin señal e incidente con 
     await resolver.getByLabel("Acción").selectOption("re_ruteo");
     await resolver.getByRole("button", { name: "Resolver incidente" }).click();
     await expect(resolver).toHaveCount(0);
-    await d.getByRole("checkbox", { name: `No disponible: ${dia.otraPlaca}`, exact: true }).check();
+    const seguimiento = d.getByRole("region", { name: "Seguimiento de operación", exact: true });
+    const otraJornada = seguimiento.getByRole("article").filter({
+      has: d.getByRole("heading", { name: new RegExp(`^${dia.otraPlaca} ·`) }),
+    });
+    const futuras = otraJornada.getByRole("listitem").filter({ hasText: "viaje futuro" });
+    await expect(futuras.first()).toBeVisible();
+    const reruteo = d.getByRole("region", { name: "Re-rutear", exact: true });
+    const foliosFuturos: string[] = [];
+    for (const futura of await futuras.all()) {
+      const texto = await futura.innerText();
+      const folio = dia.folios.find(f => texto.includes(f));
+      if (!folio) throw new Error(`Parada futura sin folio del escenario: ${texto}`);
+      foliosFuturos.push(folio);
+      const liberar = reruteo.getByRole("checkbox", { name: `Liberar ${folio}`, exact: true });
+      await expect(liberar).toBeVisible();
+      await expect(liberar).toBeEnabled();
+      await liberar.check();
+      await expect(liberar).toBeChecked();
+    }
+    await reruteo.getByRole("checkbox", { name: `No disponible: ${dia.otraPlaca}`, exact: true }).check();
+    for (const folio of foliosFuturos) {
+      const liberar = reruteo.getByRole("checkbox", { name: `Liberar ${folio}`, exact: true });
+      await expect(liberar).toBeDisabled();
+      await expect(liberar).not.toBeChecked();
+    }
     await d.getByRole("button", { name: "Generar re-ruteo", exact: true }).click();
     await expect(d).toHaveURL(/plan=/);
     await expect(d.getByText(/solicitudes congeladas conservadas/)).toBeVisible();
