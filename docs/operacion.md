@@ -212,7 +212,7 @@ El motor planea con distancias y tiempos por calle real que calcula OSRM, un ser
 ### Preparar el mapa (una vez, y al actualizarlo)
 
 1. En `.env`, poner `MAPA_FECHA` con un extracto **fechado** de México listado en <https://download.geofabrik.de/north-america/mexico.html> (por ejemplo `261019`). `MAPA_CAJA` ya trae la zona de Querétaro y El Marqués (`-100.65,20.45,-100.05,20.85`, en el orden oeste,sur,este,norte); se cambia si la operación crece.
-2. Correr `scripts/preparar-mapa.sh`. El script:
+2. Correr `scripts/preparar-mapa.sh`. Si los servicios se levantan con otro nombre de proyecto (`-p`, por ejemplo en un worktree), se usa el mismo: `scripts/preparar-mapa.sh -p rs-<rama>`. El script:
    - descarga unos 620 MB y verifica su md5;
    - recorta la caja y procesa el recorte, y luego borra el extracto completo;
    - es idempotente: con la misma fecha y caja no repite nada.

@@ -12,6 +12,7 @@ import { usuarioDePrueba } from "@/datos/pruebas/usuarios-prueba";
 import type { EventoEntrada, TiemposRuta, TipoEvento } from "@/dominio/operacion/tipos";
 import type { EntradaPlan } from "@/motor";
 import type { UsuarioSesion } from "@/seguridad/permisos";
+import { estadoDeJornada, leerJornadaOperacion } from "@/datos/operacion";
 import { registrarEventoOperador } from "./operador.nucleo";
 import { generarPlanDelDia, iniciarRevision, validarPlanDelDia } from "./plan.nucleo";
 import { generarReruteo } from "./reruteo.nucleo";
@@ -182,22 +183,26 @@ describe("acciones del Plan 7 con calles reales", () => {
     expect(r.versiones.traslados?.fuente).toBe("osrm");
   });
 
-  it("re-ruteo encadenado: se libera una parada que antes estuvo como reasignada en otra jornada", async () => {
+  it("re-ruteo encadenado: se libera una parada que sigue como reasignada en la ruta iniciada de otra jornada", async () => {
     await generarYValidar();
+    // B sale del patio y se descompone: su ruta queda iniciada (en su secuencia operativa) con las paradas retiradas.
+    await salirConElPrimerViaje(B, a(60));
     const [base0] = await base.bd.select().from(planes).where(eq(planes.estado, "validado"));
-    const deB = (await rutasDe(B.jornadaId)).length;
-    expect(deB).toBeGreaterThan(0);
-    // 1: B deja de estar disponible; sus paradas pasan a A (las de B quedan reasignadas, no vigentes).
-    const { planId: r1 } = valor(await generarReruteo(ctx(despachador, a(10)), base0.id, base0.version, { jornadasNoDisponibles: [B.jornadaId] }));
-    valor(await validar(r1, a(10)));
-    const historicas = filasDe<{ solicitud_id: string }>(await base.bd.execute(sql`
-      SELECT p.solicitud_id FROM paradas p JOIN rutas r ON r.id = p.ruta_id WHERE r.jornada_id = ${B.jornadaId} AND NOT p.vigente`));
-    const movida = historicas[0].solicitud_id;
-    // 2: sobre el re-ruteo validado, se libera esa solicitud, que ahora está pendiente en un viaje futuro de A.
+    const { planId: r1 } = valor(await generarReruteo(ctx(despachador, a(65)), base0.id, base0.version, { jornadasNoDisponibles: [B.jornadaId] }));
+    valor(await validar(r1, a(65)));
+    const estadoB = await estadoDeJornada(base.bd, (await leerJornadaOperacion(base.bd, B.jornadaId))!);
+    const historica = estadoB.viajes.flatMap((v) => v.paradas).find((p) => !p.vigente && p.estado === "reasignada");
+    expect(historica).toBeDefined();
+    const movida = historica!.solicitudId;
+    const estadoA = await estadoDeJornada(base.bd, (await leerJornadaOperacion(base.bd, A.jornadaId))!);
+    expect(estadoA.viajes.flatMap((v) => v.paradas).some((p) => p.vigente && p.estado === "pendiente" && p.solicitudId === movida)).toBe(true);
+
+    // 2: se libera esa solicitud; la jornada vieja (B) no la reclama y el re-ruteo se genera y se valida.
     const [vigente] = await base.bd.select().from(planes).where(eq(planes.estado, "validado"));
-    const { planId: r2 } = valor(await generarReruteo(ctx(despachador, a(15)), vigente.id, vigente.version,
+    const { planId: r2 } = valor(await generarReruteo(ctx(despachador, a(70)), vigente.id, vigente.version,
       { jornadasNoDisponibles: [B.jornadaId], liberadas: [movida] }));
     expect((await plan(r2)).restricciones!.liberadas).toEqual([movida]);
+    valor(await validar(r2, a(70)));
   });
 
   it("frontera_vencida: la unidad no registra su llegada y, al validar, su viaje en curso termina después de la salida propuesta", async () => {

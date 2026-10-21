@@ -50,11 +50,20 @@ test("el administrador guarda la configuración de operación", async ({ page })
   await entrarComo(page, "admin");
   await page.goto("/admin/configuracion");
   await expect(page.getByRole("button", { name: "Guardar configuración" })).toBeEnabled();
-  await page.getByLabel("Velocidad promedio (km/h)").fill("32");
+  await page.getByLabel("Velocidad promedio (km/h, respaldo sin mapa)").fill("32");
+  // Plan 7: factor de camión y una franja de hora pico nueva.
+  await page.getByLabel("Factor de camión (tiempos de auto del mapa × factor)").fill("1.25");
+  await page.getByRole("button", { name: "Agregar franja" }).click();
+  const nueva = page.getByRole("listitem", { name: "Franja 3" });
+  await nueva.getByLabel("Inicio").fill("18:00");
+  await nueva.getByLabel("Fin").fill("19:30");
+  await nueva.getByLabel("Factor").fill("1.4");
   await page.getByRole("button", { name: "Guardar configuración" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Configuración guardada" })).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel("Velocidad promedio (km/h)")).toHaveValue("32");
+  await expect(page.getByLabel("Velocidad promedio (km/h, respaldo sin mapa)")).toHaveValue("32");
+  await expect(page.getByLabel("Factor de camión (tiempos de auto del mapa × factor)")).toHaveValue("1.25");
+  await expect(page.getByRole("listitem", { name: "Franja 3" }).getByLabel("Inicio")).toHaveValue("18:00");
 });
 
 test("un despachador no entra a administración", async ({ page }) => {
