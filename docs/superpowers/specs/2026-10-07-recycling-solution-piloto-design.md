@@ -242,7 +242,12 @@ Propiedades obligatorias, verificadas con fast-check:
 
 Casos límite con salida definida: sin unidades, todo se pospone con motivo "sin unidades disponibles"; ninguna unidad disponible hoy de un tipo admitido por el cliente, se pospone con motivo "sin unidad compatible disponible"; carga mayor que toda capacidad del catálogo, se bloquea por inviabilidad física.
 
-Modelo de traslado: `km = haversine × factor_circuidad`; `min = km ÷ velocidad_kmh × 60`. Es un parámetro del motor; OSRM en contenedor puede sustituirlo en la Fase 2.
+Modelo de traslado (Plan 7):
+- Matriz dirigida de km y minutos por calle, de OSRM en contenedor propio con el mapa recortado de OpenStreetMap.
+- Los minutos de auto se multiplican por `factor_camion` y se ajustan con horas pico configurables, con un modelo continuo en el que salir más tarde nunca hace llegar antes.
+- La matriz se guarda en la entrada del plan.
+- Sin mapa, se usa la fórmula anterior (`km = haversine × factor_circuidad`; `min = km ÷ velocidad_kmh × 60`) y el plan lo avisa.
+- Diseño en `docs/superpowers/specs/2026-10-15-plan-7-calles-reales-y-alertas-design.md`.
 
 ### Re-ruteo
 
@@ -386,3 +391,4 @@ Actualizado el 2026-10-14 con lo que respondió el dueño. "Dueño" indica que l
 | Mi ruta del operador, eventos e incidentes (Tabla 6, rol operador) | Plan 5: `/operador`, `src/dominio/operacion`, `src/acciones/operador.nucleo.ts` |
 | Re-ruteo ante incidente (§6 del DI, paso 4 del motor) | §8 Re-ruteo; Plan 5 §4 |
 | Cartas X̄-R y panel (Tabla 1) | Plan 6: `/gerencia/panel`, `src/indicadores`, CSV en `/api/indicadores/csv` |
+| Tiempos de traslado reales y reacción ante retrasos (tiempos muertos, §1; K1 y K4) | Plan 7: OSRM (`src/traslados`, `infra/mapa`), `tramo` y horas pico en `src/motor`, `proyectarJornada` y alertas en el seguimiento |

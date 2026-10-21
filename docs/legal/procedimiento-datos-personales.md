@@ -64,7 +64,7 @@ En el piloto no hay finalidades secundarias (encuestas ni promociones). Si se ag
 | Tipo | Medidas |
 |---|---|
 | Administrativas | Confidencialidad firmada por todo el personal con acceso. Registro de entrega del aviso a operadores y usuarios. Acuerdos con los proveedores que alojan datos (hospedaje y respaldos). Altas y bajas de usuarios el mismo día en que alguien entra o sale. Capacitación anual. |
-| Técnicas | Las que describe la especificación del sistema (§10):<br>• roles y permisos;<br>• hash de contraseñas;<br>• límite de intentos de acceso;<br>• HTTPS;<br>• bitácora;<br>• base de datos con usuarios de privilegios mínimos;<br>• respaldos diarios y prueba de restauración. |
+| Técnicas | Las que describe la especificación del sistema (§10):<br>• roles y permisos;<br>• hash de contraseñas;<br>• límite de intentos de acceso;<br>• HTTPS;<br>• bitácora;<br>• base de datos con usuarios de privilegios mínimos;<br>• respaldos diarios y prueba de restauración;<br>• cálculo de rutas por calle en un servicio propio (OSRM), sin enviar ubicaciones a terceros (Plan 7). |
 | Físicas | Equipo de despacho con bloqueo de pantalla. Documentos en papel bajo llave. Respaldos fuera del servidor y protegidos. |
 
 ## 6. Confidencialidad (artículo 20)
