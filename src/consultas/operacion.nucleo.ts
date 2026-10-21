@@ -61,7 +61,7 @@ export async function seguimiento(ctx: Contexto, fecha?: unknown): Promise<Resul
       const operacion = await leerJornadaOperacion(tx, j.id);
       if (!operacion) continue;
       const estado = await estadoDeJornada(tx, operacion);
-      leidos.push({ j, estado, proyeccion: proyectarJornada(estado, opciones) });
+      leidos.push({ j, estado, proyeccion: proyectarConRespaldo(estado, opciones) });
     }
     // Folio y cliente de las paradas proyectadas, en una sola lectura.
     const ids = [...new Set(leidos.flatMap(({ estado }) => estado.viajes.flatMap((v) => v.paradas.map((p) => p.solicitudId))))];
@@ -114,6 +114,19 @@ export async function seguimiento(ctx: Contexto, fecha?: unknown): Promise<Resul
       },
     };
   });
+}
+
+/**
+ * Un modelo de tiempos dañado (por ejemplo, editado a mano en la base) no debe tumbar el seguimiento de todo el día: esa
+ * jornada se proyecta sin modelos, desplazando las estimaciones, y la pantalla la marca "proyección aproximada".
+ */
+function proyectarConRespaldo(estado: EstadoJornada, opciones: Parameters<typeof proyectarJornada>[1]): ProyeccionJornada {
+  try {
+    return proyectarJornada(estado, opciones);
+  } catch (error) {
+    console.error("[seguimiento] proyección sin modelo de tiempos", estado.jornadaId, error instanceof Error ? error.message : "error");
+    return proyectarJornada({ ...estado, viajes: estado.viajes.map((v) => ({ ...v, tiempos: null })) }, opciones);
+  }
 }
 
 const hhmm = (instante: string) => {

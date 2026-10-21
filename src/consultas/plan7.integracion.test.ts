@@ -89,6 +89,14 @@ describe("consultas del Plan 7: seguimiento con proyección y plan con calles", 
     expect(primera.ventana).toEqual({ inicio: "08:00", fin: "14:00" });
   });
 
+  it("una ruta con su modelo de tiempos dañado no tumba el seguimiento: esa jornada sale con proyección aproximada", async () => {
+    await salir(a(60));
+    await base.bd.execute(sql`UPDATE rutas SET tiempos = jsonb_set(tiempos, '{puntos}', '["patio"]') WHERE jornada_id = ${A.jornadaId}`);
+    const j = jornada(await seguimiento(ctx(despachador, a(105)), FECHA_PLAN));
+    expect(j.proyeccion.aproximada).toBe(true);
+    expect(j.proyeccion.paradas.length).toBeGreaterThan(0);
+  });
+
   it("liberable: sí en viajes futuros de una jornada disponible, no en el viaje en curso ni tras el check-out", async () => {
     await salir(a(60));
     const j = jornada(await seguimiento(ctx(despachador, a(62)), FECHA_PLAN));
