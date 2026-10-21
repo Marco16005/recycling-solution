@@ -163,3 +163,12 @@ it("requisitos por jornada: solo obligatorios del catálogo del operador, sin du
   expect([...requisitosPorJornada(p, clientes).values()].flat()).toEqual([]);
   expect(() => requisitosPorJornada(p, new Map())).toThrow("Falta el cliente");
 });
+
+it("convierte horas pico y rechaza franjas inválidas al construir", () => {
+  const d = datos();
+  d.configuracion.horasPico = [{ inicio: "07:00", fin: "09:30", factor: 1.3 }, { inicio: "13:30", fin: "15:00", factor: 1.15 }];
+  expect(construirEntrada(d).parametros.horasPico).toEqual([
+    { inicioMin: 420, finMin: 570, factor: 1.3 }, { inicioMin: 810, finMin: 900, factor: 1.15 }]);
+  d.configuracion.horasPico.push({ inicio: "08:00", fin: "10:00", factor: 1 });
+  expect(() => construirEntrada(d)).toThrow("franjas_invalidas");
+});

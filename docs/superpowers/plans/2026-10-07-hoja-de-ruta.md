@@ -4,7 +4,8 @@
 - **Especificación:** `docs/superpowers/specs/2026-10-07-recycling-solution-piloto-design.md`
 - **Estado (2026-10-15):**
   - Planes 1 a 6 terminados y validados por Claude y Codex en `main` (etiquetas `plan-1-validado`, `plan-2-3-validado`, `plan-4-validado`, `plan-5-validado` y `plan-6-validado`).
-  - Sigue la preparación del piloto (abajo): VPS, línea base de K2, cartera completa y revisión del aviso de privacidad por un abogado.
+  - Plan 7 (calles reales con OSRM y alertas en vivo, sin gasto en tráfico de terceros) en cierre en la rama `claude/plan-7`.
+  - Siguen el Plan 8 (optimización entre rutas) y la preparación del piloto (abajo): VPS, línea base de K2, cartera completa y revisión del aviso de privacidad por un abogado.
   - Decisiones del dueño en la especificación §14.
 
 El piloto se construye en seis planes. Cada uno deja software funcionando y probado por sí mismo. Solo el Plan 1 está escrito al detalle; el plan detallado de cada hito siguiente se escribe al iniciarlo, con el mismo formato y la misma verificación previa del código, porque depende de lo que se aprenda en el anterior.
@@ -72,6 +73,17 @@ Este plan no usa base de datos ni pantallas, así que puede empezar en cuanto es
 - `src/indicadores`: K1 a K7 y tiempo de ciclo como funciones puras (especificación §11).
 - Panel gerencial contra la línea base y exportación CSV para las cartas X̄-R.
 - Aceptación: cada indicador tiene una prueba con valores calculados a mano y reporta su tamaño de muestra; el CSV abre en Excel con una fila por recolección.
+
+### Plan 7 — Calles reales y alertas en vivo
+
+- OSRM en contenedor propio con el mapa recortado de Querétaro (gratuito, sin enviar ubicaciones): matriz dirigida por calle, factor de camión y horas pico.
+- Proyección en vivo de cada jornada y alertas de ventana en riesgo, fuera de turno y atraso; liberar paradas de viajes futuros en el re-ruteo; frontera viva al validar.
+- Navegación del operador con Waze o Google Maps (enlaces) y recorridos por calle en el mapa.
+- Aceptación: con la fórmula anterior el motor da el mismo plan; los planes 1.0.0 siguen funcionando; nada proyectado queda antes de ahora; sin OSRM, el plan sale aproximado con su motivo.
+
+### Plan 8 — Optimización entre rutas
+
+- Reacomodar paradas entre rutas para recortar km sin romper ventanas, capacidad, turno ni FIFO (la "A" de la conversación con el usuario del 2026-10-15). El aprendizaje de tiempos con datos reales (la "B") va después del piloto.
 
 ### Piloto
 

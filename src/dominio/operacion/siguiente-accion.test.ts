@@ -10,7 +10,8 @@ function inicial(): EstadoJornada {
       salidaPatioEn: null, regresoPatioEn: null, descargaFinEn: null, odometroInicioKm: null,
       paradas: [1, 2].map(p => ({ paradaId: `${n}-${p}`, solicitudId: `${n}-${p}`, secuencia: p,
         estado: "pendiente", vigente: true, llegadaEstimada: hora, inicioEstimado: hora, finEstimado: hora,
-        llegadaEn: null, inicioServicioEn: null, cierreEn: null })),
+        llegadaEn: null, inicioServicioEn: null, cierreEn: null, ventanaInicio: "08:00", ventanaFin: "16:00" })),
+      tiempos: null,
     })) };
 }
 function avanzar(s: EstadoJornada, tipo?: TipoEvento) {

@@ -80,6 +80,10 @@ Para operar el sistema, la Empresa se apoya en proveedores que tratan datos **po
 - El proveedor del servidor donde se aloja el sistema ({{PROVEEDOR_HOSPEDAJE}}) y, en su caso, el del almacenamiento de respaldos ({{PROVEEDOR_RESPALDOS}}).
 Por separado, el sistema muestra las calles con un servicio de mapas de un tercero ({{PROVEEDOR_MAPAS}}). Al cargar el mapa, su navegador le envía a ese servicio datos técnicos, como la dirección IP y la zona consultada; nunca nombres ni datos de contacto. La Empresa documentará su relación con ese proveedor.
 
+Las distancias y los tiempos de recorrido por calle se calculan **dentro de los propios equipos de la Empresa**, con datos de OpenStreetMap (© colaboradores de OpenStreetMap, licencia ODbL). Para eso, ninguna ubicación sale del sistema.
+
+En el teléfono del operador, junto a cada parada, hay botones para abrir la navegación en Waze o en Google Maps. La aplicación no consulta esos servicios por su cuenta: solo cuando el operador toca uno de esos botones, su teléfono abre esa aplicación con el destino de la parada, que es la ubicación del establecimiento, sin nombres ni datos de contacto. A partir de ahí, ese tratamiento se rige por los términos del proveedor de la aplicación.
+
 ## 6. Cuánto tiempo conservamos sus datos
 
 La Empresa conserva sus datos solo mientras son necesarios para las finalidades de este aviso. Después, los **bloquea** durante el plazo que exijan las leyes aplicables y al terminar ese plazo los **suprime**, también de los respaldos (artículos 10 y 24 de la Ley).

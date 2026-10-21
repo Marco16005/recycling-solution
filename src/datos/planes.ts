@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import type { TiemposRuta } from "@/dominio/operacion/tipos";
 import type { VersionesPlan } from "@/dominio/plan/tipos";
 import type { AjusteManual, EntradaPlan, Plan } from "@/motor";
 import type { BD, Tx } from "./bd";
@@ -30,7 +31,11 @@ export async function tomarCandadoDeCatalogoFlota(tx: Tx, modo: "compartido" | "
 }
 
 /** Restricciones de un plan de re-ruteo: jornadas que dejaron de estar disponibles, viajes conservados y paradas congeladas. */
-export interface RestriccionesReruteo { jornadasNoDisponibles: string[]; admitidas: Record<string, string[][]>; congeladas: string[] }
+export interface RestriccionesReruteo {
+  jornadasNoDisponibles: string[]; admitidas: Record<string, string[][]>; congeladas: string[];
+  /** Plan 7: paradas de viajes futuros liberadas por el despachador. Ausente en planes anteriores. */
+  liberadas?: string[];
+}
 
 /** Un ajuste manual con su autor y su hora (planes.ajustes). */
 export interface AjusteRegistrado { ajuste: AjusteManual; por: string; en: string }
@@ -228,6 +233,8 @@ export interface NuevaEjecucion {
   planId: string | null;
   versionMotor: string;
   usuarioId: string;
+  /** Plan 7: consulta al mapa antes del motor; null si no hubo. */
+  consultaMapaMs: number | null;
 }
 
 export async function insertarEjecucion(tx: Tx, e: NuevaEjecucion): Promise<string> {
@@ -276,6 +283,8 @@ export interface NuevaRuta {
   rendimientoKmLUsado: number;
   disponibleParaSalirEn: Date;
   asignadaEn: Date;
+  /** Plan 7: modelo de tiempos con que se planeó. */
+  tiempos: TiemposRuta | null;
   paradas: NuevaParada[];
 }
 

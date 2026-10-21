@@ -1,3 +1,4 @@
+import type { InfoTraslados } from "@/dominio/plan/tipos";
 import { permitir } from "@/acciones/autorizacion";
 import type { Contexto, Resultado } from "@/acciones/tipos";
 import { fechaSchema, idSchema } from "@/acciones/validacion";
@@ -10,11 +11,12 @@ import { leerSolicitudesParaCola } from "@/datos/solicitudes";
 import { requisitosPorJornada } from "@/dominio/plan/entrada";
 import { colaDelDia } from "@/dominio/solicitudes/cola";
 import { fechaEnMexico } from "@/dominio/tiempo";
-import type { Diagnostico, MotivoBloqueoMotor, MotivoPospuesta, Plan } from "@/motor";
+import type { Diagnostico, EntradaPlan, MotivoBloqueoMotor, MotivoPospuesta, Plan } from "@/motor";
 import { puede } from "@/seguridad/permisos";
 import { resumenOperador, resumenUnidad, type OperadorResumen, type UnidadResumen } from "./flota.nucleo";
 import { leerInstantanea } from "./instantanea";
 import { estiloMapaUrl } from "./mapa";
+import { trazosDeViajes, UMBRAL_PIN_M } from "@/traslados";
 
 /** Contrato del Plan 4, §3.3. Horas como "HH:MM" en Ciudad de México. */
 export interface ParadaVista {
@@ -40,6 +42,8 @@ export interface ViajeVista {
   capacidadKg: number;
   km: number;
   paradas: ParadaVista[];
+  /** Plan 7: recorrido por calle ([lng, lat]); recto si OSRM no respondió; otroMapa si se dibujó con otro mapa que el del plan. */
+  trazo: { coordenadas: [number, number][]; recto: boolean; mapa: string | null; otroMapa: boolean };
 }
 
 export interface UnidadEnPlan { jornadaId: string; unidad: UnidadResumen; operador: OperadorResumen; viajes: ViajeVista[] }
@@ -72,6 +76,10 @@ export interface VistaPlan {
   puedeGenerar: boolean;
   puedeValidar: boolean;
   estiloMapaUrl: string;
+  /** Plan 7: con qué tiempos se planeó; null en planes anteriores o sin plan. */
+  traslados: InfoTraslados | null;
+  /** Plan 7: clientes cuyo pin quedó a más de UMBRAL_PIN_M de una calle. */
+  pinesARevisar: { clienteId: string; nombre: string; distanciaM: number }[];
 }
 
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
@@ -121,12 +129,13 @@ export async function obtenerPlan(ctx: Contexto, fecha: unknown, planId?: unknow
     tipo: plan?.tipo ?? ("inicial" as const),
     reruteoPropuesto: datos.reruteo ? { planId: datos.reruteo.id } : null,
     congeladas: plan?.restricciones?.congeladas ?? [],
+    traslados: plan?.versiones.traslados ?? null,
   };
   if (plan === null) {
     return {
       ok: true,
       valor: {
-        ...base, planId: null, estado: "sin_plan", version: null, generadoEn: null, revisionIniciada: false, ajustes: 0,
+        ...base, pinesARevisar: [], planId: null, estado: "sin_plan", version: null, generadoEn: null, revisionIniciada: false, ajustes: 0,
         unidades: [], pospuestas: [], bloqueadas: [], resumen: null, nuevasDesdeGeneracion: 0, requisitos: [], puedeValidar: false,
       },
     };
@@ -144,6 +153,15 @@ export async function obtenerPlan(ctx: Contexto, fecha: unknown, planId?: unknow
 
   // Una jornada quitada después de generar ya no se muestra; validar responderá datos_cambiaron.
   const enPlan = plan.resultado.rutas.filter((r) => jornadas.has(r.unidadId));
+  // Plan 7: recorrido por calle de cada viaje (patio, paradas, patio); recto si OSRM falla o tarda.
+  const lugares = enPlan.flatMap((r) => r.viajes.map((v) => [patio!, ...v.paradas.map((p) => solicitudes.get(p.solicitudId)!.ubicacion), patio!]));
+  const trazos = await trazosDeViajes(lugares, { url: process.env.OSRM_URL });
+  const mapaDelPlan = plan.versiones.traslados?.mapa ?? null;
+  let siguienteTrazo = 0;
+  const trazo = () => {
+    const t = trazos[siguienteTrazo++];
+    return { coordenadas: t.coordenadas, recto: t.recto, mapa: t.mapa, otroMapa: mapaDelPlan !== null && t.mapa !== null && t.mapa !== mapaDelPlan };
+  };
   const vistaUnidades: UnidadEnPlan[] = enPlan.map((ruta) => {
     const jornada = jornadas.get(ruta.unidadId)!;
     return {
@@ -153,6 +171,7 @@ export async function obtenerPlan(ctx: Contexto, fecha: unknown, planId?: unknow
       viajes: ruta.viajes.map((v) => ({
         numero: v.numero, salida: hhmm(v.salidaMin), regreso: hhmm(v.regresoPatioMin), finDescarga: hhmm(v.finDescargaMin),
         cargaKg: v.cargaKg, capacidadKg: capacidad.get(ruta.unidadId) ?? 0, km: v.km,
+        trazo: trazo(),
         paradas: v.paradas.map((p) => {
           const c = clienteDe(p.solicitudId);
           const { ubicacion } = solicitudes.get(p.solicitudId)!;
@@ -192,6 +211,7 @@ export async function obtenerPlan(ctx: Contexto, fecha: unknown, planId?: unknow
       planId: plan.id, estado: plan.estado === "propuesto" ? "propuesto" : "validado", version: plan.version, generadoEn: plan.generadoEn,
       revisionIniciada: plan.revisionIniciadaEn !== null, ajustes: plan.ajustes.length,
       unidades: vistaUnidades,
+      pinesARevisar: pinesARevisar(plan.entrada, clientes),
       pospuestas: plan.resultado.pospuestas.map((p) => ({
         solicitudId: p.solicitudId, folio: folio(p.solicitudId), cliente: nombreCliente(p.solicitudId), motivo: p.motivo, diagnostico: p.diagnostico,
       })),
@@ -204,4 +224,21 @@ export async function obtenerPlan(ctx: Contexto, fecha: unknown, planId?: unknow
       puedeValidar: plan.estado === "propuesto" && puede(permiso.usuario, "planes.validar"),
     },
   };
+}
+
+/** Clientes del plan cuyo pin quedó a más de UMBRAL_PIN_M de una calle, según el ajuste de OSRM guardado en la matriz. */
+function pinesARevisar(
+  entrada: EntradaPlan, clientes: Map<string, { id: string; nombre: string }>,
+): VistaPlan["pinesARevisar"] {
+  const m = entrada.traslados;
+  if (!m) return [];
+  const fila = new Map(m.puntos.map((p, i) => [`${p.lat}|${p.lng}`, i]));
+  const vistos = new Map<string, VistaPlan["pinesARevisar"][number]>();
+  for (const s of entrada.solicitudes) {
+    const i = fila.get(`${s.ubicacion.lat}|${s.ubicacion.lng}`);
+    const cliente = clientes.get(s.clienteId);
+    if (i === undefined || !cliente || m.ajusteM[i] <= UMBRAL_PIN_M) continue;
+    vistos.set(cliente.id, { clienteId: cliente.id, nombre: cliente.nombre, distanciaM: Math.round(m.ajusteM[i]) });
+  }
+  return [...vistos.values()];
 }

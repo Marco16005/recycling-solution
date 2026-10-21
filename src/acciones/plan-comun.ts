@@ -1,7 +1,7 @@
 import type { Tx } from "@/datos/bd";
 import { registrarEvento } from "@/datos/bitacora";
 import { leerClientesPorId } from "@/datos/clientes";
-import { leerConfiguracionCompleta } from "@/datos/configuracion";
+import { leerConfiguracionCompleta, type ConfiguracionCompleta } from "@/datos/configuracion";
 import { leerCatalogo, leerOperadores, leerUnidades } from "@/datos/flota";
 import type { JornadaGuardada } from "@/datos/jornadas";
 import {
@@ -14,7 +14,10 @@ import { motivosNoDisponibleOperador, motivosNoDisponibleUnidad } from "@/domini
 import type { OperadorGuardado, UnidadGuardada } from "@/dominio/flota/tipos";
 import { capacidadMaximaPorTipo, instanteDeMinutos, minutoEnMexico, minutosDeHora } from "@/dominio/plan/entrada";
 import { fechaEnMexico } from "@/dominio/tiempo";
-import { distanciaKm, ErrorAdmitidas, validarPlan, type EntradaPlan, type Plan, type RestriccionesPlan } from "@/motor";
+import type { TiemposRuta } from "@/dominio/operacion/tipos";
+import type { VersionesPlan } from "@/dominio/plan/tipos";
+import { crearTraslados, ErrorAdmitidas, validarPlan, type EntradaPlan, type Plan, type RestriccionesPlan } from "@/motor";
+import { conTraslados, matrizDeTraslados, puntosDeEntrada } from "@/traslados";
 import type { CodigoConflicto, Contexto, Resultado } from "./tipos";
 import { idSchema, invalido, versionSchema, type Fallo } from "./validacion";
 
@@ -51,6 +54,20 @@ export async function propuestoEnVersion(tx: Tx, id: string, version: number): P
   if (plan.estado !== "propuesto") return conflicto("generacion_adelantada", "Esta propuesta ya no está vigente; abre la del día");
   if (plan.version !== version) return { ok: false, error: "conflicto" };
   return plan;
+}
+
+/**
+ * Plan 7: la matriz por calle de OSRM para la entrada, fuera de toda transacción y antes del motor. Si no la hay, el motor
+ * usa la fórmula anterior; versiones.traslados dice con qué tiempos se planeó y por qué.
+ */
+export async function conMapa<V extends VersionesPlan>(entrada: EntradaPlan, versiones: V, config: ConfiguracionCompleta):
+  Promise<{ entrada: EntradaPlan; versiones: V; consultaMapaMs: number | null }> {
+  const r = await matrizDeTraslados(puntosDeEntrada(entrada), {
+    url: process.env.OSRM_URL,
+    factorCamion: config.factorCamion,
+    respaldo: { velocidadKmh: config.velocidadKmh, factorCircuidad: config.factorCircuidad },
+  });
+  return { entrada: conTraslados(entrada, r), versiones: { ...versiones, traslados: r.info }, consultaMapaMs: r.consultaMs };
 }
 
 export const esFallo = (x: unknown): x is Fallo => typeof x === "object" && x !== null && "ok" in x && (x as { ok: unknown }).ok === false;
@@ -173,9 +190,21 @@ export function rutasParaGuardar(
 ): NuevaRuta[] {
   const { fecha, entrada } = plan;
   const p = entrada.parametros;
+  const t = crearTraslados(entrada);
   const solicitudes = new Map(entrada.solicitudes.map((s) => [s.id, s]));
   const porJornada = new Map(jornadas.map((j) => [j.id, j]));
   const instante = (m: number) => instanteDeMinutos(fecha, m);
+  /** Plan 7, §2.6: la submatriz dirigida entre el patio y las paradas del viaje, con el modelo con que se planeó. */
+  const tiemposDelViaje = (ids: string[]): TiemposRuta => {
+    const lugares = [p.patio, ...ids.map((id) => solicitudes.get(id)!.ubicacion)];
+    return {
+      puntos: ["patio", ...ids],
+      minLibres: lugares.map((o) => lugares.map((d) => t.tramo(o, d).minLibres)),
+      horasPico: p.horasPico ?? [],
+      turnoFinMin: p.turnoFinMin,
+      descargaMin: p.descargaMin,
+    };
+  };
   const nuevas: NuevaRuta[] = [];
   for (const ruta of plan.resultado.rutas) {
     const jornada = porJornada.get(ruta.unidadId)!;
@@ -195,8 +224,8 @@ export function rutasParaGuardar(
           esperaMin: parada.esperaMin,
           cargaKg: s.cargaKg,
           kmDesdeAnterior: parada.kmDesdeAnterior,
-          // El método actual: un viaje redondo patio–cliente–patio por solicitud (como el resumen del motor).
-          kmContrafactual: 2 * distanciaKm(p.patio, s.ubicacion, p.factorCircuidad),
+          // El método actual: un viaje redondo patio–cliente–patio por solicitud, en ambos sentidos (como el resumen del motor).
+          kmContrafactual: t.tramo(p.patio, s.ubicacion).km + t.tramo(s.ubicacion, p.patio).km,
         };
       });
       nuevas.push({
@@ -211,6 +240,7 @@ export function rutasParaGuardar(
         rendimientoKmLUsado: unidad.rendimientoKmL,
         disponibleParaSalirEn: disponible,
         asignadaEn: ahora,
+        tiempos: tiemposDelViaje(viaje.paradas.map((x) => x.solicitudId)),
         paradas,
       });
       // El siguiente viaje queda disponible al terminar la descarga de este (el Plan 5 pone el real).
@@ -254,6 +284,8 @@ export interface Generacion {
   antesDeGuardar: (tx: Tx) => Promise<Fallo | null>;
   reruteo?: NuevaPlan["reruteo"];
   accion: "generar" | "generar_reruteo";
+  /** Plan 7: lo que tardó la consulta del mapa (K7, aparte de duracion_ms); null si no hubo consulta. */
+  consultaMapaMs: number | null;
 }
 
 /**
@@ -275,7 +307,7 @@ export async function ejecutarYGuardar(ctx: Contexto, g: Generacion): Promise<Re
   const duracionMs = performance.now() - inicio;
   const ejecucion: Omit<NuevaEjecucion, "planId" | "resultado" | "error"> = {
     fecha: g.fecha, inicioEn: ctx.ahora, finEn: new Date(ctx.ahora.getTime() + duracionMs), duracionMs,
-    versionMotor: plan?.versionMotor ?? "desconocida", usuarioId: g.usuarioId,
+    versionMotor: plan?.versionMotor ?? "desconocida", usuarioId: g.usuarioId, consultaMapaMs: g.consultaMapaMs,
   };
 
   if (plan === null) {

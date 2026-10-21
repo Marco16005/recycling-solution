@@ -32,12 +32,16 @@ export function MapaPlan({ vista }: { vista: VistaPlan }) {
         unidades.forEach((u, i) => {
           const color = COLORES[i % COLORES.length];
           u.viajes.forEach(v => {
-            const coordenadas: [number, number][] = [origen, ...v.paradas.map(p => [p.cliente.lng, p.cliente.lat] as [number, number]), origen];
+            const coordenadas = v.trazo.coordenadas;
+            coordenadas.forEach(punto => limites.extend(punto));
             const id = `ruta-${i}-${v.numero}`;
             actual.addSource(id, { type: "geojson", data: {
               type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coordenadas },
             } });
-            actual.addLayer({ id, type: "line", source: id, paint: { "line-color": color, "line-width": 3 } });
+            actual.addLayer({ id, type: "line", source: id, paint: {
+              "line-color": color, "line-width": 3,
+              ...(v.trazo.recto ? { "line-dasharray": [2, 2] } : {}),
+            } });
             v.paradas.forEach(p => {
               const punto: [number, number] = [p.cliente.lng, p.cliente.lat];
               limites.extend(punto);
@@ -55,7 +59,12 @@ export function MapaPlan({ vista }: { vista: VistaPlan }) {
   if (!patio) return <p>Falta configurar la ubicación del patio.</p>;
   return <section aria-label="Mapa de rutas" className="space-y-3">
     <h2 className="text-xl font-semibold">Rutas del día</h2>
-    <p className="text-sm text-muted-foreground">Líneas entre paradas; no representan el recorrido por calles. El detalle de cada viaje está debajo.</p>
+    <p className="text-sm text-muted-foreground">Los trazos continuos siguen calles; los discontinuos unen las paradas en línea recta. El detalle de cada viaje está debajo.</p>
+    {unidades.some(u => u.viajes.some(v => v.trazo.otroMapa)) && <ul className="text-sm text-muted-foreground">
+      {unidades.flatMap(u => u.viajes.filter(v => v.trazo.otroMapa).map(v => <li key={`${u.jornadaId}-${v.numero}`}>
+        {u.unidad.placa} · Viaje {v.numero}: dibujado con otro mapa.
+      </li>))}
+    </ul>}
     <div ref={contenedor} role="region" aria-label="Patio y paradas en el mapa" className="h-80 rounded-xl border" />
     {error && <p role="status">No se pudo cargar el mapa. Consulta las paradas en el detalle de viajes.</p>}
     <ul aria-label="Colores de las unidades" className="flex flex-wrap gap-4 text-sm">

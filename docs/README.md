@@ -14,6 +14,7 @@ Piloto de un asistente de logística para una recicladora: CRM de clientes, cat�
 | [Plan 4: plan del día](superpowers/plans/2026-10-15-plan-4-plan-del-dia.md) | Generar, revisar en lista y mapa, ajustar y validar; candados, versiones y K6/K7 |
 | [Plan 5: operador, incidentes y re-ruteo](superpowers/plans/2026-10-15-plan-5-operador-incidentes-y-reruteo.md) | Mi ruta en el teléfono sin señal, eventos idempotentes, rechazos conciliables, incidentes y re-ruteo sin tocar lo congelado |
 | [Plan 6: indicadores y panel](superpowers/plans/2026-10-15-plan-6-indicadores-y-panel.md) | K1 a K7 y ciclo, panel de gerencia, CSV para cartas X̄-R e instantánea diaria de K5 |
+| [Plan 7: calles reales y alertas](superpowers/plans/2026-10-15-plan-7-calles-reales-y-alertas.md) ([diseño](superpowers/specs/2026-10-15-plan-7-calles-reales-y-alertas-design.md)) | Tiempos por calle con OSRM local y gratuito, horas pico, alertas de ventana en riesgo en vivo, liberar en el re-ruteo y navegación con Waze o Google Maps |
 | [Catálogo de documentos](catalogo-de-documentos.md) | Qué documentos pide el sistema a unidades, operadores y clientes, y por qué |
 | [Documentos legales](legal/README.md) | Aviso de privacidad integral y simplificado, procedimiento interno y formato ARCO |
 | [Operación](operacion.md) | Levantar, respaldar, restaurar y mudar el sistema con Docker |

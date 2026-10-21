@@ -12,13 +12,13 @@ import {
 } from "@/datos/planes";
 import { leerSolicitudesParaCola, solicitudesPorId } from "@/datos/solicitudes";
 import { fronteraDeReruteo } from "@/dominio/operacion";
-import { construirEntrada, ErrorDeEntrada, instanteDeMinutos } from "@/dominio/plan/entrada";
+import { construirEntrada, ErrorDeEntrada, instanteDeMinutos, minutosDeHora } from "@/dominio/plan/entrada";
 import { colaDelDia, siguienteDiaOperacion } from "@/dominio/solicitudes/cola";
 import { fechaEnMexico } from "@/dominio/tiempo";
 import { generarPlan, type EntradaPlan } from "@/motor";
 import { permitir } from "./autorizacion";
 import {
-  asignada, cambio, comprobarValidacion, conflicto, disponibleOperador, disponibleUnidad, ejecutarYGuardar, esFallo, porVersion,
+  asignada, cambio, comprobarValidacion, conflicto, conMapa, disponibleOperador, disponibleUnidad, ejecutarYGuardar, esFallo, porVersion,
   propuestoEnVersion, rutasParaGuardar, solicitudesRuteadas, validarIdYVersionDePlan, type ReglasSolicitudes,
 } from "./plan-comun";
 import type { Contexto, Resultado } from "./tipos";
@@ -26,7 +26,11 @@ import { invalido, type Fallo } from "./validacion";
 
 /** Re-ruteo (Plan 5, §4): conserva lo congelado y las admitidas; reubica en FIFO lo de las jornadas no disponibles y lo nuevo. */
 
-const entradaSchema = z.object({ jornadasNoDisponibles: z.array(z.uuid()).max(50) });
+const entradaSchema = z.object({
+  jornadasNoDisponibles: z.array(z.uuid()).max(50),
+  /** Plan 7: solicitudes de viajes futuros que el despachador libera para que el motor las reubique. */
+  liberadas: z.array(z.uuid()).max(200).optional(),
+});
 
 /** Permiso planes.generar. Solo sobre el plan validado de hoy, en su versión. */
 export async function generarReruteo(ctx: Contexto, planBaseId: unknown, versionEsperada: unknown, entrada: unknown): Promise<Resultado<{ planId: string }>> {
@@ -37,6 +41,7 @@ export async function generarReruteo(ctx: Contexto, planBaseId: unknown, version
   const validado = entradaSchema.safeParse(entrada);
   if (!validado.success) return invalido({ jornadasNoDisponibles: ["Elige las jornadas que dejan de estar disponibles"] });
   const noDisponibles = new Set(validado.data.jornadasNoDisponibles);
+  const pedidas = new Set(validado.data.liberadas ?? []);
   const usuarioId = permiso.usuario.id;
   const hoy = fechaEnMexico(ctx.ahora);
 
@@ -82,6 +87,16 @@ export async function generarReruteo(ctx: Contexto, planBaseId: unknown, version
   const aReubicar: string[] = [];
   const libreDesde = new Map<string, number>();
   const disponibles: typeof jornadas = [];
+  // Plan 7, §4.4: cada liberada va a la jornada donde está su parada VIGENTE; las apariciones históricas
+  // (reasignadas u omitidas en otra jornada) no cuentan.
+  const liberadasDe = new Map<string, Set<string>>();
+  for (const [jornadaId, estado] of estados)
+    for (const v of estado.viajes) for (const p of v.paradas)
+      if (p.vigente && pedidas.has(p.solicitudId)) liberadasDe.set(jornadaId, (liberadasDe.get(jornadaId) ?? new Set()).add(p.solicitudId));
+  const asignadas = new Set([...liberadasDe.values()].flatMap((s) => [...s]));
+  if ([...pedidas].some((id) => !asignadas.has(id))) return invalido({ liberadas: ["Solo se liberan paradas asignadas de hoy"] });
+  const liberadas: string[] = [];
+  const opcionesFrontera = { umbralAtrasoMin: config.umbralAtrasoMin, turnoFinMin: minutosDeHora(config.turnoFin), descargaMin: config.descargaMin };
   for (const j of jornadas) {
     const estado = estados.get(j.id)!;
     // Una jornada que ya hizo check-out no puede recibir trabajo (terminalidad, invariante 23).
@@ -90,15 +105,17 @@ export async function generarReruteo(ctx: Contexto, planBaseId: unknown, version
       !noDisponibles.has(j.id) &&
       disponibleUnidad(unidades.get(j.unidadId), leida.catalogoUnidad, base.fecha) &&
       disponibleOperador(operadores.get(j.operadorId), leida.catalogoOperador, base.fecha);
-    const frontera = fronteraDeReruteo(estado, disponible, ctx.ahora.toISOString());
-    if (!frontera.ok) return invalido({ _: [frontera.motivo] });
+    const suyas = liberadasDe.get(j.id) ?? new Set<string>();
+    const frontera = fronteraDeReruteo(estado, disponible, ctx.ahora.toISOString(), { liberadas: suyas, ...opcionesFrontera });
+    if (!frontera.ok) return suyas.size > 0 ? invalido({ liberadas: [frontera.motivo] }) : invalido({ _: [frontera.motivo] });
     congeladas.push(...frontera.congeladas);
+    liberadas.push(...frontera.liberadas);
+    // Las liberadas de una jornada disponible también se reubican (Plan 7); el resto de aReubicar es de las no disponibles.
+    aReubicar.push(...frontera.aReubicar);
     if (disponible) {
       disponibles.push(j);
       admitidas[j.id] = frontera.admitidas;
       libreDesde.set(j.id, frontera.libreDesdeMin);
-    } else {
-      aReubicar.push(...frontera.aReubicar);
     }
   }
 
@@ -137,10 +154,11 @@ export async function generarReruteo(ctx: Contexto, planBaseId: unknown, version
     planBase: { id: base.id, version: base.version },
     operacion: leida.operacion,
   };
-  const restricciones: RestriccionesReruteo = { jornadasNoDisponibles: [...noDisponibles], admitidas, congeladas };
+  const restricciones: RestriccionesReruteo = { jornadasNoDisponibles: [...noDisponibles], admitidas, congeladas, liberadas };
+  const conCalles = await conMapa(entradaMotor, versiones, config);
 
   return ejecutarYGuardar(ctx, {
-    fecha: base.fecha, usuarioId, entrada: entradaMotor, versiones, esperado: leida.esperado,
+    fecha: base.fecha, usuarioId, entrada: conCalles.entrada, versiones: conCalles.versiones, esperado: leida.esperado,
     correr: (e) => generarPlan(e, { admitidas }),
     antesDeGuardar: async (tx) => {
       const actual = await leerPlan(tx, base.id);
@@ -150,6 +168,7 @@ export async function generarReruteo(ctx: Contexto, planBaseId: unknown, version
     },
     reruteo: { planBaseId: base.id, restricciones },
     accion: "generar_reruteo",
+    consultaMapaMs: conCalles.consultaMapaMs,
   });
 }
 
@@ -197,6 +216,25 @@ export async function validarReruteo(
         return conflicto("operacion_avanzo", "La operación avanzó mientras se revisaba el re-ruteo (nuevos eventos o cancelaciones); vuelve a generarlo");
       }
       if (enUso.has(j.id) && jo.checkOutEn !== null) return conflicto("datos_cambiaron", "Una jornada del re-ruteo ya terminó; vuelve a generarlo");
+    }
+
+    // Plan 7, §4.4: la frontera se recalcula con la hora de validar. Sin eventos nuevos, un viaje en curso que se atrasa
+    // termina más tarde de lo que suponía la propuesta; si la unidad saldría antes, se regenera.
+    const configuracionActual = await leerConfiguracionCompleta(tx);
+    const opcionesFrontera = {
+      liberadas: new Set<string>(), umbralAtrasoMin: configuracionActual.umbralAtrasoMin,
+      turnoFinMin: minutosDeHora(configuracionActual.turnoFin), descargaMin: configuracionActual.descargaMin,
+    };
+    const placas = new Map((await leerUnidades(tx, jornadas.map((j) => j.unidadId))).map((u) => [u.id, u.placa]));
+    for (const j of jornadas.filter((x) => enUso.has(x.id))) {
+      const primera = plan.resultado.rutas.find((r) => r.unidadId === j.id)?.viajes[0];
+      if (!primera) continue;
+      const estado = await estadoDeJornada(tx, (await leerJornadaOperacion(tx, j.id))!);
+      const frontera = fronteraDeReruteo(estado, true, ahora.toISOString(), opcionesFrontera);
+      if (!frontera.ok) return conflicto("datos_cambiaron", "La jornada cambió desde que se generó el re-ruteo; vuelve a generarlo");
+      if (primera.salidaMin < Math.ceil(frontera.libreDesdeMin)) {
+        return conflicto("frontera_vencida", `La unidad ${placas.get(j.unidadId) ?? ""} terminará su viaje más tarde de lo previsto; vuelve a generar el re-ruteo`);
+      }
     }
 
     // Parada vigente de cada solicitud en el plan operativo.

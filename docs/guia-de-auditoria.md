@@ -49,9 +49,13 @@ Cada una debe cumplirse siempre. Si alguna falla, es un hallazgo.
 | 21 | Un ajuste manual nunca deja un plan que rompa capacidad, ventanas, turno o tipo de unidad | `ajustarPlan` comprueba con `validarPlan(…, { ajustadoAMano: true })`, que reconstruye cada ruta sin usar la admisión; pruebas de propiedades en `src/motor/ajustes.test.ts` |
 | 22 | Un evento del operador se aplica a lo sumo una vez (evento_id único, huella) y un rechazo siempre queda guardado para conciliarse; un operador solo opera su jornada, también al repetir | `src/acciones/operador.nucleo.ts`; pruebas de idempotencia secuencial y simultánea en `operador.nucleo.test.ts` y `plan5.integracion.test.ts` |
 | 23 | La máquina de eventos es exhaustiva: nada después de check_out, orden por secuencia, odómetro no decreciente, una sola parada en sitio o en servicio | Propiedades de `src/dominio/operacion/operacion.test.ts` |
-| 24 | Un re-ruteo no toca lo congelado (completado, no atendido, en sitio, viaje en curso) ni cambia de unidad, viaje u orden las admitidas; se rechaza si la operación avanzó mientras se revisaba | `src/acciones/reruteo.nucleo.ts`, `src/motor/admitidas.test.ts`, pruebas de re-ruteo y operacion_avanzo |
+| 24 | Un re-ruteo no toca lo congelado (completado, no atendido, en sitio, viaje en curso de una jornada disponible) ni cambia de unidad u orden las admitidas, salvo las liberadas por el despachador (Plan 7); se rechaza si la operación avanzó mientras se revisaba o si la frontera proyectada ya pasó la salida propuesta (`frontera_vencida`) | `src/acciones/reruteo.nucleo.ts`, `src/motor/admitidas.test.ts`, `src/dominio/operacion/proyeccion.test.ts`, pruebas de re-ruteo, operacion_avanzo y frontera_vencida (`src/acciones/plan7.integracion.test.ts`) |
 | 25 | Lo que /operador guarda en el teléfono (ruta, cola, caché) es de un solo usuario y se borra al cerrar sesión, aunque falle la red | `public/sw-operador.js`, `src/components/sesion/registrar-sw-operador.tsx`, `boton-salir.tsx` |
 | 26 | Cada indicador reporta su tamaño de muestra y un dato faltante no cuenta como cero; el CSV no contiene contactos ni teléfonos y neutraliza fórmulas | `src/indicadores/indicadores.test.ts` (valores a mano), `src/consultas/indicadores.nucleo.test.ts` |
+| 27 | Un plan guarda la matriz y la fuente de tiempos con que se planeó (OSRM o fórmula, con su motivo); ajustar y validar no consultan el mapa, y un plan `1.0.0` se sigue validando con la fórmula | `src/motor/compatibilidad.test.ts` (regresión campo por campo y fixture `1.0.0`), `src/acciones/plan7.integracion.test.ts` |
+| 28 | La proyección nunca pone algo que no ha ocurrido antes de la hora actual ni antes de un hito real, y no cambia los hitos reales | Propiedad de `src/dominio/operacion/proyeccion.test.ts` |
+| 29 | Solo se liberan paradas pendientes y vigentes de viajes futuros de jornadas disponibles; las apariciones históricas en otra jornada no cuentan | `src/dominio/operacion/proyeccion.test.ts`, re-ruteo encadenado en `src/acciones/plan7.integracion.test.ts` |
+| 30 | Ninguna ubicación sale de la instalación para calcular rutas: OSRM corre en su contenedor, sin puertos publicados; si falla, el plan usa la fórmula y lo dice | `compose.yaml` (servicio `osrm`), `src/traslados/traslados.test.ts` y `.integracion.test.ts` |
 
 ## Qué intentar romper
 
@@ -83,7 +87,7 @@ Gravedad: bloquea el piloto | corrige antes del piloto | mejora
 
 ## Limitaciones conocidas (no son hallazgos)
 
-- Los tiempos de traslado son estimados, no consultados a un servicio de mapas (especificación §4).
+- Los tiempos de traslado salen de OSRM por calle, con tiempos de auto × factor de camión y horas pico configuradas. No hay tráfico en vivo (decisión del usuario: sin gasto; plan 7). Sin mapa, se usa la fórmula aproximada y el plan lo avisa.
 - El motor es una heurística explicable, no un optimizador (especificación §8).
 - Sin tiempo real: las pantallas del despachador se refrescan por sondeo.
 - Sin rastreo GPS continuo: solo se registran los eventos que marca el operador.

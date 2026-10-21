@@ -16,6 +16,8 @@ test("despachador genera, ajusta y valida el plan; gerencia lo consulta en solo 
     await expect(unidad.getByRole("article", { name: `Parada ${folio}`, exact: true })).toBeVisible();
   }
 
+  await expect(plan.getByText(/^Tiempos por calle/)).toBeVisible();
+
   const segundoFolio = folios[1];
   const parada = unidad.getByRole("article", { name: `Parada ${segundoFolio}`, exact: true });
   await parada.getByRole("button", { name: "Posponer", exact: true }).click();

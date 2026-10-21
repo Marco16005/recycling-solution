@@ -16,7 +16,7 @@ import { colaDelDia, siguienteDiaOperacion } from "@/dominio/solicitudes/cola";
 import { fechaEnMexico } from "@/dominio/tiempo";
 import { ajustarPlan, generarPlan, validarPlan, type AjusteManual, type EntradaPlan, type ResultadoAjuste } from "@/motor";
 import {
-  comprobarValidacion, conflicto, disponibleOperador, disponibleUnidad, ejecutarYGuardar, esFallo, LIMITE_MOTOR_MS, porVersion,
+  comprobarValidacion, conflicto, conMapa, disponibleOperador, disponibleUnidad, ejecutarYGuardar, esFallo, LIMITE_MOTOR_MS, porVersion,
   propuestoEnVersion, rutasParaGuardar, solicitudesRuteadas, validarIdYVersionDePlan, ValidacionRechazada,
 } from "./plan-comun";
 import { permitir } from "./autorizacion";
@@ -52,16 +52,17 @@ export async function generarPlanDelDia(ctx: Contexto, fecha: unknown): Promise<
 
   const leida = await leerInstantaneaDePlan(ctx, dia.data);
   if (esFallo(leida)) return leida;
-  const { entrada, versiones, esperado } = leida;
+  const { entrada, versiones, consultaMapaMs } = await conMapa(leida.entrada, leida.versiones, leida.config);
 
   return ejecutarYGuardar(ctx, {
-    fecha: dia.data, usuarioId, entrada, versiones, esperado,
+    fecha: dia.data, usuarioId, entrada, versiones, esperado: leida.esperado,
     correr: (e) => generarPlan(e),
     antesDeGuardar: async (tx) =>
       (await hayValidado(tx, dia.data))
         ? conflicto("plan_validado_existente", "La fecha ya tiene un plan validado; los cambios del día se hacen con el re-ruteo")
         : null,
     accion: "generar",
+    consultaMapaMs,
   });
 }
 

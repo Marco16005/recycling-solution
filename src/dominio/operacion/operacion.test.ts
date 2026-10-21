@@ -13,7 +13,8 @@ function estado(): EstadoJornada {
       paradas: [0, 1].map(k => ({ paradaId: `p${i}${k}`, solicitudId: `s${i}${k}`, secuencia: k + 1,
         estado: "pendiente", vigente: true, llegadaEstimada: hora(490 + i * 120 + k * 30),
         inicioEstimado: hora(495 + i * 120 + k * 30), finEstimado: hora(510 + i * 120 + k * 30),
-        llegadaEn: null, inicioServicioEn: null, cierreEn: null })) })) };
+        llegadaEn: null, inicioServicioEn: null, cierreEn: null, ventanaInicio: "08:00", ventanaFin: "16:00" })),
+      tiempos: null })) };
 }
 function evento(tipo: TipoEvento, cambios: Partial<EventoEntrada> = {}): EventoEntrada {
   const jornada = tipo === "check_in" || tipo === "check_out";
@@ -173,7 +174,7 @@ describe("frontera", () => {
   it("congela el viaje completo, conserva futuros y traslada pendientes al retirar unidad", () => {
     const s = estado(); s.viajes[0].salidaPatioEn = hora(490);
     expect(fronteraDeReruteo(s, true, hora(500))).toEqual({ ok: true, congeladas: ["s00", "s01"],
-      viajeEnCurso: "r0", retrasoMin: 10, libreDesdeMin: 590, admitidas: [["s10", "s11"]], aReubicar: [] });
+      viajeEnCurso: "r0", retrasoMin: 10, libreDesdeMin: 590, admitidas: [["s10", "s11"]], aReubicar: [], liberadas: [] });
     expect(fronteraDeReruteo(s, false, hora(500))).toMatchObject({ ok: true, congeladas: [], admitidas: [], aReubicar: ["s00", "s01", "s10", "s11"] });
   });
   it.each(["en_sitio", "en_servicio"] as const)("impide retirar una jornada %s", estadoParada => {
@@ -190,18 +191,18 @@ describe("frontera", () => {
     expect(fronteraDeReruteo(s, true, hora(600))).toMatchObject({ congeladas: ["s00"], viajeEnCurso: null, libreDesdeMin: 600 });
   });
   it.each([
-    ["llegada", 502, 12], ["inicio", 502, 7], ["cierre", 522, 12],
-  ] as const)("calcula el retraso del último hito: %s", (hito, minuto, retraso) => {
+    ["llegada", 502, 12, 615], ["inicio", 502, 7, 600], ["cierre", 522, 12, 592],
+  ] as const)("calcula el retraso del último hito: %s", (hito, minuto, retraso, libre) => {
     const s = estado(), v = s.viajes[0], p = v.paradas[0]; v.salidaPatioEn = hora(480);
     if (hito === "llegada") p.llegadaEn = hora(minuto);
     if (hito === "inicio") { p.llegadaEn = hora(500); p.inicioServicioEn = hora(minuto); }
     if (hito === "cierre") { p.estado = "completada"; p.cierreEn = hora(minuto); }
-    expect(fronteraDeReruteo(s, true, hora(530))).toMatchObject({ retrasoMin: retraso, libreDesdeMin: 580 + retraso });
+    expect(fronteraDeReruteo(s, true, hora(530))).toMatchObject({ retrasoMin: retraso, libreDesdeMin: libre });
   });
   it("redondea disponibilidad hacia arriba y conserva minutos del día siguiente", () => {
     const s = estado(), v = s.viajes[0];
     v.salidaPatioEn = hora(480.5); v.finDescargaEstimado = hora(1440);
-    expect(fronteraDeReruteo(s, true, hora(500))).toMatchObject({ retrasoMin: 0.5, libreDesdeMin: 1441 });
+    expect(fronteraDeReruteo(s, true, hora(500))).toMatchObject({ retrasoMin: 0.5, libreDesdeMin: 1450 });
   });
   it("sin viaje iniciado admite futuros; rechaza ahora inválido", () => {
     expect(fronteraDeReruteo(estado(), true, hora())).toMatchObject({ admitidas: [["s00", "s01"], ["s10", "s11"]], libreDesdeMin: 480 });

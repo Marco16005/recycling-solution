@@ -24,6 +24,7 @@ services:
     build: { context: ., target: dev }
     command: ["npm", "run", "prueba:integracion"]
     environment:
+      OSRM_URL: http://osrm:5000
       PRUEBA_ADMIN_URL: postgres://rs_super:rs_super_prueba@db:5432/postgres
       RS_MIGRADOR_PASSWORD: migrador_prueba
       RS_APP_PASSWORD: app_prueba
@@ -32,6 +33,31 @@ services:
       - modulos:/app/node_modules
     depends_on:
       db: { condition: service_healthy }
+      osrm: { condition: service_healthy }
+
+  # Plan 7: OSRM con un mapa sintético propio (infra/mapa/prueba), siempre activo en las pruebas.
+  mapa-prueba-osm:
+    build: { context: ., target: dev }
+    command: ["node", "/generador/generar-cuadricula.mjs", "/mapa/prueba.osm"]
+    volumes:
+      - ./infra/mapa/prueba:/generador:ro
+      - mapa_prueba:/mapa
+
+  mapa-prueba:
+    build: { context: ./infra/mapa }
+    image: rs-mapa:v26.9.0
+    entrypoint: ["preparar-mapa", "prueba"]
+    volumes:
+      - mapa_prueba:/mapa
+    depends_on:
+      mapa-prueba-osm: { condition: service_completed_successfully }
+
+  osrm:
+    profiles: !reset []
+    volumes: !override
+      - mapa_prueba:/mapa:ro
+    depends_on:
+      mapa-prueba: { condition: service_completed_successfully }
 
   migrate:
     environment:
@@ -60,6 +86,7 @@ services:
       BETTER_AUTH_SECRET: secreto-de-pruebas-e2e-de-al-menos-32-caracteres
       BETTER_AUTH_URL: http://web:3000
       MAPA_ESTILO_URL: https://tiles.openfreemap.org/styles/liberty
+      OSRM_URL: http://osrm:5000
       # Las pruebas entran muchas veces desde una sola IP; el límite se prueba en auth.integracion.test.ts.
       AUTH_LIMITAR_INTENTOS: "no"
     healthcheck:
@@ -69,6 +96,7 @@ services:
       retries: 30
     depends_on:
       semilla: { condition: service_completed_successfully }
+      osrm: { condition: service_healthy }
 
   e2e:
     build: { context: ., target: e2e }
@@ -88,3 +116,4 @@ services:
 volumes:
   modulos: {}
   next_cache: {}
+  mapa_prueba: {}

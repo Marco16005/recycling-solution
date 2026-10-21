@@ -1,0 +1,118 @@
+{
+  "entrada": {
+    "fecha": "2026-10-14",
+    "instanteMin": 480,
+    "solicitudes": [
+      {
+        "id": "s1",
+        "folio": "s1",
+        "registradaEn": "2026-10-14T07:00:00-06:00",
+        "clienteId": "cliente-s1",
+        "ubicacion": {
+          "lat": 20.62,
+          "lng": -100.27
+        },
+        "ventanas": [
+          {
+            "inicioMin": 480,
+            "finMin": 960
+          }
+        ],
+        "tiempoServicioMin": 20,
+        "cargaKg": 1000,
+        "tiposUnidadAdmitidos": [
+          "doble_rodada"
+        ]
+      }
+    ],
+    "unidades": [
+      {
+        "id": "u1",
+        "tipo": "doble_rodada",
+        "capacidadKg": 8000,
+        "ubicacionInicial": {
+          "lat": 20.62,
+          "lng": -100.27
+        },
+        "libreDesdeMin": 480,
+        "cargaActualKg": 0
+      }
+    ],
+    "parametros": {
+      "patio": {
+        "lat": 20.62,
+        "lng": -100.27
+      },
+      "turnoInicioMin": 480,
+      "turnoFinMin": 960,
+      "velocidadKmh": 30,
+      "factorCircuidad": 1.3,
+      "descargaMin": 15,
+      "capacidadMaximaPorTipoKg": {
+        "doble_rodada": 8000,
+        "rabon": 12000,
+        "camioneta": 2000
+      },
+      "semilla": 37
+    }
+  },
+  "plan": {
+    "versionMotor": "1.0.0",
+    "rutas": [
+      {
+        "unidadId": "u1",
+        "viajes": [
+          {
+            "numero": 1,
+            "salidaMin": 480,
+            "paradas": [
+              {
+                "solicitudId": "s1",
+                "secuencia": 1,
+                "kmDesdeAnterior": 0,
+                "llegadaMin": 480,
+                "esperaMin": 0,
+                "inicioServicioMin": 480,
+                "finServicioMin": 500,
+                "ventana": {
+                  "inicioMin": 480,
+                  "finMin": 960
+                }
+              }
+            ],
+            "regresoPatioMin": 500,
+            "finDescargaMin": 515,
+            "cargaKg": 1000,
+            "km": 0
+          }
+        ]
+      }
+    ],
+    "pospuestas": [],
+    "bloqueadas": [],
+    "traza": [
+      {
+        "solicitudId": "s1",
+        "resultado": "admitida",
+        "unidadId": "u1",
+        "viaje": 1,
+        "secuencia": 1,
+        "rutasAntes": [
+          {
+            "unidadId": "u1",
+            "viajes": []
+          }
+        ]
+      }
+    ],
+    "resumen": {
+      "ruteadas": 1,
+      "pospuestas": 0,
+      "bloqueadas": 0,
+      "km": 0,
+      "minutosTraslado": 0,
+      "kmMetodoActual": 0,
+      "minutosTrasladoMetodoActual": 0
+    }
+  }
+}

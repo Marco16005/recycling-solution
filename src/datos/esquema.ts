@@ -178,6 +178,12 @@ export const configuracion = pgTable(
     /** 0 = domingo … 6 = sábado. */
     diasOperacion: smallint("dias_operacion").array().notNull().default(sql`'{1,2,3,4,5,6}'::smallint[]`),
     diasParaAtrasada: smallint("dias_para_atrasada").notNull().default(2),
+    /** Plan 7: los tiempos de auto de OSRM se multiplican por este factor para la flota. */
+    factorCamion: doublePrecision("factor_camion").notNull().default(1.2),
+    /** Plan 7: franjas [{ inicio: "HH:MM", fin: "HH:MM", factor }]; supuestos hasta calibrar en el piloto. */
+    horasPico: jsonb("horas_pico").notNull().default([{ inicio: "07:00", fin: "09:30", factor: 1.3 }, { inicio: "13:30", fin: "15:00", factor: 1.15 }]),
+    /** Plan 7: a partir de cuántos minutos de atraso proyectado se avisa. */
+    umbralAtrasoMin: smallint("umbral_atraso_min").notNull().default(15),
     version: integer("version").notNull().default(1),
     ...marcas,
   },
@@ -187,6 +193,9 @@ export const configuracion = pgTable(
     check("configuracion_velocidad", sql`${t.velocidadKmh} > 0`),
     check("configuracion_circuidad", sql`${t.factorCircuidad} >= 1`),
     check("configuracion_descarga", sql`${t.descargaMin} >= 0`),
+    check("configuracion_factor_camion", sql`${t.factorCamion} >= 1 AND ${t.factorCamion} <= 3`),
+    check("configuracion_horas_pico", sql`jsonb_typeof(${t.horasPico}) = 'array'`),
+    check("configuracion_umbral_atraso", sql`${t.umbralAtrasoMin} BETWEEN 1 AND 120`),
     check("configuracion_carga_omision", sql`${t.cargaPorOmisionKg} > 0`),
     check("configuracion_dias_operacion", sql`cardinality(${t.diasOperacion}) > 0 AND ${t.diasOperacion} <@ '{0,1,2,3,4,5,6}'::smallint[]`),
     check("configuracion_dias_atrasada", sql`${t.diasParaAtrasada} >= 1`),
@@ -422,6 +431,8 @@ export const ejecucionesMotor = pgTable(
     planId: uuid("plan_id").references(() => planes.id),
     versionMotor: text("version_motor").notNull(),
     usuarioId: uuid("usuario_id").notNull().references(() => usuarios.id),
+    /** Plan 7: lo que tardó la consulta al mapa antes de correr el motor; null si no hubo consulta. */
+    consultaMapaMs: doublePrecision("consulta_mapa_ms"),
     creadoEn: timestamp("creado_en", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -430,6 +441,7 @@ export const ejecucionesMotor = pgTable(
     check("ejecuciones_motor_orden", sql`${t.inicioEn} <= ${t.finEn}`),
     check("ejecuciones_motor_plan", sql`${t.resultado} = 'ok' OR ${t.planId} IS NULL`),
     check("ejecuciones_motor_error", sql`${t.error} IS NULL OR length(${t.error}) <= 200`),
+    check("ejecuciones_motor_consulta_mapa", sql`${t.consultaMapaMs} IS NULL OR ${t.consultaMapaMs} >= 0`),
   ],
 );
 
@@ -459,6 +471,8 @@ export const rutas = pgTable(
     descargaFinEn: timestamp("descarga_fin_en", { withTimezone: true }),
     odometroInicioKm: doublePrecision("odometro_inicio_km"),
     odometroFinKm: doublePrecision("odometro_fin_km"),
+    /** Plan 7: modelo de tiempos con que se planeó (TiemposRuta); null en las rutas anteriores. */
+    tiempos: jsonb("tiempos"),
     ...marcas,
   },
   (t) => [

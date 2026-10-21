@@ -31,8 +31,16 @@ export interface ConfiguracionCompleta {
   versionAvisoPrivacidad: string;
   /** Línea base del método actual (DI) y de K2 cronometrada (Plan 6). */
   lineaBase: LineaBase;
+  /** Plan 7: multiplica los tiempos de auto de OSRM. */
+  factorCamion: number;
+  /** Plan 7: franjas de hora pico en HH:MM. */
+  horasPico: FranjaHoraPico[];
+  /** Plan 7: minutos de atraso proyectado a partir de los cuales se avisa. */
+  umbralAtrasoMin: number;
   version: number;
 }
+
+export interface FranjaHoraPico { inicio: string; fin: string; factor: number }
 
 export interface LineaBase { esperaMin: number; trasladoMin: number; cicloMin: number; k2Seg?: number; k2Muestra?: number; k2Fecha?: string }
 
@@ -59,11 +67,16 @@ export async function leerConfiguracionCompleta(bd: BD | Tx): Promise<Configurac
     diasParaAtrasada: c.diasParaAtrasada,
     versionAvisoPrivacidad: c.versionAvisoPrivacidad,
     lineaBase: c.lineaBase as LineaBase,
+    factorCamion: c.factorCamion,
+    horasPico: c.horasPico as FranjaHoraPico[],
+    umbralAtrasoMin: c.umbralAtrasoMin,
     version: c.version,
   };
 }
 
-export type CambiosConfiguracion = Omit<ConfiguracionCompleta, "versionAvisoPrivacidad" | "version" | "lineaBase"> & { lineaBase?: LineaBase };
+/** Los campos del Plan 7 son opcionales hasta que el formulario de configuración los envíe (P7-8). */
+export type CambiosConfiguracion = Omit<ConfiguracionCompleta, "versionAvisoPrivacidad" | "version" | "lineaBase" | "factorCamion" | "horasPico" | "umbralAtrasoMin">
+  & { lineaBase?: LineaBase } & Partial<Pick<ConfiguracionCompleta, "factorCamion" | "horasPico" | "umbralAtrasoMin">>;
 
 export async function actualizarConfiguracionSiVersion(tx: Tx, version: number, cambios: CambiosConfiguracion, ahora: Date): Promise<number | null> {
   const [fila] = await tx

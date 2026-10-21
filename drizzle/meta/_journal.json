@@ -57,6 +57,13 @@
       "when": 1792100862077,
       "tag": "0007_indicadores",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792165166394,
+      "tag": "0008_traslados",
+      "breakpoints": true
     }
   ]
 }

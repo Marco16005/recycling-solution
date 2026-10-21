@@ -199,7 +199,11 @@ export function MiRuta({ usuarioId, inicial }: { usuarioId: string; inicial: Vis
         <h3 className="font-semibold">{p.secuencia}. {p.cliente.nombre}</h3><p className="text-sm">{p.folio} · {estado?.viajes.flatMap(v => v.paradas).find(e => e.paradaId === p.paradaId)?.estado.replaceAll("_", " ") ?? p.estado}</p>
         <p>{p.cliente.direccion ?? "Sin dirección"}</p><p>{p.cliente.notasAcceso ?? "Sin notas de acceso"}</p>
         <p className="text-sm">Ventana {p.ventana.inicio}–{p.ventana.fin} · Llegada {p.llegadaEstimada} · {p.cargaKg} kg</p>
-        {p.cliente.lat !== null && p.cliente.lng !== null && <a className="inline-block min-h-12 py-3 font-medium underline" href={`geo:${p.cliente.lat},${p.cliente.lng}`}>Abrir mapa</a>}
+        {p.cliente.lat !== null && p.cliente.lng !== null && <div className="flex flex-wrap gap-x-4 gap-y-2">
+          <a className="inline-flex min-h-12 items-center py-3 font-medium underline" href={`geo:${p.cliente.lat},${p.cliente.lng}`}>Abrir mapa</a>
+          <a className="inline-flex min-h-12 items-center py-3 font-medium underline" href={`https://waze.com/ul?ll=${p.cliente.lat},${p.cliente.lng}&navigate=yes`}>Navegar con Waze</a>
+          <a className="inline-flex min-h-12 items-center py-3 font-medium underline" href={`https://www.google.com/maps/dir/?api=1&destination=${p.cliente.lat},${p.cliente.lng}&travelmode=driving`}>Navegar con Google Maps</a>
+        </div>}
       </article>)}
     </section>)}
     {estado && <Button variant="outline" className="min-h-12 w-full" onClick={() => setIncidente(!incidente)}>Reportar incidente</Button>}

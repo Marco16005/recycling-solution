@@ -24,7 +24,7 @@ export async function resolverIncidenteAccion(id: string, versionEsperada: numbe
 export async function generarReruteoAccion(
   planBaseId: string,
   versionEsperada: number,
-  entrada: { jornadasNoDisponibles: string[] },
+  entrada: { jornadasNoDisponibles: string[]; liberadas?: string[] },
 ): Promise<Resultado<{ planId: string }>> {
   const resultado = await generarReruteo(await contextoDeLaPeticion(), planBaseId, versionEsperada, entrada);
   if (resultado.ok) refrescar();
