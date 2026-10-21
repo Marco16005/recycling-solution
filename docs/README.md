@@ -21,4 +21,4 @@ Piloto de un asistente de logística para una recicladora: CRM de clientes, cat�
 | [Guía de auditoría](guia-de-auditoria.md) | Cómo revisar el proyecto con otra persona u otro modelo |
 | [Pendientes del Documento Integrador](pendientes-documento-integrador.md) | Decisiones por confirmar y datos reales que faltan en el documento académico |
 
-Estado al 2026-10-15: Planes 1 a 6 validados por Claude y Codex en `main`; sigue la preparación del piloto. Las decisiones de producto están en la especificación §14. Todo se ejecuta con Docker (`scripts/verificar-todo.sh`); la operación en el VPS está en [operacion.md](operacion.md).
+Estado al 2026-10-21: Planes 1 a 7 validados por Claude y Codex en `main`; siguen el Plan 8 (optimización) y la preparación del piloto. Las decisiones de producto están en la especificación §14. Todo se ejecuta con Docker (`scripts/verificar-todo.sh`); la operación en el VPS está en [operacion.md](operacion.md).

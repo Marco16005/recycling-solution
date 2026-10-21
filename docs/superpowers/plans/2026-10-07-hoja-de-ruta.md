@@ -4,7 +4,7 @@
 - **Especificación:** `docs/superpowers/specs/2026-10-07-recycling-solution-piloto-design.md`
 - **Estado (2026-10-15):**
   - Planes 1 a 6 terminados y validados por Claude y Codex en `main` (etiquetas `plan-1-validado`, `plan-2-3-validado`, `plan-4-validado`, `plan-5-validado` y `plan-6-validado`).
-  - Plan 7 (calles reales con OSRM y alertas en vivo, sin gasto en tráfico de terceros) en cierre en la rama `claude/plan-7`.
+  - Plan 7 (calles reales con OSRM y alertas en vivo, sin gasto en tráfico de terceros) validado por Claude y Codex en `main` (etiqueta `plan-7-validado`).
   - Siguen el Plan 8 (optimización entre rutas) y la preparación del piloto (abajo): VPS, línea base de K2, cartera completa y revisión del aviso de privacidad por un abogado.
   - Decisiones del dueño en la especificación §14.
 
