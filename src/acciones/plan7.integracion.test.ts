@@ -7,7 +7,7 @@ import type { PlanGuardado } from "@/datos/planes";
 import {
   AHORA_PLAN, clienteHabilitado, FECHA_PLAN, jornadaDisponible, ponerPatio, solicitudPendiente, usuarioOperadorDe,
 } from "@/datos/pruebas/escenario-plan";
-import { crearBasePostgres, filasDe, type BasePostgres } from "@/datos/pruebas/postgres-prueba";
+import { crearBasePostgres, type BasePostgres } from "@/datos/pruebas/postgres-prueba";
 import { usuarioDePrueba } from "@/datos/pruebas/usuarios-prueba";
 import type { EventoEntrada, TiemposRuta, TipoEvento } from "@/dominio/operacion/tipos";
 import type { EntradaPlan } from "@/motor";

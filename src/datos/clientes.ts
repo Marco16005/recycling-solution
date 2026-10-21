@@ -131,6 +131,11 @@ async function leerClientes(bd: Conexion, ids?: string[]): Promise<ClienteGuarda
     nombre: c.nombre,
     contactoNombre: c.contactoNombre,
     contactoTelefono: c.contactoTelefono,
+    // PC-1 las lee de sus columnas.
+    contactoCorreo: null,
+    contactoPuesto: null,
+    contactosAdicionales: [],
+    recurrencia: null,
     direccion: c.direccion,
     lat: c.lat,
     lng: c.lng,

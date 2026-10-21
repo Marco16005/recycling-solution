@@ -1,12 +1,17 @@
 import type { ClienteEntrada } from "./esquemas";
-import type { ClienteGuardado } from "./tipos";
+import type { Cliente, ClienteGuardado } from "./tipos";
 
 /** Valores iniciales del formulario de alta. */
-export function clienteNuevo(): ClienteEntrada {
+/** Los campos del Plan CRM van explícitos: así un ejemplo armado con clienteNuevo() es un Cliente completo. */
+export function clienteNuevo(): ClienteEntrada & Pick<Cliente, "contactoCorreo" | "contactoPuesto" | "contactosAdicionales" | "recurrencia"> {
   return {
     nombre: "",
     contactoNombre: null,
     contactoTelefono: null,
+    contactoCorreo: null,
+    contactoPuesto: null,
+    contactosAdicionales: [],
+    recurrencia: null,
     direccion: null,
     lat: null,
     lng: null,
@@ -28,6 +33,10 @@ export function aEntrada(cliente: ClienteGuardado): ClienteEntrada {
     nombre: cliente.nombre,
     contactoNombre: cliente.contactoNombre,
     contactoTelefono: cliente.contactoTelefono,
+    contactoCorreo: cliente.contactoCorreo,
+    contactoPuesto: cliente.contactoPuesto,
+    contactosAdicionales: cliente.contactosAdicionales,
+    recurrencia: cliente.recurrencia,
     direccion: cliente.direccion,
     lat: cliente.lat,
     lng: cliente.lng,

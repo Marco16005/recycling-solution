@@ -23,6 +23,8 @@ export interface ClienteResumen {
   faltantes: Faltante[];
   completo: boolean;
   motivosHoy: MotivoBloqueo[];
+  /** Plan CRM: algún documento vence en 30 días o menos, o ya venció. */
+  documentoPorVencer: boolean;
 }
 
 /** fecha: hoy en Ciudad de México. k5: sobre toda la cartera, sin importar el filtro. */
@@ -88,6 +90,7 @@ export async function listarClientes(ctx: Contexto, filtro: unknown): Promise<Re
           faltantes,
           completo: faltantes.length === 0,
           motivosHoy: motivosDeBloqueoCliente(c, fecha, version),
+          documentoPorVencer: false, // PC-4
         };
       }),
     },

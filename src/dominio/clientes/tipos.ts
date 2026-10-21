@@ -41,10 +41,22 @@ export interface EstadoPrivacidad {
   en: Date;
 }
 
+/** Plan CRM: un contacto además del principal. */
+export interface ContactoCliente { nombre: string; puesto: string | null; telefono: string | null; correo: string | null }
+/** Plan CRM: día fijo opcional para proponer recolecciones. dias: 0 = domingo … 6 = sábado. */
+export type Recurrencia =
+  | { tipo: "dias_semana"; dias: number[] }
+  | { tipo: "cada_n_dias"; cadaDias: number; desde: string };
+
 export interface Cliente {
   nombre: string;
   contactoNombre: string | null;
   contactoTelefono: string | null;
+  /** Plan CRM. */
+  contactoCorreo: string | null;
+  contactoPuesto: string | null;
+  contactosAdicionales: ContactoCliente[];
+  recurrencia: Recurrencia | null;
   direccion: string | null;
   lat: number | null;
   lng: number | null;
