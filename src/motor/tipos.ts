@@ -18,6 +18,11 @@ export interface ParametrosMotor {
   semilla: number;
   /** Plan 7, §4.2. Ausente o [] = sin franjas (planes 1.0.0). */
   horasPico?: FranjaPico[];
+  /**
+   * Plan 8, §4.5. Minutos de tiempo muerto que puede agregar cada parada readmitida (0 a 60).
+   * construirEntrada lo pone en 1.2.0; ausente en entradas anteriores.
+   */
+  toleranciaReadmisionMin?: number;
 }
 
 /** Entre inicioMin y finMin los traslados avanzan a 1/factor de su velocidad libre. Sin traslapes; factor en [1, 3]. */
@@ -133,11 +138,16 @@ export type MotivoPospuesta =
   | "sin_unidades_disponibles"   // no hay ninguna unidad
   | "sin_unidad_compatible"      // ninguna unidad disponible es de un tipo admitido
   | "sin_cupo"                   // no cabe en ninguna posición factible
+  | "alarga_la_jornada"          // Plan 8: cabría, pero toda inserción pasa la tolerancia (solo fase 3 de 1.2.0)
   | "pospuesta_a_mano";          // solo ajuste del despachador, con diagnostico null
 export type MotivoBloqueoMotor = "carga_mayor_a_capacidad_compatible"; // > máximo de capacidadMaximaPorTipoKg entre sus tipos admitidos
 
 /** Por qué se descartaron las posiciones probadas para una pospuesta "sin_cupo" (cuántas por cada razón). */
-export interface Diagnostico { capacidad: number; ventana: number; finDeTurno: number; afectaAOtra: number }
+export interface Diagnostico {
+  capacidad: number; ventana: number; finDeTurno: number; afectaAOtra: number;
+  /** Plan 8: solo con "alarga_la_jornada"; el menor Δ de tiempo muerto entre las inserciones directas factibles. */
+  deltaMinimoMin?: number;
+}
 
 /** Una decisión de admisión, en orden FIFO, con el estado de las rutas justo ANTES de tomarla. */
 export type DecisionTraza =
@@ -145,8 +155,36 @@ export type DecisionTraza =
   | { solicitudId: string; resultado: "pospuesta"; motivo: MotivoPospuesta; diagnostico: Diagnostico; rutasAntes: RutaPlan[] }
   | { solicitudId: string; resultado: "bloqueada"; motivo: MotivoBloqueoMotor };
 
+/** Plan 8. Viaje y secuencia desde 1. */
+export interface PosicionPlan { unidadId: string; viaje: number; secuencia: number }
+
+/** Plan 8, §4.5. Una decisión de la fase 3, en orden FIFO, con el estado de las rutas justo ANTES de tomarla. */
+export type DecisionReadmision =
+  | { solicitudId: string; resultado: "admitida"; posicion: PosicionPlan; deltaMin: number;
+      /** "Mover una y meter": la parada que se movió antes de insertar; null en una inserción directa. */
+      movida: null | { solicitudId: string; de: PosicionPlan; a: PosicionPlan }; rutasAntes: RutaPlan[] }
+  | { solicitudId: string; resultado: "pospuesta"; motivo: "sin_cupo" | "alarga_la_jornada";
+      diagnostico: Diagnostico; rutasAntes: RutaPlan[] };
+
+export type ResumenConTiempoMuerto = Plan["resumen"] & { tiempoMuertoMin: number };
+
+/** Plan 8, §4.7. Obligatorio en 1.2.0 y ausente en versiones anteriores. */
+export interface Reacomodo {
+  /** S1: el resumen de la admisión. */
+  antes: ResumenConTiempoMuerto;
+  /** S4 tal como lo dejó el motor; inmutable: un ajuste manual no lo cambia. */
+  despues: ResumenConTiempoMuerto;
+  /** S2. */
+  rutasReacomodadas: RutaPlan[];
+  /** Fase 3, en orden FIFO. */
+  readmision: DecisionReadmision[];
+  /** Mejoras estrictas aceptadas. */
+  movimientos: { fase2: number; fase4: number };
+  evaluaciones: { fase2: number; readmision: number; fase4: number };
+}
+
 export interface Plan {
-  versionMotor: string;          // "1.0.0"
+  versionMotor: string;          // "1.0.0", "1.1.0" o "1.2.0"
   rutas: RutaPlan[];
   pospuestas: { solicitudId: string; motivo: MotivoPospuesta; diagnostico: Diagnostico | null }[];
   bloqueadas: { solicitudId: string; motivo: MotivoBloqueoMotor }[];
@@ -156,7 +194,11 @@ export interface Plan {
     km: number; minutosTraslado: number;
     /** Un viaje redondo patio–cliente–patio por cada solicitud RUTEADA; compara las mismas solicitudes. */
     kmMetodoActual: number; minutosTrasladoMetodoActual: number;
+    /** Plan 8, §4.2: con horas pico, incluye espera y descargas. Obligatorio en 1.2.0 y ausente en anteriores. */
+    tiempoMuertoMin?: number;
   };
+  /** Plan 8. Obligatorio en 1.2.0 y ausente en versiones anteriores; traza sigue siendo la de la fase 1. */
+  reacomodo?: Reacomodo;
 }
 
 /** viaje y posicion se interpretan después de retirar la solicitud; viaje n+1 abre uno nuevo. */

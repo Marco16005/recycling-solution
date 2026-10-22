@@ -15,6 +15,8 @@ export interface ConfiguracionPlan {
   versionAvisoPrivacidad: string;
   /** Plan 7: HH:MM. construirEntrada las copia a parametros.horasPico en minutos. */
   horasPico?: { inicio: string; fin: string; factor: number }[];
+  /** Plan 8: 0 a 60 min. construirEntrada la copia a parametros.toleranciaReadmisionMin. */
+  toleranciaReadmisionMin?: number;
 }
 
 export type MotivoAproximado = "sin_configurar" | "sin_respuesta" | "respuesta_invalida" | "error_osrm" | "demasiados_puntos";

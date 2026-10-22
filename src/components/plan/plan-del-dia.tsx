@@ -16,6 +16,8 @@ const motivos = {
   sin_unidades_disponibles: "No hay unidades disponibles.",
   sin_unidad_compatible: "No hay una unidad disponible del tipo admitido por el cliente.",
   sin_cupo: "No hay una posición factible con la capacidad, ventanas y turnos actuales.",
+  // Plan 8 (P8-0): el texto con el Δ real llega en P8-5.
+  alarga_la_jornada: "Cabría, pero alarga la jornada más que la tolerancia.",
   pospuesta_a_mano: "Pospuesta por el despachador.",
   carga_mayor_a_capacidad_compatible: "La carga supera la capacidad de todas las unidades compatibles.",
 };

@@ -80,6 +80,20 @@ export interface VistaPlan {
   traslados: InfoTraslados | null;
   /** Plan 7: clientes cuyo pin quedó a más de UMBRAL_PIN_M de una calle. */
   pinesARevisar: { clienteId: string; nombre: string; distanciaM: number }[];
+  /** Plan 8: lo que ganó el reacomodo del motor (S1 contra S4); null en planes anteriores a 1.2.0 o sin plan. */
+  reacomodo: ReacomodoVista | null;
+}
+
+export interface MetricasReacomodo { ruteadas: number; pospuestas: number; tiempoMuertoMin: number; km: number; minutosTraslado: number }
+export interface ReacomodoVista {
+  antes: MetricasReacomodo;
+  /** El del motor (S4); un ajuste manual no lo cambia. */
+  despues: MetricasReacomodo;
+  readmitidas: number;
+  alargaLaJornada: number;
+  movimientos: number;
+  /** > 0: la pantalla dice "antes de N ajustes manuales". */
+  ajustesManualesDespues: number;
 }
 
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
@@ -135,7 +149,7 @@ export async function obtenerPlan(ctx: Contexto, fecha: unknown, planId?: unknow
     return {
       ok: true,
       valor: {
-        ...base, pinesARevisar: [], planId: null, estado: "sin_plan", version: null, generadoEn: null, revisionIniciada: false, ajustes: 0,
+        ...base, pinesARevisar: [], reacomodo: null, planId: null, estado: "sin_plan", version: null, generadoEn: null, revisionIniciada: false, ajustes: 0,
         unidades: [], pospuestas: [], bloqueadas: [], resumen: null, nuevasDesdeGeneracion: 0, requisitos: [], puedeValidar: false,
       },
     };
@@ -212,6 +226,7 @@ export async function obtenerPlan(ctx: Contexto, fecha: unknown, planId?: unknow
       revisionIniciada: plan.revisionIniciadaEn !== null, ajustes: plan.ajustes.length,
       unidades: vistaUnidades,
       pinesARevisar: pinesARevisar(plan.entrada, clientes),
+      reacomodo: null, // P8-4
       pospuestas: plan.resultado.pospuestas.map((p) => ({
         solicitudId: p.solicitudId, folio: folio(p.solicitudId), cliente: nombreCliente(p.solicitudId), motivo: p.motivo, diagnostico: p.diagnostico,
       })),
