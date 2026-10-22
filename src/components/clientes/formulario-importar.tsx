@@ -179,7 +179,6 @@ export function FormularioImportar() {
         </p>
         <a
           href="/api/clientes/plantilla"
-          download="plantilla-clientes.csv"
           className="inline-block text-sm underline underline-offset-4"
         >
           Descargar plantilla

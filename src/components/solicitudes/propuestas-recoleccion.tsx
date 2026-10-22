@@ -78,7 +78,7 @@ export function PropuestasRecoleccion({ fecha, propuestas, puedeConfirmar }: { f
         {puedeConfirmar && <div className="flex flex-wrap items-end gap-3">
           <label className="space-y-2 text-sm">Días a posponer<Input aria-label={`Días a posponer para ${p.nombre}`} className="w-28" type="number" min={1} max={30} value={dias[p.clienteId] ?? "7"} onChange={(e) => setDias({ ...dias, [p.clienteId]: e.target.value })} /></label>
           <Button type="button" variant="outline" onClick={() => decidir("posponer", p.clienteId)}>Posponer</Button>
-          <label className="min-w-48 flex-1 space-y-2 text-sm">Nota al descartar (opcional)<Input aria-label={`Nota al descartar ${p.nombre}`} maxLength={1000} value={notas[p.clienteId] ?? ""} onChange={(e) => setNotas({ ...notas, [p.clienteId]: e.target.value })} /></label>
+          <label className="min-w-48 flex-1 space-y-2 text-sm">Nota al descartar (opcional)<Input aria-label={`Nota al descartar ${p.nombre}`} maxLength={300} value={notas[p.clienteId] ?? ""} onChange={(e) => setNotas({ ...notas, [p.clienteId]: e.target.value })} /></label>
           <Button type="button" variant="ghost" onClick={() => decidir("descartar", p.clienteId)}>Descartar</Button>
         </div>}
       </li>)}</ul>

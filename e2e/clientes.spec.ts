@@ -311,7 +311,7 @@ test("K5 conserva porcentaje y clientes activos al filtrar y limpiar la búsqued
   await expect(page.getByRole("region", { name: "Listado de clientes" }).getByRole("row")).toHaveCount(2);
   await expect(porcentaje).toHaveText(porcentajeGlobal);
   await expect(totales).toHaveText(totalesGlobales);
-  await page.getByRole("link", { name: "Limpiar", exact: true }).click();
+  await page.getByRole("link", { name: "Limpiar filtros", exact: true }).click();
   await expect(page).toHaveURL((url) => url.pathname === RUTA_CLIENTES && !url.searchParams.has("q"));
   await expect(porcentaje).toHaveText(porcentajeGlobal);
   await expect(totales).toHaveText(totalesGlobales);
