@@ -51,6 +51,8 @@ export function PanelIndicadores({ vista }: { vista: VistaPanel }) {
           <Tarjeta id="ciclo" titulo="Tiempo de ciclo" medida={vista.ciclo} unidad="min" lineaBase={lb.cicloMin} />
           <Tarjeta id="k2" titulo="K2 · Captura de una solicitud (mediana)" medida={{ ...vista.k2, valor: vista.k2.valor === null ? null : vista.k2.valor / 60, lineaBase: vista.k2.lineaBase === undefined ? undefined : vista.k2.lineaBase / 60 }} unidad="min"
             nota={vista.k2.lineaBase === undefined ? "Falta cronometrar la línea base de K2 (Configuración)." : undefined} />
+          <Tarjeta id="k2-propuestas" titulo="K2 · Captura desde una propuesta (mediana)" medida={{ ...vista.k2Propuestas, valor: vista.k2Propuestas.valor === null ? null : vista.k2Propuestas.valor / 60 }} unidad="min"
+            nota="Solicitudes confirmadas desde Propuestas; no se comparan con la línea base de captura manual." />
         </div>
       </section>
 

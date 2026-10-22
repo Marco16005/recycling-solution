@@ -50,7 +50,8 @@ export function propuestasParaFecha(fecha: string, diasOperacion: number[], cand
     if (c.recurrencia && tocaRecurrencia(c.recurrencia, fecha)) motivos.push("recurrencia");
     const esperada = c.ritmo ? dia(c.ritmo.ultima) + c.ritmo.dias : null;
     if (esperada !== null && esperada <= d && esperada >= d - TOLERANCIA_PROPUESTA_DIAS) motivos.push("ritmo");
-    if (pospuesta && motivos.length === 0) motivos.push("pospuesta");
+    // Una posposición vencida siempre se muestra, también junto a ritmo o recurrencia: el despachador ya la había visto.
+    if (pospuesta) motivos.push("pospuesta");
     if (motivos.length === 0) continue;
     salida.push({
       clienteId: c.clienteId, motivos, ritmo: c.ritmo,

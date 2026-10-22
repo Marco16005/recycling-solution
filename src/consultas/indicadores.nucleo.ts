@@ -16,6 +16,8 @@ export interface VistaPanel {
   lineaBase: LineaBase;
   k1: ReturnType<typeof k1>;
   k2: Medida;
+  /** Plan CRM: captura asistida desde una propuesta, aparte para no mezclarla con la captura manual de la tesis. */
+  k2Propuestas: Medida;
   k3: ReturnType<typeof k3>;
   k4: ReturnType<typeof k4>;
   k5: ReturnType<typeof k5>;
@@ -140,6 +142,7 @@ export async function panel(ctx: Contexto, desde?: unknown, hasta?: unknown): Pr
       lineaBase: config.lineaBase,
       k1: k1(recolecciones),
       k2: k2(datos.capturasSeg, config.lineaBase.k2Seg ?? null),
+      k2Propuestas: k2(datos.capturasPropuestaSeg, null),
       k3: k3(recolecciones, sumarConteos(conteos.values())),
       k4: k4(viajes, datos.planes.filter((p) => p.tipo === "inicial").map((p) => ({ km: p.resumen.km, kmMetodoActual: p.resumen.kmMetodoActual }))),
       k5: k5({ activos: actual.activos, completos: actual.completos }, datos.serieK5),

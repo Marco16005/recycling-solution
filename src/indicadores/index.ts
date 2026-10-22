@@ -60,9 +60,13 @@ export function k2(capturasSeg: number[], lineaBaseSeg: number | null): Medida {
  * esperar cuenta; empezar antes de que abra o después del cierre exacto (09:00:01 para una ventana que cierra a las 09:00), no.
  */
 function dentroDeVentana(x: RecoleccionMedida): boolean | null {
-  if (!x.inicioServicioEn) return null;
-  const m = minutoDelDia(x.inicioServicioEn);
-  return minutoDeHora(x.ventanaInicio) <= m && m <= minutoDeHora(x.ventanaFin);
+  return x.inicioServicioEn ? inicioDentroDeVentana(x.inicioServicioEn, x.ventanaInicio, x.ventanaFin) : null;
+}
+
+/** Regla de K3: el inicio de servicio cae dentro de la ventana (cierre incluido). También la usan los números por cliente. */
+export function inicioDentroDeVentana(inicio: Date, ventanaInicio: string, ventanaFin: string): boolean {
+  const m = minutoDelDia(inicio);
+  return minutoDeHora(ventanaInicio) <= m && m <= minutoDeHora(ventanaFin);
 }
 
 export function k3(r: RecoleccionMedida[], conteos: ConteosK3): Medida & ConteosK3 {
