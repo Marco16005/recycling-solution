@@ -1,13 +1,61 @@
 import type { Ventana } from "./tipos";
 
-/** Plan CRM, §4.1: "lun-vie 08:00-14:00; sab 09:00-12:00" ↔ ventanas. Se implementa en PC-2. */
+/** Plan CRM, §4.1: "lun-vie 08:00-14:00; sab 09:00-12:00" ↔ ventanas. Días: lun mar mie jue vie sab dom, con o sin acento. */
+
+const DIAS = ["dom", "lun", "mar", "mie", "jue", "vie", "sab"] as const;
+const AYUDA = "usa, por ejemplo, lun-vie 08:00-14:00; sab 09:00-12:00";
+const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const sinAcentos = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+const indiceDia = (s: string) => DIAS.indexOf(s as (typeof DIAS)[number]);
+
 export function leerHorarios(texto: string): { ok: true; ventanas: Ventana[] } | { ok: false; mensaje: string } {
-  void texto;
-  throw new Error("pendiente: PC-2");
+  const limpio = texto.trim();
+  if (limpio === "") return { ok: true, ventanas: [] };
+  const error = (franja: string) => ({ ok: false as const, mensaje: `Horario no reconocido: '${franja}'; ${AYUDA}` });
+  const ventanas: Ventana[] = [];
+  for (const franjaCruda of limpio.split(";")) {
+    const franja = franjaCruda.trim();
+    if (franja === "") continue;
+    const partes = /^(.+?)\s+(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$/.exec(franja);
+    if (!partes) return error(franja);
+    const [, diasTexto, inicio, fin] = partes;
+    if (!HORA.test(inicio) || !HORA.test(fin) || inicio >= fin) return error(franja);
+    const dias = new Set<number>();
+    for (const pieza of sinAcentos(diasTexto).split(",").map((p) => p.trim()).filter(Boolean)) {
+      const rango = pieza.split("-").map((p) => p.trim());
+      if (rango.length > 2) return error(franja);
+      const [desde, hasta] = [indiceDia(rango[0]), indiceDia(rango[rango.length - 1])];
+      if (desde < 0 || hasta < 0) return error(franja);
+      // lun-dom recorre de lunes a domingo pasando por el fin de semana.
+      for (let d = desde; ; d = (d + 1) % 7) { dias.add(d); if (d === hasta) break; }
+    }
+    if (dias.size === 0) return error(franja);
+    for (const diaSemana of dias) ventanas.push({ diaSemana, horaInicio: inicio, horaFin: fin });
+  }
+  ventanas.sort((a, b) => a.diaSemana - b.diaSemana || a.horaInicio.localeCompare(b.horaInicio));
+  return { ok: true, ventanas };
 }
 
-/** Inversa de leerHorarios: leerHorarios(escribirHorarios(v)) da v normalizado. */
+/** Agrupa días consecutivos con el mismo horario: lun-vie 08:00-14:00; sab 09:00-12:00. */
 export function escribirHorarios(ventanas: Ventana[]): string {
-  void ventanas;
-  throw new Error("pendiente: PC-2");
+  const porHorario = new Map<string, number[]>();
+  for (const v of ventanas) {
+    const clave = `${v.horaInicio}-${v.horaFin}`;
+    porHorario.set(clave, [...(porHorario.get(clave) ?? []), v.diaSemana]);
+  }
+  const franjas: { primerDia: number; texto: string }[] = [];
+  for (const [horario, diasCrudos] of porHorario) {
+    // Lunes primero y domingo al final, como se escribe en México.
+    const dias = [...new Set(diasCrudos)].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
+    const grupos: number[][] = [];
+    for (const d of dias) {
+      const ultimo = grupos.at(-1);
+      if (ultimo && (ultimo.at(-1)! + 1) % 7 === d && d !== 1) ultimo.push(d);
+      else grupos.push([d]);
+    }
+    const textoDias = grupos.map((g) => (g.length >= 3 ? `${DIAS[g[0]]}-${DIAS[g.at(-1)!]}` : g.map((d) => DIAS[d]).join(", "))).join(", ");
+    franjas.push({ primerDia: (dias[0] + 6) % 7, texto: `${textoDias} ${horario}` });
+  }
+  return franjas.sort((a, b) => a.primerDia - b.primerDia).map((f) => f.texto).join("; ");
 }

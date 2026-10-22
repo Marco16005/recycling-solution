@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analizarClientesCsv, LIMITES_CSV, nombreNormalizado, posiblesDuplicados } from "./csv";
+import { analizarClientesCsv, COLUMNAS_CSV, filaCsvDeCliente, LIMITES_CSV, nombreNormalizado, posiblesDuplicados } from "./csv";
 
 describe("analizarClientesCsv", () => {
   it("acepta BOM, punto y coma, coma decimal y renglones vacíos", () => {
@@ -79,5 +79,43 @@ describe("posiblesDuplicados", () => {
     expect(r[0]).toMatchObject({ nombre: "Cartonera  Núñez S.A.", nombreExistente: "cartonera nunez sa" });
     expect(validas.map((v) => v.fila)).toEqual([5, 4, 3, 2]);
     expect(cartera.map((c) => c.id)).toEqual(["b", "a"]);
+  });
+});
+
+describe("columnas del Plan CRM", () => {
+  const encabezado = "nombre,contacto,telefono,correo,puesto,direccion,ubicacion,residuo,material,servicio_min,carga_kg,horarios,tipos_unidad,notas_acceso";
+  it("lee horarios, tipos, notas, ubicación pegada, correo y puesto", () => {
+    const r = analizarClientesCsv(`${encabezado}\nCartonera,Ana,4421234567,ana@ejemplo.test,Almacén,Calle 1,"20.62, -100.3",RME,Cartón,30,800,"lun-vie 08:00-14:00",doble_rodada|rabon,Tocar en caseta\n`);
+    expect(r.errores).toEqual([]);
+    expect(r.validas[0].entrada).toMatchObject({
+      contactoCorreo: "ana@ejemplo.test", contactoPuesto: "Almacén", lat: 20.62, lng: -100.3, notasAcceso: "Tocar en caseta",
+      tiposUnidadAdmitidos: ["doble_rodada", "rabon"], ventanas: expect.arrayContaining([{ diaSemana: 1, horaInicio: "08:00", horaFin: "14:00" }]),
+    });
+  });
+  it("marca horarios no reconocidos, tipos desconocidos, enlace corto y ubicación distinta de lat/lng", () => {
+    const filas = [
+      'Uno,"lunes a viernes 8-2",,',
+      'Dos,,camion,',
+      'Tres,,,https://maps.app.goo.gl/abc',
+    ];
+    const r = analizarClientesCsv(`nombre,horarios,tipos_unidad,ubicacion\n${filas.join("\n")}\n`);
+    expect(r.errores.map((e) => [e.fila, e.mensajes.join(" ")])).toEqual([
+      [2, expect.stringContaining("Horario no reconocido")],
+      [3, expect.stringContaining("Tipo de unidad no reconocido")],
+      [4, expect.stringContaining("Enlace corto")],
+    ]);
+    const distinta = analizarClientesCsv("nombre,lat,lng,ubicacion\nUno,20.62,-100.3,\"20.70,-100.40\"\n");
+    expect(distinta.errores[0].mensajes.join(" ")).toContain("no coincide");
+  });
+  it("un archivo en Windows-1252 conserva los acentos", () => {
+    const bytes = new Uint8Array([...new TextEncoder().encode("nombre,direccion\nCartonera,Quer"), 0xe9, ...new TextEncoder().encode("taro\n")]);
+    expect(analizarClientesCsv(bytes).validas[0].entrada.direccion).toBe("Querétaro");
+  });
+  it("ida y vuelta: filaCsvDeCliente se vuelve a leer con los mismos datos", () => {
+    const r = analizarClientesCsv(`${encabezado}\nCartonera,Ana,4421234567,ana@ejemplo.test,Almacén,Calle 1,"20.62, -100.3",RME,Cartón,30,800,"lun-vie 08:00-14:00; sab 09:00-12:00",doble_rodada,Caseta\n`);
+    const entrada = r.validas[0].entrada;
+    const fila = filaCsvDeCliente({ ...entrada, id: "x", version: 1, privacidad: null } as never);
+    const csv = [COLUMNAS_CSV.join(","), COLUMNAS_CSV.map((c) => `"${fila[c].replaceAll('"', '""')}"`).join(",")].join("\n");
+    expect(analizarClientesCsv(csv).validas[0].entrada).toEqual(entrada);
   });
 });
