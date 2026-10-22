@@ -147,9 +147,11 @@ const ENCABEZADOS = [
 /**
  * Un texto que empieza como fórmula (=, +, -, @, tabulador o retorno) se neutraliza con un apóstrofo: Excel no lo ejecuta.
  * Un número puro (-100.3, +5) no es fórmula y se deja tal cual, para que la cartera exportada se vuelva a importar (Plan CRM).
+ * Revisión de Codex: un texto que ya empieza con apóstrofo también lleva uno, así la importación quita exactamente uno
+ * (analizarClientesCsv) y la ida y vuelta conserva el valor original.
  */
 const NUMERO_PURO = /^[+-]?\d+(\.\d+)?$/;
-const sinFormula = (v: string) => (/^[=+\-@\t\r]/.test(v) && !NUMERO_PURO.test(v) ? `'${v}` : v);
+const sinFormula = (v: string) => (/^[=+\-@\t\r']/.test(v) && !NUMERO_PURO.test(v) ? `'${v}` : v);
 
 /** Celda de CSV para Excel: fórmulas neutralizadas y comillas cuando hace falta. Los números se redondean a 2 decimales. */
 export function celda(v: string | number | boolean | null): string {

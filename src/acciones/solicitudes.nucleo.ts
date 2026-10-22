@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { registrarEvento } from "@/datos/bitacora";
 import { bloquearCliente, leerCliente } from "@/datos/clientes";
-import { actualizarSolicitudPendiente, insertarSolicitud, siguienteConsecutivo, type ResultadoCambioSolicitud } from "@/datos/solicitudes";
+import { actualizarSolicitudPendiente, insertarSolicitud, siguienteConsecutivo, solicitudAbiertaEnFecha, type ResultadoCambioSolicitud } from "@/datos/solicitudes";
 import { erroresPorCampo } from "@/dominio/clientes/esquemas";
 import { formatoFolio } from "@/dominio/solicitudes/cola";
 import { solicitudSchema } from "@/dominio/solicitudes/esquemas";
@@ -50,6 +50,10 @@ export async function registrarSolicitud(ctx: Contexto, entrada: unknown): Promi
     await bloquearCliente(tx, datos.clienteId);
     const cliente = await leerCliente(tx, datos.clienteId);
     if (cliente === null || !cliente.activo) return invalido({ clienteId: ["Elige un cliente activo"] });
+    // Revisión de Codex: con el candado, no se captura a mano otra solicitud abierta del cliente para la misma fecha
+    // (por ejemplo, una propuesta recién confirmada). Para otra fecha sigue permitida, como siempre.
+    const abierta = await solicitudAbiertaEnFecha(tx, datos.clienteId, datos.fechaSolicitada);
+    if (abierta) return invalido({ clienteId: [`Este cliente ya tiene la solicitud ${abierta} abierta para esa fecha`] });
     const folio = formatoFolio(hoy, await siguienteConsecutivo(tx, hoy));
     const id = await insertarSolicitud(tx, {
       folio,

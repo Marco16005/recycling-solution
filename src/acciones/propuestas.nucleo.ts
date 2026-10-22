@@ -47,6 +47,24 @@ async function noElegible(tx: Tx, clienteId: string, fecha: string, versionAviso
   return abierta ? "solicitud_abierta" : null;
 }
 
+/**
+ * Con el cliente bloqueado: por qué no se puede decidir hoy su propuesta para la fecha, o null si se propone de verdad.
+ * Revisión de Codex: confirmar, posponer y descartar recalculan la propuesta, así una pantalla desactualizada no decide
+ * sobre un cliente que ya no se propone (por ejemplo, con una posposición vigente).
+ */
+async function motivoParaNoDecidir(ctx: Contexto, tx: Tx, clienteId: string, dia: string): Promise<MotivoNoElegible | null> {
+  const config = await leerConfiguracionCompleta(tx);
+  const motivo = await noElegible(tx, clienteId, dia, config.versionAvisoPrivacidad);
+  if (motivo) return motivo;
+  const cliente = (await leerCliente(tx, clienteId))!;
+  const candidato = {
+    clienteId, activo: true, habilitadoEnFecha: true, tieneSolicitudAbierta: false, recurrencia: cliente.recurrencia,
+    ritmo: ritmoAprendido((await fechasAtendidas(tx, [clienteId])).get(clienteId) ?? [], fechaEnMexico(ctx.ahora)),
+    decisiones: (await decisionesDePropuestas(tx, [clienteId])).get(clienteId) ?? [],
+  };
+  return propuestasParaFecha(dia, config.diasOperacion, [candidato]).length === 0 ? "no_propuesta" : null;
+}
+
 export async function confirmarPropuestas(ctx: Contexto, fecha: unknown, clienteIds: unknown):
   Promise<Resultado<{ creadas: { clienteId: string; solicitudId: string; folio: string }[]; yaConfirmadas: string[];
     noElegibles: { clienteId: string; motivo: MotivoNoElegible }[] }>> {
@@ -70,17 +88,8 @@ export async function confirmarPropuestas(ctx: Contexto, fecha: unknown, cliente
         else noElegibles.push({ clienteId, motivo: "ya_decidida" });
         return;
       }
-      const config = await leerConfiguracionCompleta(tx);
-      const motivo = await noElegible(tx, clienteId, dia, config.versionAvisoPrivacidad);
+      const motivo = await motivoParaNoDecidir(ctx, tx, clienteId, dia);
       if (motivo) { noElegibles.push({ clienteId, motivo }); return; }
-      // Revisión de Codex: confirmar solo lo que de verdad se propone para esa fecha, recalculado con el cliente bloqueado.
-      const cliente = (await leerCliente(tx, clienteId))!;
-      const candidato = {
-        clienteId, activo: true, habilitadoEnFecha: true, tieneSolicitudAbierta: false, recurrencia: cliente.recurrencia,
-        ritmo: ritmoAprendido((await fechasAtendidas(tx, [clienteId])).get(clienteId) ?? [], fechaEnMexico(ctx.ahora)),
-        decisiones: (await decisionesDePropuestas(tx, [clienteId])).get(clienteId) ?? [],
-      };
-      if (propuestasParaFecha(dia, config.diasOperacion, [candidato]).length === 0) { noElegibles.push({ clienteId, motivo: "no_propuesta" }); return; }
       const hoy = fechaEnMexico(ctx.ahora);
       const folio = formatoFolio(hoy, await siguienteConsecutivo(tx, hoy));
       const solicitudId = await insertarSolicitud(tx, {
@@ -106,6 +115,9 @@ async function decidir(ctx: Contexto, fecha: unknown, clienteId: unknown, decisi
   return ctx.bd.transaction(async (tx): Promise<Resultado<null>> => {
     if (!(await bloquearCliente(tx, id.data))) return { ok: false, error: "no_encontrado" };
     if (await decisionDe(tx, id.data, dia)) return { ok: false, error: "conflicto" };
+    const motivo = await motivoParaNoDecidir(ctx, tx, id.data, dia);
+    if (motivo === "no_encontrado") return { ok: false, error: "no_encontrado" };
+    if (motivo) return { ok: false, error: "conflicto" };
     const hasta = decision.estado === "pospuesta"
       ? new Date(Date.parse(`${dia}T00:00:00Z`) + decision.dias! * 86_400_000).toISOString().slice(0, 10) : null;
     const decisionId = await insertarDecisionPropuesta(tx, { clienteId: id.data, fecha: dia, estado: decision.estado, pospuestaHasta: hasta,

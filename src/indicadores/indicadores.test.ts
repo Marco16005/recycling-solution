@@ -124,5 +124,8 @@ describe("indicadores (valores calculados a mano)", () => {
     expect(celda("-100.3")).toBe("-100.3");
     expect(celda("-1+1")).toBe("'-1+1");
     expect(celda("+52 442")).toBe("'+52 442");
+    // Revisión de Codex: un apóstrofo inicial también se protege, para que la importación quite solo el de la exportación.
+    expect(celda("'Los Pinos'")).toBe("''Los Pinos'");
+    expect(celda("Los 'Pinos'")).toBe("Los 'Pinos'");
   });
 });

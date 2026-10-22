@@ -107,23 +107,32 @@ describe("acciones del Plan CRM", () => {
       expect(s.capturaInicioEn).toEqual(AHORA);
     });
 
-    it("confirmación y captura manual a la vez: sin errores y la confirmación nunca crea una segunda solicitud abierta", async () => {
-      // Las dos bloquean al cliente. La captura manual puede crear otra solicitud a propósito (regla de siempre);
-      // lo que no puede pasar es que la confirmación cree una cuando la manual ya existía.
-      const manual = () => registrarSolicitud(ctx(), { clienteId, fechaSolicitada: MANANA, canal: "telefono", cargaEstimadaKg: null, notas: null, capturaInicioEn: AHORA });
+    const manual = (fechaSolicitada = MANANA) =>
+      registrarSolicitud(ctx(), { clienteId, fechaSolicitada, canal: "telefono", cargaEstimadaKg: null, notas: null, capturaInicioEn: AHORA });
+    const abiertas = async () => (await base.bd.select().from(solicitudes).where(eq(solicitudes.clienteId, clienteId)))
+      .filter((s) => s.fechaSolicitada === MANANA && s.estado === "pendiente");
+
+    it("confirmar y luego capturar a mano para la misma fecha: la captura se rechaza y queda una sola abierta", async () => {
+      const { creadas } = valor(await confirmarPropuestas(ctx(), MANANA, [clienteId]));
+      const r = await manual();
+      expect(r).toMatchObject({ ok: false, error: "invalido", campos: { clienteId: [expect.stringContaining(creadas[0].folio)] } });
+      expect(await abiertas()).toHaveLength(1);
+      // Para otra fecha sigue permitida, como siempre.
+      valor(await manual("2026-10-23"));
+    });
+
+    it("capturar a mano y luego confirmar: la confirmación no crea otra (solicitud_abierta)", async () => {
+      valor(await manual());
+      expect(valor(await confirmarPropuestas(ctx(), MANANA, [clienteId])).noElegibles).toEqual([{ clienteId, motivo: "solicitud_abierta" }]);
+      expect(await abiertas()).toHaveLength(1);
+    });
+
+    it("confirmación y captura manual a la vez: el candado común deja exactamente una solicitud abierta", async () => {
       const [r1, r2] = await Promise.all([confirmarPropuestas(ctx(), MANANA, [clienteId]), manual()]);
       const confirmacion = valor(r1);
-      valor(r2);
-      const filas = await base.bd.select().from(solicitudes).where(eq(solicitudes.clienteId, clienteId));
-      const propuesta = filas.filter((s) => s.canal === "propuesta");
-      if (confirmacion.creadas.length === 1) {
-        // La confirmación ganó el candado: la manual se registró después.
-        expect(propuesta).toHaveLength(1);
-        expect(propuesta[0].registradaEn.getTime()).toBeLessThanOrEqual(Math.min(...filas.filter((s) => s.canal !== "propuesta").map((s) => s.registradaEn.getTime())));
-      } else {
-        expect(confirmacion.noElegibles).toEqual([{ clienteId, motivo: "solicitud_abierta" }]);
-        expect(propuesta).toHaveLength(0);
-      }
+      // Gana una sola: o confirma y la manual se rechaza, o la manual entra y la confirmación ve la abierta.
+      expect(Number(confirmacion.creadas.length === 1) + Number(r2.ok)).toBe(1);
+      expect(await abiertas()).toHaveLength(1);
     });
 
     it("no confirma si ya tiene solicitud abierta o dejó de estar habilitado para la fecha", async () => {
@@ -145,9 +154,24 @@ describe("acciones del Plan CRM", () => {
       expect(valor(await confirmarPropuestas(ctx(), "2026-10-23", [conRecurrencia])).noElegibles).toEqual([{ clienteId: conRecurrencia, motivo: "no_propuesta" }]);
     });
 
+    it("posponer desde una lista y descartar desde otra desactualizada: el descarte se rechaza y la posposición vale", async () => {
+      // Recurrencia jueves y viernes: se propone el 22 y el 23. Una pestaña pospone el 22 hasta el 29; la otra,
+      // con la lista vieja, intenta descartar el 23.
+      const recurrente = (await clienteHabilitado(base.bd, "Cartonera Dos Pestañas", 0.02, { recurrencia: { tipo: "dias_semana", dias: [4, 5] } })).id;
+      valor(await posponerPropuesta(ctx(), MANANA, recurrente, 7));
+      expect(await descartarPropuesta(ctx(), "2026-10-23", recurrente, null)).toEqual({ ok: false, error: "conflicto" });
+      expect(await posponerPropuesta(ctx(), "2026-10-23", recurrente, 1)).toEqual({ ok: false, error: "conflicto" });
+      const filas = filasDe<{ fecha: string; estado: string }>(await base.bd.execute(sql`
+        SELECT fecha::text, estado FROM propuestas_recoleccion WHERE cliente_id = ${recurrente}`));
+      expect(filas).toEqual([{ fecha: MANANA, estado: "pospuesta" }]);
+      // Tampoco se decide sobre quien ya no se propone por tener una solicitud abierta.
+      valor(await registrarSolicitud(ctx(), { clienteId, fechaSolicitada: MANANA, canal: "telefono", cargaEstimadaKg: null, notas: null, capturaInicioEn: AHORA }));
+      expect(await descartarPropuesta(ctx(), MANANA, clienteId, null)).toEqual({ ok: false, error: "conflicto" });
+    });
+
     it("posponer y descartar guardan su decisión; gerencia no puede", async () => {
       valor(await posponerPropuesta(ctx(), MANANA, clienteId, 7));
-      const otro = (await clienteHabilitado(base.bd, "Cartonera Descarte", 0.02)).id;
+      const otro = (await clienteHabilitado(base.bd, "Cartonera Descarte", 0.02, { recurrencia: { tipo: "dias_semana", dias: [4] } })).id;
       valor(await descartarPropuesta(ctx(), MANANA, otro, "Ya no tiene material"));
       const filas = filasDe<{ cliente_id: string; estado: string; pospuesta_hasta: string | null }>(await base.bd.execute(sql`
         SELECT cliente_id, estado, pospuesta_hasta::text FROM propuestas_recoleccion ORDER BY estado`));
@@ -179,6 +203,37 @@ describe("acciones del Plan CRM", () => {
     expect(contenido.endsWith("\r\n")).toBe(true);
     expect(valor(await analizarImportacion(ctx(), contenido))).toMatchObject({ validas: 1, errores: [] });
     expect(await plantillaCsv(ctx(gerencia))).toEqual({ ok: false, error: "no_autorizado" });
+  });
+
+  it("dos correcciones de la misma nota a la vez: entra una y la otra es conflicto; reenviar desde la pantalla vieja también", async () => {
+    const clienteId = (await clienteHabilitado(base.bd, "Cartonera Correcciones", 0.01)).id;
+    const { id } = valor(await agregarNota(ctx(), clienteId, { tipo: "acuerdo", texto: "Precio A" }));
+    const [r1, r2] = await Promise.all(["Precio B", "Precio C"].map((texto) => agregarNota(ctx(), clienteId, { tipo: "acuerdo", texto, corrigeA: id })));
+    expect([r1, r2].filter((r) => r.ok)).toHaveLength(1);
+    expect([r1, r2].filter((r) => !r.ok)).toEqual([{ ok: false, error: "conflicto" }]);
+    expect(await agregarNota(ctx(), clienteId, { tipo: "acuerdo", texto: "Precio D", corrigeA: id })).toEqual({ ok: false, error: "conflicto" });
+    // La corrección vigente sí se puede corregir.
+    const vigente = (r1.ok ? r1 : r2) as { ok: true; valor: { id: string } };
+    valor(await agregarNota(ctx(), clienteId, { tipo: "acuerdo", texto: "Precio E", corrigeA: vigente.valor.id }));
+    expect((await notasDeCliente(base.bd, clienteId)).filter((n) => n.corrigeA === id)).toHaveLength(1);
+  });
+
+  it("exportar → importar conserva teléfonos con +, textos que empiezan como fórmula y apóstrofos originales", async () => {
+    valor(await importar(`${encabezado}\nCartonera Signos,Ana,+52 442 123 4567,,,'Los Pinos',"20.62, -100.3",RME,,30,800,"lun-vie 08:00-14:00",doble_rodada,=SUMA(A1)\n`));
+    const [fila] = filasDe<{ id: string }>(await base.bd.execute(sql`SELECT id FROM clientes WHERE nombre = 'Cartonera Signos'`));
+    const original = (await leerCliente(base.bd, fila.id))!;
+    expect(original).toMatchObject({ contactoTelefono: "+52 442 123 4567", direccion: "'Los Pinos'", notasAcceso: "=SUMA(A1)" });
+    const { contenido } = valor(await csvDeCartera(ctx(), { texto: "Cartonera Signos" }));
+    // En el archivo van neutralizados para Excel.
+    expect(contenido).toContain("'+52 442 123 4567");
+    expect(contenido).toContain("'=SUMA(A1)");
+    expect(contenido).toContain("''Los Pinos'");
+    await base.bd.execute(sql`UPDATE clientes SET nombre = 'Cartonera Signos Vieja' WHERE id = ${original.id}`);
+    const resumen = valor(await analizarImportacion(ctx(), contenido));
+    expect(resumen.errores).toEqual([]);
+    valor(await confirmarImportacion(ctx(), contenido, { operacionId: randomUUID(), huella: resumen.huella, aceptarDuplicados: true }));
+    const [vuelta] = filasDe<{ id: string }>(await base.bd.execute(sql`SELECT id FROM clientes WHERE nombre = 'Cartonera Signos'`));
+    expect((await leerCliente(base.bd, vuelta.id))!).toMatchObject({ contactoTelefono: "+52 442 123 4567", direccion: "'Los Pinos'", notasAcceso: "=SUMA(A1)" });
   });
 
   it("la supresión ARCO borra las notas del cliente solo con la conexión del migrador", async () => {

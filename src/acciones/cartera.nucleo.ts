@@ -52,6 +52,10 @@ export async function agregarNota(ctx: Contexto, clienteId: unknown, entrada: un
       const [original] = await tx.select({ id: notasCliente.id }).from(notasCliente)
         .where(and(eq(notasCliente.id, corrigeA), eq(notasCliente.clienteId, id.data)));
       if (!original) return invalido({ corrigeA: ["La nota que se corrige no es de este cliente"] });
+      // Revisión de Codex: una nota se corrige una sola vez (con el cliente bloqueado); otra corrección es de una
+      // pantalla desactualizada y debe partir de la versión vigente.
+      const [yaCorregida] = await tx.select({ id: notasCliente.id }).from(notasCliente).where(eq(notasCliente.corrigeA, corrigeA)).limit(1);
+      if (yaCorregida) return { ok: false, error: "conflicto" };
     }
     const nueva = await insertarNota(tx, { clienteId: id.data, tipo, texto, autor: permiso.usuario.id, corrigeA: corrigeA ?? null }, ctx.ahora);
     await registrarEvento(tx, { usuarioId: permiso.usuario.id, entidad: "nota_cliente", entidadId: nueva, accion: corrigeA ? "corregir_nota" : "crear_nota", campos: ["tipo", "texto"] });
