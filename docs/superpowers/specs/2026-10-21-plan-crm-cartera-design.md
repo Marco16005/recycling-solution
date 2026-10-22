@@ -1,7 +1,7 @@
 # Plan CRM — Cartera lista para operar y con plus (diseño)
 
 - **Fecha:** 2026-10-21.
-- **Revisión:** 1 (para la revisión de Codex y del usuario).
+- **Revisión:** 1.1. Incorpora los 7 hallazgos de Codex del 2026-10-21 (§10); el usuario ya había aprobado la 1.
 - **Base:** `main` en f89983c (Planes 1 a 7 validados). Este plan va **antes** del Plan 8; el Plan 8 queda escrito y en espera.
 - **Lo que pidió el usuario (2026-10-21):**
   - Revisar el CRM antes de seguir y hacer un plan con los diez puntos propuestos, porque "todos pueden hacer una diferencia".
@@ -71,7 +71,10 @@ Datos personales (contactos y notas): solo los ve quien hoy ve clientes (`client
   - `ubicacion`: un enlace o texto del §4.2, como alternativa a `lat` y `lng`. Si vienen las dos y no coinciden, la fila marca error.
     - *Decisión de Claude:* en el CSV no se aceptan enlaces cortos, para no consultar a Google por cada fila al analizar. La fila marca "Enlace corto: pégalo en la ficha o copia el enlace largo".
   - `correo` y `puesto` del contacto principal.
-- **Plantilla:** descargable desde la pantalla de importación, con BOM, CRLF y una fila de ejemplo sintética. Es la misma forma que la exportación (§4.9), así que exportar e importar es ida y vuelta.
+- **Plantilla:** descargable desde la pantalla de importación, con BOM, CRLF y una fila de ejemplo sintética. Tiene la misma forma que la exportación (§4.9).
+- **Ida y vuelta, acotada:** exportar e importar conserva las **columnas de la plantilla**. La importación solo **da de alta** clientes; ignora `id` con un aviso y no actualiza los existentes. Contactos adicionales, recurrencia, documentos, estado activo y privacidad no viajan por CSV: se capturan en la ficha.
+- **Archivo como bytes:** la pantalla envía el archivo en `FormData` y la acción lee sus bytes. Así Windows-1252 se decodifica en el servidor, y los límites y la huella se calculan sobre los bytes.
+- **Privacidad:** el CSV no trae la aceptación del aviso. Un cliente importado con todos sus datos operativos queda con el faltante `aviso_privacidad` hasta que se registra la aceptación en su ficha.
 - **Errores:** la vista previa y los errores por fila siguen como hoy, con mensajes claros, por ejemplo "Horario no reconocido: 'lunes a viernes 8-2'; usa lun-vie 08:00-14:00".
 
 ### 4.2 Ubicación pegada (punto 2)
@@ -112,6 +115,8 @@ En la ficha, "Historial" muestra lo más reciente primero, de 20 en 20:
 - **Reglas de la lista** (decisión de Claude):
   - una sola propuesta por cliente y fecha, aunque tenga recurrencia y ritmo, con los dos motivos;
   - posponer N días guarda `pospuesta_hasta = D + N`, y el cliente no se vuelve a proponer antes de esa fecha;
+  - una posposición vencida es un motivo propio (`pospuesta`): el cliente se propone en el primer día de operación ≥ `pospuesta_hasta` con horario y habilitación, aunque ya no caiga en la ventana del ritmo ni toque su recurrencia, hasta que se confirme o se descarte;
+  - confirmar y la captura manual comparten candado: las dos bloquean al cliente (`bloquearCliente`) antes de revisar o insertar. Dentro de la transacción, la confirmación vuelve a comprobar toda la elegibilidad para D: activo, habilitado, sin solicitud abierta y sin decisión;
   - descartar vale solo para esa D;
   - la solicitud confirmada usa la hora de confirmar como `registrada_en` (llave FIFO) y como inicio y fin de captura;
   - el panel muestra K2 de las de canal `propuesta` por separado, para no mezclar captura asistida con captura manual en la comparación de la tesis;
@@ -127,7 +132,7 @@ En la ficha, "Historial" muestra lo más reciente primero, de 20 en 20:
   - última visita;
   - ritmo aprendido;
   - veces que se pospuso;
-  - porcentaje de llegadas dentro de su horario (como K3) con su muestra.
+  - porcentaje de inicios de servicio dentro de su horario, con su muestra. Es la misma regla y el mismo denominador que K3: llegar antes y esperar cuenta como cumplimiento.
 - Funciones puras en `src/indicadores/cliente.ts` (Claude), con valores calculados a mano en las pruebas.
 
 ### 4.6 Mapa de la cartera (punto 6)
@@ -232,3 +237,15 @@ Si Codex no tiene cuota, Claude puede tomar las funciones puras de `src/dominio`
 | Los formatos de enlace de Google cambian | Varios patrones y el enlace corto resuelto. Si no se reconoce, mensaje claro y se puede hacer clic en el mapa |
 | Exportar datos personales | Permiso propio, bitácora y procedimiento interno |
 | Notas con datos sensibles | Aviso en la pantalla ("no escribas datos sensibles"), límite de 1000 caracteres y revisión del abogado |
+
+## 10. Respuesta a la revisión de Codex (2026-10-21)
+
+| # | Hallazgo | Resolución |
+|---|---|---|
+| 1 | Una pospuesta podía desaparecer | Motivo `pospuesta` y regla de §4.4 |
+| 2 | "Dentro del horario" no era K3 | §4.5: inicio de servicio, la definición y el denominador de K3; el contrato recibe `inicioServicioEn` |
+| 3 | La ida y vuelta prometía más | §4.1: acotada a las columnas de la plantilla; la importación da altas e ignora `id` |
+| 4 | Confirmación contra captura manual | §4.4: candado común por cliente y elegibilidad revalidada, con pruebas en los dos órdenes y contra un cambio de habilitación |
+| 5 | Windows-1252 de punta a punta | §4.1: el archivo viaja como bytes en `FormData` |
+| 6 | K5 contra privacidad | §4.1: importado queda con `aviso_privacidad` faltante hasta registrarla |
+| 7 | Contratos del plan contra PC-0 | Plan §2 sincronizado con el código: `src/acciones/cartera.nucleo.ts` y `fichaCartera` |

@@ -47,7 +47,7 @@ Cinco entradas que la especificación implica y que una persona encontraría pri
 | # | Responsable | Tarea | Depende de |
 |---|---|---|---|
 | P8-0 | Claude (parte de Codex reasignada el 2026-10-21: Codex sin cuota hasta las 17:58; Codex la revisa) | Contratos de §2 que compilan | — |
-| P8-1 | Claude | Migración `0009`, configuración (acción, consulta y formulario) | P8-0 |
+| P8-1 | Claude | Migración `0010` (después de la `0009` del Plan CRM), configuración (acción, consulta y formulario) | P8-0 |
 | P8-2 | Claude (reasignada; Codex la revisa) | Tiempo muerto, VND de las fases 2 y 4, versión `1.2.0`, fixture `1.1.0`, compatibilidad, propiedades y rendimiento | P8-0 |
 | P8-3 | Claude (reasignada; Codex la revisa) | Readmisión (directa y "mover una y meter"), `alarga_la_jornada`, validación por fases, manipulación y ajustes manuales | P8-2 |
 | P8-4 | Claude | `obtenerPlan` con `reacomodo`; pruebas de integración de re-ruteo con reacomodo | P8-3 |
@@ -76,6 +76,7 @@ export type DecisionReadmision =
       diagnostico: Diagnostico; rutasAntes: RutaPlan[] };
 export interface Reacomodo {
   antes: Plan["resumen"] & { tiempoMuertoMin: number };   // S1
+  despues: Plan["resumen"] & { tiempoMuertoMin: number }; // S4 del motor; inmutable ante ajustes
   rutasReacomodadas: RutaPlan[];                          // S2
   readmision: DecisionReadmision[];                       // fase 3, en orden FIFO
   movimientos: { fase2: number; fase4: number };
@@ -128,7 +129,7 @@ scripts/verificar-todo.sh                                     # al cierre, árbo
 
 **Archivos:**
 - `src/datos/esquema.ts`: `tolerancia_readmision_min smallint NOT NULL DEFAULT 15`, con `CHECK BETWEEN 0 AND 60`.
-- `drizzle/0009_reacomodo.sql`, generado con `npx drizzle-kit generate --name reacomodo`.
+- `drizzle/0010_reacomodo.sql`, generado con `npx drizzle-kit generate --name reacomodo`.
 - `src/datos/configuracion.ts`.
 - `src/acciones/configuracion.nucleo.ts` (Zod `z.number().int().min(0).max(60)`, opcional como los del Plan 7, en `CAMPOS`).
 - `src/consultas/configuracion.nucleo.ts`.
@@ -143,7 +144,7 @@ scripts/verificar-todo.sh                                     # al cierre, árbo
 - [ ] **Paso 2.** Correr las dos. Esperado: FALLA (columna o campo inexistente).
 - [ ] **Paso 3.** Esquema, migración y persistencia. El formulario muestra el campo "Tolerancia para una parada extra (min de tiempo muerto)" con la nota "si una parada extra alarga el día más que esto, se queda para otro día".
 - [ ] **Paso 4.** Correr las pruebas y `src/datos/migraciones`. Esperado: PASA.
-- [ ] **Paso 5.** Commit: `Plan 8 P8-1: tolerancia de readmisión en la configuración (migración 0009)`.
+- [ ] **Paso 5.** Commit: `Plan 8 P8-1: tolerancia de readmisión en la configuración (migración 0010)`.
 
 ### P8-2: Tiempo muerto y VND (Claude, reasignada; Codex la revisa)
 
@@ -219,7 +220,7 @@ scripts/verificar-todo.sh                                     # al cierre, árbo
 - [ ] **Paso 4.** Validación (§4.6, pasos 3 y 6). Pruebas de manipulación:
   - `rechaza readmisión fuera de orden, con Δ excedido, con una decisión de más o de menos, con rutasAntes alterado, con movida protegida, y una pospuesta alarga_la_jornada cuyo Δ mínimo real está dentro de la tolerancia`;
   - `acepta un hueco abierto por la fase 4 después de rechazar una pospuesta`.
-- [ ] **Paso 5.** Ajustes manuales: `ajustar un 1.2.0 (mover, posponer, actualizarHora) conserva reacomodo intacto, recalcula resumen.tiempoMuertoMin y valida en modo manual` (enfoque 5).
+- [ ] **Paso 5.** Ajustes manuales: `ajustar un 1.2.0 (mover, posponer, actualizarHora) conserva reacomodo intacto, incluido despues, recalcula resumen.tiempoMuertoMin y valida en modo manual` (enfoque 5). La validación automática exige `reacomodo.despues` igual al resumen de S4.
 - [ ] **Paso 6.** Propiedades:
   - cada readmitida con Δ ≤ tolerancia;
   - cada pospuesta final cumple §4.1;
@@ -231,7 +232,7 @@ scripts/verificar-todo.sh                                     # al cierre, árbo
 ### P8-4: Consulta y re-ruteo con reacomodo (Claude)
 
 **Archivos:**
-- `src/consultas/plan.nucleo.ts`: `reacomodo` de §2 desde `plan.resultado.reacomodo`, `resumen` y `plan.ajustes.length`; `null` si la versión no es `1.2.0`.
+- `src/consultas/plan.nucleo.ts`: `reacomodo` de §2 desde `plan.resultado.reacomodo` (`antes` y `despues`, este último inmutable) y `plan.ajustes.length`; `null` si la versión no es `1.2.0`.
 - Pruebas: `src/consultas/plan8.integracion.test.ts` y `src/acciones/plan8.integracion.test.ts`.
 
 - [ ] **Paso 1: pruebas que fallan.**

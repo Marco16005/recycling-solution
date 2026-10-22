@@ -93,7 +93,7 @@ export interface CandidatoPropuesta {
   clienteId: string; activo: boolean; habilitadoEnFecha: boolean; tieneSolicitudAbierta: boolean;
   recurrencia: Recurrencia | null; ritmo: Ritmo | null; decisiones: DecisionPropuesta[];
 }
-export interface Propuesta { clienteId: string; motivos: ("recurrencia" | "ritmo")[]; fechaEsperada: string | null; ritmo: Ritmo | null }
+export interface Propuesta { clienteId: string; motivos: ("recurrencia" | "ritmo" | "pospuesta")[]; fechaEsperada: string | null; ritmo: Ritmo | null }
 export function propuestasParaFecha(fecha: string, diasOperacion: number[], candidatos: CandidatoPropuesta[]): Propuesta[];
 
 // src/indicadores/cliente.ts (Claude)
@@ -101,11 +101,12 @@ export interface NumerosCliente {
   completadas: number; noAtendidas: number; ultimaVisita: string | null; ritmo: Ritmo | null;
   vecesPospuesta: number; dentroDeHorario: { porcentaje: number | null; muestra: number };
 }
-export function numerosDeCliente(datos: { paradas: { fecha: string; estado: string; llegadaEn: string | null;
+export function numerosDeCliente(datos: { paradas: { fecha: string; estado: string; inicioServicioEn: string | null;
   ventanaInicio: string; ventanaFin: string }[]; solicitudes: { fechaSolicitada: string; estado: string; vecesPospuesta: number }[] },
   hoy: string): NumerosCliente;   // ventana de 90 días
 
-// Acciones (Claude): src/acciones/clientes.nucleo.ts y src/acciones/propuestas.nucleo.ts
+// Acciones (Claude): src/acciones/cartera.nucleo.ts (ubicación y notas) y src/acciones/propuestas.nucleo.ts
+// Importación: la acción recibe FormData con el archivo (bytes) en lugar de una cadena (Windows-1252, límites y huella sobre bytes).
 export async function ubicacionDesdeTexto(ctx: Contexto, texto: unknown):
   Promise<Resultado<{ lat: number; lng: number; distanciaCalleM: number | null }>>;
 export async function confirmarPropuestas(ctx: Contexto, fecha: unknown, clienteIds: unknown):
@@ -114,13 +115,12 @@ export async function posponerPropuesta(ctx: Contexto, fecha: unknown, clienteId
 export async function descartarPropuesta(ctx: Contexto, fecha: unknown, clienteId: unknown, nota: unknown): Promise<Resultado<null>>;
 export async function agregarNota(ctx: Contexto, clienteId: unknown, entrada: unknown): Promise<Resultado<{ id: string }>>;
 
-// Consultas (Claude): filtros en listarClientes, más
+// Consultas (Claude): src/consultas/cartera.nucleo.ts (como quedó en PC-0): FiltrosCartera, fichaCartera(ctx, clienteId, pagina)
+// → FichaCartera { historial, numeros, notas, ritmo, puedeAnotar }, propuestasDeRecoleccion y mapaCartera.
 export interface FiltrosCartera {
   texto?: string; residuo?: TipoResiduo; estado?: "completo" | "incompleto" | "habilitado" | "no_habilitado";
   sinUbicacion?: boolean; documentos?: "por_vencer" | "vencidos"; activos?: "activos" | "inactivos" | "todos";
 }
-// FichaCliente agrega: historial (página), numeros: NumerosCliente, notas (última versión de cada una, con corregida),
-//                      ritmo: Ritmo | null.
 export async function propuestasDeRecoleccion(ctx: Contexto, fecha?: unknown): Promise<Resultado<{ fecha: string;
   propuestas: (Propuesta & { nombre: string; ultimaSolicitud: string | null })[] }>>;
 export async function mapaCartera(ctx: Contexto, filtros: unknown): Promise<Resultado<{ puntos: { clienteId: string; nombre: string;
@@ -225,11 +225,15 @@ scripts/verificar-todo.sh          # al cierre, árbol limpio y sin tocar nada m
 - Pruebas: `src/acciones/crm.integracion.test.ts`.
 
 - [ ] **Paso 1: pruebas que fallan.**
-  - `importar un CSV con todas las columnas deja fichas completas (K5) y exportar → importar da los mismos datos`;
+  - `importar un CSV con todas las columnas deja la ficha con datos operativos completos y solo el faltante aviso_privacidad; tras registrar la aceptación queda completa (K5)`;
+  - `exportar → importar conserva las columnas de la plantilla, crea altas e ignora id con aviso`;
+  - `importar un archivo Windows-1252 enviado como FormData conserva Querétaro`;
   - `ubicacionDesdeTexto resuelve un enlace corto contra un servidor falso (redirección a ?q=lat,lng), corta tras 3 saltos o 3 s, rechaza un dominio que no es de Google, y devuelve distanciaCalleM con OSRM`;
   - `confirmarPropuestas crea la solicitud con canal propuesta y registrada_en = ahora; dos confirmaciones a la vez dejan una sola y la otra en yaConfirmadas` (enfoque 5);
+  - `confirmación y captura manual del mismo cliente a la vez, en los dos órdenes: queda una sola solicitud abierta` (las dos bloquean al cliente);
+  - `no confirma si el cliente dejó de estar habilitado para D después de listar`;
   - `no confirma a un cliente que ya tiene solicitud abierta`;
-  - `posponer 7 días lo esconde hasta D + 7; descartar vale solo para D`;
+  - `posponer 7 días lo esconde hasta D + 7 y reaparece con motivo pospuesta en el primer día de operación ≥ D + 7; descartar vale solo para D`;
   - `agregarNota respeta tipo y largo, corregir crea otra nota, y la bitácora guarda ["tipo","texto"]`;
   - `GET /api/clientes/csv: 403 para gerencia; para el despachador, CSV con BOM y fórmulas neutralizadas, y bitácora exportar_clientes`;
   - `GET /api/clientes/plantilla con el permiso clientes.importar`;
@@ -246,7 +250,7 @@ scripts/verificar-todo.sh          # al cierre, árbol limpio y sin tocar nada m
 **Archivos:** `src/consultas/clientes.nucleo.ts` (filtros, ficha y mapa), `src/consultas/propuestas.nucleo.ts`, `src/indicadores/cliente.ts`, `src/consultas/indicadores.nucleo.ts` (K2 sin `propuesta` y aparte) y sus pruebas.
 
 - [ ] **Paso 1: pruebas que fallan.**
-  - `numerosDeCliente`, con valores a mano: 3 completadas, 1 no atendida y 2 de 3 llegadas en horario dan 66.7 % con muestra 3;
+  - `numerosDeCliente`, con valores a mano: 3 completadas, 1 no atendida y 2 de 3 inicios de servicio en horario (uno llegó antes y esperó: cuenta) dan 66.7 % con muestra 3;
   - `listarClientes con cada filtro y combinado con texto; K5 no cambia con los filtros; insignia de documento por vencer`;
   - `obtenerFicha trae historial paginado, números, notas con su última versión y ritmo`;
   - `propuestasDeRecoleccion para el siguiente día de operación por omisión`;

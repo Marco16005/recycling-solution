@@ -1,7 +1,7 @@
 # Plan 8 — Reacomodo de rutas: más paradas atendidas y menos tiempo muerto (diseño)
 
 - **Fecha:** 2026-10-21.
-- **Revisión:** 2. Incorpora el chequeo de constructor y los 11 hallazgos de Codex sobre la revisión 1, y la respuesta del usuario a la única pregunta que era suya (§9).
+- **Revisión:** 2.1. Incorpora el chequeo de constructor y los 11 hallazgos de Codex sobre la revisión 1, la respuesta del usuario a la única pregunta que era suya (§9) y los hallazgos de Codex sobre la revisión 2 (§10). Va después del Plan CRM y usa la migración `0010`.
 - **Base:** `main` en f89983c, con los Planes 1 a 7 validados.
 - **Lo que pidió el usuario (2026-10-21):**
   - Que el reacomodo mejore "el tiempo y la cobertura y paradas". Confirmó las suposiciones de la conversación:
@@ -180,6 +180,8 @@ toleranciaReadmisionMin?: number;      // de configuracion.tolerancia_readmision
 // Plan agrega (obligatorio en 1.2.0, ausente en versiones anteriores):
 reacomodo: {
   antes: Plan["resumen"] & { tiempoMuertoMin: number };   // S1
+  /** S4 tal como lo dejó el motor; inmutable: un ajuste manual no lo cambia. Validación: igual al resumen de S4. */
+  despues: Plan["resumen"] & { tiempoMuertoMin: number };
   rutasReacomodadas: RutaPlan[];                          // S2
   readmision: DecisionReadmision[];                       // fase 3, en orden FIFO
   movimientos: { fase2: number; fase4: number };          // mejoras estrictas aceptadas
@@ -188,10 +190,10 @@ reacomodo: {
 // Plan.resumen agrega tiempoMuertoMin (obligatorio en 1.2.0, ausente en versiones anteriores).
 
 type DecisionReadmision =
-  | { solicitudId: string; resultado: "admitida"; unidadId: string; viaje: number; secuencia: number; deltaMin: number;
-      movida: null | { solicitudId: string; de: { unidadId: string; viaje: number; secuencia: number };
-                       a: { unidadId: string; viaje: number; secuencia: number } };
+  | { solicitudId: string; resultado: "admitida"; posicion: PosicionPlan; deltaMin: number;
+      movida: null | { solicitudId: string; de: PosicionPlan; a: PosicionPlan };
       rutasAntes: RutaPlan[] }
+// PosicionPlan = { unidadId: string; viaje: number; secuencia: number }, viaje y secuencia desde 1.
   | { solicitudId: string; resultado: "pospuesta"; motivo: "sin_cupo" | "alarga_la_jornada"; diagnostico: Diagnostico; rutasAntes: RutaPlan[] };
 ```
 
@@ -208,7 +210,7 @@ type DecisionReadmision =
 ### 4.9 Lo demás del sistema
 
 - **Configuración (Claude):**
-  - columna `tolerancia_readmision_min` (0 a 60, 15 por omisión; migración `0009`);
+  - columna `tolerancia_readmision_min` (0 a 60, 15 por omisión; migración `0010`, después de la `0009` del Plan CRM);
   - campo "Tolerancia para una parada extra (min de tiempo muerto)" con la nota "si una parada extra alarga el día más que esto, se queda para otro día";
   - `construirEntrada` (Codex) la copia a los parámetros.
 - **Plan del día (pantalla, Codex):**
@@ -303,3 +305,11 @@ Si Codex se queda sin cuota, Claude puede tomar tareas del motor que no sean pan
 | B9 | El presupuesto no demuestra la duración | §3 y §4.4: escenarios de rendimiento, costo por rutas recalculadas y medición del flujo completo |
 | B10 | Desempate contado como mejora | §4.3, mejora estricta, orden canónico solo para elegir y corte determinista |
 | B11 | Integración con la frontera | §3 y §4.9: índices tras liberar, excepciones del Plan 7 y pruebas de acciones de Claude |
+
+## 10. Respuesta a la revisión de Codex de la revisión 2 (2026-10-21)
+
+| # | Hallazgo | Resolución |
+|---|---|---|
+| 8 y 9 | Faltaba conservar el resumen automático S4 | `reacomodo.despues` inmutable, validado igual al resumen de S4 y conservado en los ajustes (§4.7 y §4.8) |
+| 10 | Migración 0009 | Pasa a `0010`, con el Plan CRM como prerrequisito |
+| 11 | Dos formas de `DecisionReadmision` | Una sola, con `posicion: PosicionPlan` (§4.7) |
