@@ -27,6 +27,8 @@ export interface FilaValida {
 
 /** registros: registros de datos no vacíos leídos del archivo. */
 export interface AnalisisCsv {
+  /** Plan CRM: avisos que no impiden importar (por ejemplo, la columna id se ignora). */
+  avisos: string[];
   validas: FilaValida[];
   errores: ErrorDeImportacion[];
   registros: number;
@@ -39,7 +41,7 @@ export type PosibleDuplicado =
 /** Convierte el CSV exportado desde Excel en entradas validadas, con los errores por fila. */
 export function analizarClientesCsv(entradaCruda: string | Uint8Array): AnalisisCsv {
   const contenido = typeof entradaCruda === "string" ? entradaCruda : decodificar(entradaCruda);
-  const resultado: AnalisisCsv = { validas: [], errores: [], registros: 0 };
+  const resultado: AnalisisCsv = { validas: [], errores: [], registros: 0, avisos: [] };
   const errorArchivo = (mensaje: string) => {
     resultado.errores.push({ fila: null, mensajes: [mensaje] });
     return resultado;
@@ -62,6 +64,7 @@ export function analizarClientesCsv(entradaCruda: string | Uint8Array): Analisis
   if (erroresPorFila.has(1)) resultado.errores.push({ fila: 1, mensajes: erroresPorFila.get(1)! });
   if (!encabezados.includes("nombre")) return errorArchivo('Falta la columna obligatoria "nombre"');
   if (new Set(encabezados).size !== encabezados.length) return errorArchivo("Hay encabezados repetidos");
+  if (encabezados.includes("id")) resultado.avisos.push("La columna id se ignora: la importación solo da de alta clientes nuevos");
 
   leido.data.slice(1).forEach((valores, indice) => {
     const fila = indice + 2;

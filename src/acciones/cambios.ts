@@ -3,9 +3,11 @@ import type { ClienteEntrada } from "@/dominio/clientes/esquemas";
 const CAMPOS = [
   "nombre", "contactoNombre", "contactoTelefono", "direccion", "lat", "lng", "tipoResiduo", "material",
   "tiposUnidadAdmitidos", "notasAcceso", "tiempoServicioMin", "cargaEstimadaKg", "activo", "ventanas", "documentos",
+  // Plan CRM.
+  "contactoCorreo", "contactoPuesto", "contactosAdicionales", "recurrencia",
 ] as const satisfies readonly (keyof ClienteEntrada)[];
 
-const tieneValor = (v: unknown) => v !== null && !(Array.isArray(v) && v.length === 0);
+const tieneValor = (v: unknown) => v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0);
 
 /** Para comparar: un campo nulo y uno ausente valen lo mismo, y el orden de las llaves no importa. */
 const sinVacios = (x: unknown): unknown =>
@@ -19,9 +21,11 @@ const sinVacios = (x: unknown): unknown =>
  */
 export function camposCambiados(antes: ClienteEntrada | null, despues: ClienteEntrada): string[] {
   if (antes === null) return CAMPOS.filter((campo) => tieneValor(despues[campo]));
+  // Un campo ausente (entrada anterior al Plan CRM) vale lo mismo que vacío.
   const comparable = (v: unknown) =>
-    Array.isArray(v) ? JSON.stringify(v.map((x) => JSON.stringify(sinVacios(x))).sort()) : JSON.stringify(v);
-  return CAMPOS.filter((campo) => comparable(antes[campo]) !== comparable(despues[campo]));
+    Array.isArray(v) ? JSON.stringify(v.map((x) => JSON.stringify(sinVacios(x))).sort()) : JSON.stringify(v ?? null);
+  const vacioSiArreglo = (campo: (typeof CAMPOS)[number], v: unknown) => (v === undefined && (campo === "contactosAdicionales") ? [] : v);
+  return CAMPOS.filter((campo) => comparable(vacioSiArreglo(campo, antes[campo])) !== comparable(vacioSiArreglo(campo, despues[campo])));
 }
 
 /** Igual que camposCambiados, para cualquier registro: compara solo los campos indicados. */

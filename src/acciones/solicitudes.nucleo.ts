@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { registrarEvento } from "@/datos/bitacora";
-import { leerCliente } from "@/datos/clientes";
+import { bloquearCliente, leerCliente } from "@/datos/clientes";
 import { actualizarSolicitudPendiente, insertarSolicitud, siguienteConsecutivo, type ResultadoCambioSolicitud } from "@/datos/solicitudes";
 import { erroresPorCampo } from "@/dominio/clientes/esquemas";
 import { formatoFolio } from "@/dominio/solicitudes/cola";
@@ -46,6 +46,8 @@ export async function registrarSolicitud(ctx: Contexto, entrada: unknown): Promi
   const usuarioId = permiso.usuario.id;
 
   return ctx.bd.transaction(async (tx): Promise<Resultado<{ id: string; folio: string }>> => {
+    // Plan CRM: el mismo candado que confirmar una propuesta, para que esta vea la solicitud recién capturada.
+    await bloquearCliente(tx, datos.clienteId);
     const cliente = await leerCliente(tx, datos.clienteId);
     if (cliente === null || !cliente.activo) return invalido({ clienteId: ["Elige un cliente activo"] });
     const folio = formatoFolio(hoy, await siguienteConsecutivo(tx, hoy));

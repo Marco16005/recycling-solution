@@ -140,15 +140,25 @@ const ENCABEZADOS = [
   "regreso_y_descarga_min", "ciclo_min", "dentro_de_ventana", "km_contrafactual",
 ];
 
-/** Un texto que empieza como fórmula (=, +, -, @, tabulador o retorno) se neutraliza con un apóstrofo: Excel no lo ejecuta. */
-const sinFormula = (v: string) => (/^[=+\-@\t\r]/.test(v) ? `'${v}` : v);
+/**
+ * Un texto que empieza como fórmula (=, +, -, @, tabulador o retorno) se neutraliza con un apóstrofo: Excel no lo ejecuta.
+ * Un número puro (-100.3, +5) no es fórmula y se deja tal cual, para que la cartera exportada se vuelva a importar (Plan CRM).
+ */
+const NUMERO_PURO = /^[+-]?\d+(\.\d+)?$/;
+const sinFormula = (v: string) => (/^[=+\-@\t\r]/.test(v) && !NUMERO_PURO.test(v) ? `'${v}` : v);
 
-function celda(v: string | number | boolean | null): string {
+/** Celda de CSV para Excel: fórmulas neutralizadas y comillas cuando hace falta. Los números se redondean a 2 decimales. */
+export function celda(v: string | number | boolean | null): string {
   if (v === null) return "";
   if (typeof v === "boolean") return v ? "si" : "no";
   if (typeof v === "number") return Number.isFinite(v) ? String(Math.round(v * 100) / 100) : "";
   const texto = sinFormula(v);
   return /[",\r\n]/.test(texto) ? `"${texto.replaceAll('"', '""')}"` : texto;
+}
+
+/** Documento CSV para Excel: UTF-8 con BOM, comas y CRLF (también lo usa la cartera, Plan CRM). */
+export function documentoCsv(encabezados: readonly string[], filas: (string | number | boolean | null)[][]): string {
+  return `\uFEFF${[encabezados.join(","), ...filas.map((f) => f.map(celda).join(","))].join("\r\n")}\r\n`;
 }
 
 /** CSV para Excel: UTF-8 con BOM, comas, punto decimal y CRLF. Celdas vacías para lo que falta. */

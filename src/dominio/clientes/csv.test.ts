@@ -59,7 +59,7 @@ describe("analizarClientesCsv", () => {
     const csv = inicio + "á".repeat(Math.floor(resto / 2)) + "x".repeat(resto % 2);
     expect(new TextEncoder().encode(csv).byteLength).toBe(LIMITES_CSV.bytes);
     expect(analizarClientesCsv(csv).errores).toEqual([]);
-    expect(analizarClientesCsv(csv + "x")).toEqual({ validas: [], registros: 0, errores: [{ fila: null, mensajes: [expect.stringContaining("bytes")] }] });
+    expect(analizarClientesCsv(csv + "x")).toEqual({ validas: [], registros: 0, avisos: [], errores: [{ fila: null, mensajes: [expect.stringContaining("bytes")] }] });
   });
 });
 

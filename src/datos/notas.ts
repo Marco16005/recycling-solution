@@ -12,6 +12,12 @@ export async function insertarNota(tx: Tx, n: NuevaNota, en: Date): Promise<stri
   return fila.id;
 }
 
+/** Supresión (derecho ARCO): solo con la conexión del migrador; rs_app no tiene DELETE. Devuelve cuántas borró. */
+export async function suprimirNotasDeCliente(tx: Tx, clienteId: string): Promise<number> {
+  const borradas = await tx.delete(notasCliente).where(eq(notasCliente.clienteId, clienteId)).returning({ id: notasCliente.id });
+  return borradas.length;
+}
+
 /** Más recientes primero. */
 export async function notasDeCliente(bd: BD | Tx, clienteId: string): Promise<FilaNota[]> {
   return bd.select().from(notasCliente).where(eq(notasCliente.clienteId, clienteId)).orderBy(desc(notasCliente.en), desc(notasCliente.id));
