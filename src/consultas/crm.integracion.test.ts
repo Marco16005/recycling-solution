@@ -122,7 +122,7 @@ describe("consultas del Plan CRM", () => {
     await base.bd.execute(sql`UPDATE solicitudes SET captura_inicio_en = ${new Date(AHORA.getTime() - 120_000)} WHERE cliente_id = ${habilitado}`);
     // Incompleto (sin residuo): no es elegible y no deja decisión.
     expect(valor(await confirmarPropuestas(ctx(), "2026-10-22", [incompleto])).noElegibles).toEqual([{ clienteId: incompleto, motivo: "no_habilitado" }]);
-    await base.bd.execute(sql`UPDATE clientes SET tipo_residuo = 'RME' WHERE id = ${incompleto}`);
+    await base.bd.execute(sql`UPDATE clientes SET tipo_residuo = 'RME', recurrencia = '{"tipo":"dias_semana","dias":[4]}' WHERE id = ${incompleto}`);
     valor(await confirmarPropuestas(ctx(), "2026-10-22", [incompleto]));
     const p = valor(await panel(ctx(gerencia), "2026-10-21", "2026-10-21"));
     expect(p.k2.muestra).toBe(1);

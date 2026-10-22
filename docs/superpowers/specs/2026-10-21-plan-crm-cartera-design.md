@@ -73,7 +73,7 @@ Datos personales (contactos y notas): solo los ve quien hoy ve clientes (`client
   - `correo` y `puesto` del contacto principal.
 - **Plantilla:** descargable desde la pantalla de importación, con BOM, CRLF y una fila de ejemplo sintética. Tiene la misma forma que la exportación (§4.9).
 - **Ida y vuelta, acotada:** exportar e importar conserva las **columnas de la plantilla**. La importación solo **da de alta** clientes; ignora `id` con un aviso y no actualiza los existentes. Contactos adicionales, recurrencia, documentos, estado activo y privacidad no viajan por CSV: se capturan en la ficha.
-- **Archivo como bytes:** la pantalla envía el archivo en `FormData` y la acción lee sus bytes. Así Windows-1252 se decodifica en el servidor, y los límites y la huella se calculan sobre los bytes.
+- **Codificación (como quedó implementado):** la pantalla lee el archivo como bytes, lo decodifica como UTF-8 o, si no es válido, como Windows-1252, y envía el texto. La acción mantiene su contrato de texto; los límites y la huella se calculan sobre ese texto. `analizarClientesCsv` también acepta bytes. *Decisión de Claude (2026-10-22), anotada tras la revisión de Codex.*
 - **Privacidad:** el CSV no trae la aceptación del aviso. Un cliente importado con todos sus datos operativos queda con el faltante `aviso_privacidad` hasta que se registra la aceptación en su ficha.
 - **Errores:** la vista previa y los errores por fila siguen como hoy, con mensajes claros, por ejemplo "Horario no reconocido: 'lunes a viernes 8-2'; usa lun-vie 08:00-14:00".
 

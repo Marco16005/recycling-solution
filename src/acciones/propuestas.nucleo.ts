@@ -4,7 +4,9 @@ import { registrarEvento } from "@/datos/bitacora";
 import { bloquearCliente, leerCliente } from "@/datos/clientes";
 import { leerConfiguracionCompleta } from "@/datos/configuracion";
 import { solicitudes } from "@/datos/esquema";
-import { decisionDe, insertarDecisionPropuesta } from "@/datos/propuestas";
+import { fechasAtendidas } from "@/datos/cartera";
+import { decisionDe, decisionesDePropuestas, insertarDecisionPropuesta } from "@/datos/propuestas";
+import { propuestasParaFecha, ritmoAprendido } from "@/dominio/solicitudes/propuestas";
 import { insertarSolicitud, siguienteConsecutivo } from "@/datos/solicitudes";
 import { diaSemanaDeFecha, motivosDeBloqueoCliente } from "@/dominio/clientes/habilitacion";
 import { formatoFolio } from "@/dominio/solicitudes/cola";
@@ -20,7 +22,8 @@ import { fechaSchema, idSchema, invalido, type Fallo } from "./validacion";
  * que una confirmación nunca crea una solicitud si ya había una abierta.
  */
 
-export type MotivoNoElegible = "inactivo" | "no_habilitado" | "solicitud_abierta" | "ya_decidida" | "no_encontrado";
+/** no_propuesta: no toca para esa fecha (sin ritmo ni recurrencia que la propongan, o con una posposición vigente). */
+export type MotivoNoElegible = "inactivo" | "no_habilitado" | "solicitud_abierta" | "ya_decidida" | "no_propuesta" | "no_encontrado";
 
 const ABIERTAS = ["pendiente", "programada", "en_ruta"] as const;
 
@@ -67,9 +70,17 @@ export async function confirmarPropuestas(ctx: Contexto, fecha: unknown, cliente
         else noElegibles.push({ clienteId, motivo: "ya_decidida" });
         return;
       }
-      const { versionAvisoPrivacidad } = await leerConfiguracionCompleta(tx);
-      const motivo = await noElegible(tx, clienteId, dia, versionAvisoPrivacidad);
+      const config = await leerConfiguracionCompleta(tx);
+      const motivo = await noElegible(tx, clienteId, dia, config.versionAvisoPrivacidad);
       if (motivo) { noElegibles.push({ clienteId, motivo }); return; }
+      // Revisión de Codex: confirmar solo lo que de verdad se propone para esa fecha, recalculado con el cliente bloqueado.
+      const cliente = (await leerCliente(tx, clienteId))!;
+      const candidato = {
+        clienteId, activo: true, habilitadoEnFecha: true, tieneSolicitudAbierta: false, recurrencia: cliente.recurrencia,
+        ritmo: ritmoAprendido((await fechasAtendidas(tx, [clienteId])).get(clienteId) ?? [], fechaEnMexico(ctx.ahora)),
+        decisiones: (await decisionesDePropuestas(tx, [clienteId])).get(clienteId) ?? [],
+      };
+      if (propuestasParaFecha(dia, config.diasOperacion, [candidato]).length === 0) { noElegibles.push({ clienteId, motivo: "no_propuesta" }); return; }
       const hoy = fechaEnMexico(ctx.ahora);
       const folio = formatoFolio(hoy, await siguienteConsecutivo(tx, hoy));
       const solicitudId = await insertarSolicitud(tx, {

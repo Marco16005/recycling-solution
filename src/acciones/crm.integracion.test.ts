@@ -7,9 +7,9 @@ import { clienteHabilitado, PATIO, ponerPatio } from "@/datos/pruebas/escenario-
 import { crearBasePostgres, filasDe, type BasePostgres } from "@/datos/pruebas/postgres-prueba";
 import { usuarioDePrueba } from "@/datos/pruebas/usuarios-prueba";
 import { faltantesDeCliente } from "@/dominio/clientes/completitud";
-import { COLUMNAS_CSV, filaCsvDeCliente } from "@/dominio/clientes/csv";
+import { COLUMNAS_CSV } from "@/dominio/clientes/csv";
 import type { UsuarioSesion } from "@/seguridad/permisos";
-import { plantillaCsv } from "@/consultas/cartera.nucleo";
+import { csvDeCartera, plantillaCsv } from "@/consultas/cartera.nucleo";
 import { crearConexion } from "@/datos/conexion-base";
 import { insertarNota, notasDeCliente, suprimirNotasDeCliente } from "@/datos/notas";
 import { agregarNota, ubicacionDesdeTexto } from "./cartera.nucleo";
@@ -63,8 +63,11 @@ describe("acciones del Plan CRM", () => {
     valor(await importar(`${encabezado}\nCartonera Ida,Ana,4421234567,,,Calle 1,"20.62, -100.3",RME,,30,800,"lun-vie 08:00-14:00; sab 09:00-12:00",doble_rodada|rabon,\n`));
     const [fila] = filasDe<{ id: string }>(await base.bd.execute(sql`SELECT id FROM clientes WHERE nombre = 'Cartonera Ida'`));
     const original = (await leerCliente(base.bd, fila.id))!;
-    const exportada = filaCsvDeCliente({ ...original, nombre: "Cartonera Vuelta" });
-    const csv = ["id," + COLUMNAS_CSV.join(","), `${original.id},` + COLUMNAS_CSV.map((c) => `"${exportada[c]}"`).join(",")].join("\n");
+    // La exportación real (con fórmulas neutralizadas y las columnas id, completa y habilitada_hoy), renombrada para darla de alta.
+    await base.bd.execute(sql`UPDATE clientes SET nombre = 'Cartonera Vuelta' WHERE id = ${original.id}`);
+    const { contenido } = valor(await csvDeCartera(ctx(), { texto: "Cartonera Vuelta" }));
+    await base.bd.execute(sql`UPDATE clientes SET nombre = 'Cartonera Ida' WHERE id = ${original.id}`);
+    const csv = contenido;
     const resumen = valor(await analizarImportacion(ctx(), csv));
     expect(resumen.avisos.join(" ")).toContain("id");
     valor(await confirmarImportacion(ctx(), csv, { operacionId: randomUUID(), huella: resumen.huella, aceptarDuplicados: true }));
@@ -89,7 +92,8 @@ describe("acciones del Plan CRM", () => {
     let clienteId: string;
     beforeEach(async () => {
       // Lunes a sábado de 08:00 a 14:00 (escenario-plan) y aviso aceptado: habilitado para mañana jueves.
-      clienteId = (await clienteHabilitado(base.bd, "Cartonera Propuesta", 0.01)).id;
+      // Recurrencia los jueves: mañana (2026-10-22) se le propone.
+      clienteId = (await clienteHabilitado(base.bd, "Cartonera Propuesta", 0.01, { recurrencia: { tipo: "dias_semana", dias: [4] } })).id;
     });
 
     it("confirmar crea la solicitud con canal propuesta y la hora de confirmar; dos a la vez dejan una sola", async () => {
@@ -128,6 +132,17 @@ describe("acciones del Plan CRM", () => {
       const otro = (await clienteHabilitado(base.bd, "Cartonera Sin Horario", 0.02)).id;
       await base.bd.execute(sql`DELETE FROM ventanas_cliente WHERE cliente_id = ${otro}`);
       expect(valor(await confirmarPropuestas(ctx(), MANANA, [otro])).noElegibles).toEqual([{ clienteId: otro, motivo: "no_habilitado" }]);
+    });
+
+    it("no confirma lo que no se propone para esa fecha: sin ritmo ni recurrencia, o con una posposición vigente", async () => {
+      const sinMotivo = (await clienteHabilitado(base.bd, "Cartonera Sin Motivo", 0.02)).id;
+      expect(valor(await confirmarPropuestas(ctx(), MANANA, [sinMotivo])).noElegibles).toEqual([{ clienteId: sinMotivo, motivo: "no_propuesta" }]);
+      valor(await posponerPropuesta(ctx(), "2026-10-29", clienteId, 7));   // jueves siguiente, pospuesta hasta el 5 de noviembre
+      // El 22 todavía se propone (la posposición es de otra fecha); el jueves 29 ya tiene decisión.
+      expect(valor(await confirmarPropuestas(ctx(), "2026-10-29", [clienteId])).noElegibles).toEqual([{ clienteId, motivo: "ya_decidida" }]);
+      const conRecurrencia = (await clienteHabilitado(base.bd, "Cartonera Pospuesta", 0.03, { recurrencia: { tipo: "dias_semana", dias: [4, 5] } })).id;
+      valor(await posponerPropuesta(ctx(), MANANA, conRecurrencia, 3));    // hasta el domingo 25
+      expect(valor(await confirmarPropuestas(ctx(), "2026-10-23", [conRecurrencia])).noElegibles).toEqual([{ clienteId: conRecurrencia, motivo: "no_propuesta" }]);
     });
 
     it("posponer y descartar guardan su decisión; gerencia no puede", async () => {
