@@ -33,4 +33,11 @@ describe("leerHorarios (Plan CRM, §4.1)", () => {
     expect(leerHorarios(escribirHorarios(r.ventanas))).toEqual(r);
     expect(escribirHorarios([])).toBe("");
   });
+  it("un texto enorme o lleno de espacios se rechaza rápido (sin retroceso catastrófico)", () => {
+    for (const texto of ["lun" + " ".repeat(50_000) + "x", "a ".repeat(20_000) + "08:00-09:00", ("lun 08:00-09:00;").repeat(100)]) {
+      const inicio = performance.now();
+      expect(leerHorarios(texto).ok).toBe(false);
+      expect(performance.now() - inicio).toBeLessThan(50);
+    }
+  });
 });
