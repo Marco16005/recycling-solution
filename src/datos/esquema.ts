@@ -233,6 +233,8 @@ export const configuracion = pgTable(
     horasPico: jsonb("horas_pico").notNull().default([{ inicio: "07:00", fin: "09:30", factor: 1.3 }, { inicio: "13:30", fin: "15:00", factor: 1.15 }]),
     /** Plan 7: a partir de cuántos minutos de atraso proyectado se avisa. */
     umbralAtrasoMin: smallint("umbral_atraso_min").notNull().default(15),
+    /** Plan 8: minutos de tiempo muerto que puede agregar una parada readmitida; si pasa, se queda para otro día. */
+    toleranciaReadmisionMin: smallint("tolerancia_readmision_min").notNull().default(15),
     version: integer("version").notNull().default(1),
     ...marcas,
   },
@@ -245,6 +247,7 @@ export const configuracion = pgTable(
     check("configuracion_factor_camion", sql`${t.factorCamion} >= 1 AND ${t.factorCamion} <= 3`),
     check("configuracion_horas_pico", sql`jsonb_typeof(${t.horasPico}) = 'array'`),
     check("configuracion_umbral_atraso", sql`${t.umbralAtrasoMin} BETWEEN 1 AND 120`),
+    check("configuracion_tolerancia_readmision", sql`${t.toleranciaReadmisionMin} BETWEEN 0 AND 60`),
     check("configuracion_carga_omision", sql`${t.cargaPorOmisionKg} > 0`),
     check("configuracion_dias_operacion", sql`cardinality(${t.diasOperacion}) > 0 AND ${t.diasOperacion} <@ '{0,1,2,3,4,5,6}'::smallint[]`),
     check("configuracion_dias_atrasada", sql`${t.diasParaAtrasada} >= 1`),

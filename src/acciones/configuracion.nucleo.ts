@@ -47,6 +47,8 @@ const configuracionSchema = z
     factorCamion: z.number().min(1, "El factor va de 1 a 3").max(3, "El factor va de 1 a 3").optional(),
     umbralAtrasoMin: z.number().int("Usa minutos enteros").min(1, "De 1 a 120 minutos").max(120, "De 1 a 120 minutos").optional(),
     horasPico: horasPicoSchema.optional(),
+    /** Plan 8. Opcional como los del Plan 7. */
+    toleranciaReadmisionMin: z.number().int("Usa minutos enteros").min(0, "De 0 a 60 minutos").max(60, "De 0 a 60 minutos").optional(),
     /** Línea base (Plan 6): la del método actual viene del Documento Integrador; la de K2 se cronometra antes del piloto. */
     lineaBase: z
       .object({
@@ -68,7 +70,7 @@ const configuracionSchema = z
 
 const CAMPOS = [
   "patioLat", "patioLng", "turnoInicio", "turnoFin", "velocidadKmh", "factorCircuidad", "descargaMin", "cargaPorOmisionKg",
-  "diasOperacion", "diasParaAtrasada", "lineaBase", "factorCamion", "horasPico", "umbralAtrasoMin",
+  "diasOperacion", "diasParaAtrasada", "lineaBase", "factorCamion", "horasPico", "umbralAtrasoMin", "toleranciaReadmisionMin",
 ] as const;
 
 /** Permiso configuracion.editar. entrada: ConfiguracionVista sin version, versionAvisoPrivacidad ni estiloMapaUrl. */

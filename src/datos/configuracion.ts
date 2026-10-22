@@ -37,6 +37,8 @@ export interface ConfiguracionCompleta {
   horasPico: FranjaHoraPico[];
   /** Plan 7: minutos de atraso proyectado a partir de los cuales se avisa. */
   umbralAtrasoMin: number;
+  /** Plan 8: 0 a 60 min de tiempo muerto por parada readmitida. */
+  toleranciaReadmisionMin: number;
   version: number;
 }
 
@@ -70,13 +72,15 @@ export async function leerConfiguracionCompleta(bd: BD | Tx): Promise<Configurac
     factorCamion: c.factorCamion,
     horasPico: c.horasPico as FranjaHoraPico[],
     umbralAtrasoMin: c.umbralAtrasoMin,
+    toleranciaReadmisionMin: c.toleranciaReadmisionMin,
     version: c.version,
   };
 }
 
-/** Los campos del Plan 7 son opcionales hasta que el formulario de configuración los envíe (P7-8). */
-export type CambiosConfiguracion = Omit<ConfiguracionCompleta, "versionAvisoPrivacidad" | "version" | "lineaBase" | "factorCamion" | "horasPico" | "umbralAtrasoMin">
-  & { lineaBase?: LineaBase } & Partial<Pick<ConfiguracionCompleta, "factorCamion" | "horasPico" | "umbralAtrasoMin">>;
+/** Los campos de los Planes 7 y 8 son opcionales: quien no los envía conserva lo guardado. */
+type CamposOpcionales = "factorCamion" | "horasPico" | "umbralAtrasoMin" | "toleranciaReadmisionMin";
+export type CambiosConfiguracion = Omit<ConfiguracionCompleta, "versionAvisoPrivacidad" | "version" | "lineaBase" | CamposOpcionales>
+  & { lineaBase?: LineaBase } & Partial<Pick<ConfiguracionCompleta, CamposOpcionales>>;
 
 export async function actualizarConfiguracionSiVersion(tx: Tx, version: number, cambios: CambiosConfiguracion, ahora: Date): Promise<number | null> {
   const [fila] = await tx

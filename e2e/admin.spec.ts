@@ -66,6 +66,29 @@ test("el administrador guarda la configuración de operación", async ({ page })
   await expect(page.getByRole("listitem", { name: "Franja 3" }).getByLabel("Inicio")).toHaveValue("18:00");
 });
 
+test("el administrador guarda la tolerancia para una parada extra (Plan 8)", async ({ page }) => {
+  await entrarComo(page, "admin");
+  await page.goto("/admin/configuracion");
+  const guardar = page.getByRole("button", { name: "Guardar configuración" });
+  await expect(guardar).toBeEnabled();
+  const tolerancia = page.getByRole("spinbutton", { name: "Tolerancia para una parada extra (min de tiempo muerto)", exact: true });
+  await expect(tolerancia).toHaveValue("15");
+  await expect(tolerancia).toHaveAccessibleDescription("Si una parada extra alarga el día más que esto, se queda para otro día.");
+  await tolerancia.fill("61");
+  await guardar.click();
+  await expect(page.getByRole("form", { name: "Configuración de operación", exact: true }).getByRole("alert")).toContainText("De 0 a 60 minutos");
+  await tolerancia.fill("20");
+  await guardar.click();
+  await expect(page.getByRole("status").filter({ hasText: "Configuración guardada" })).toBeVisible();
+  await page.reload();
+  await expect(guardar).toBeEnabled();
+  await expect(tolerancia).toHaveValue("20");
+  // Las pruebas que siguen comparten la base: se deja el valor por omisión.
+  await tolerancia.fill("15");
+  await guardar.click();
+  await expect(page.getByRole("status").filter({ hasText: "Configuración guardada" })).toBeVisible();
+});
+
 test("un despachador no entra a administración", async ({ page }) => {
   await entrarComo(page, "despachador");
   await page.goto("/admin/usuarios");

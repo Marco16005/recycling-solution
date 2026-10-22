@@ -1,0 +1,2 @@
+ALTER TABLE "configuracion" ADD COLUMN "tolerancia_readmision_min" smallint DEFAULT 15 NOT NULL;--> statement-breakpoint
+ALTER TABLE "configuracion" ADD CONSTRAINT "configuracion_tolerancia_readmision" CHECK ("configuracion"."tolerancia_readmision_min" BETWEEN 0 AND 60);

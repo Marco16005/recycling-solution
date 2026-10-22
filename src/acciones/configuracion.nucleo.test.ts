@@ -62,3 +62,31 @@ describe("configuración de traslados del Plan 7", () => {
     for (const umbralAtrasoMin of [0, 121, 7.5]) expect(await guardarConfiguracion(ctx(), 1, { ...base, umbralAtrasoMin })).toMatchObject({ ok: false, error: "invalido", campos: { umbralAtrasoMin: expect.any(Array) } });
   });
 });
+
+describe("tolerancia de readmisión del Plan 8", () => {
+  let bd: BD;
+  let admin: UsuarioSesion;
+  const ctx = (): Contexto => ({ bd, usuario: admin, ahora: AHORA });
+  beforeEach(async () => {
+    bd = await crearBdPrueba();
+    admin = await usuarioDePrueba(bd, "admin");
+  });
+
+  it("guardarConfiguracion acepta 0 y 60, rechaza 7.5 y 61, y la bitácora nombra toleranciaReadmisionMin sin su valor", async () => {
+    expect(await guardarConfiguracion(ctx(), 1, { ...base, toleranciaReadmisionMin: 0 })).toEqual({ ok: true, valor: { version: 2 } });
+    expect((await leerConfiguracionCompleta(bd)).toleranciaReadmisionMin).toBe(0);
+    expect(await guardarConfiguracion(ctx(), 2, { ...base, toleranciaReadmisionMin: 47 })).toEqual({ ok: true, valor: { version: 3 } });
+    const [renglon] = await bd.select().from(bitacora).where(eq(bitacora.entidad, "configuracion")).orderBy(desc(bitacora.en)).limit(1);
+    expect(renglon.campos).toEqual(["toleranciaReadmisionMin"]);
+    // Sin id, usuario ni fecha, que podrían contener "47" por azar.
+    expect(JSON.stringify({ ...renglon, id: null, usuarioId: null, en: null })).not.toContain("47");
+    expect(await guardarConfiguracion(ctx(), 3, { ...base, toleranciaReadmisionMin: 60 })).toMatchObject({ ok: true });
+    for (const toleranciaReadmisionMin of [7.5, 61, -1]) {
+      expect(await guardarConfiguracion(ctx(), 4, { ...base, toleranciaReadmisionMin }))
+        .toMatchObject({ ok: false, error: "invalido", campos: { toleranciaReadmisionMin: expect.any(Array) } });
+    }
+    // Quien no lo envía conserva lo guardado.
+    expect(await guardarConfiguracion(ctx(), 4, base)).toMatchObject({ ok: true });
+    expect((await leerConfiguracionCompleta(bd)).toleranciaReadmisionMin).toBe(60);
+  });
+});

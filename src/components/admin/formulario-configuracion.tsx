@@ -18,9 +18,13 @@ const SelectorUbicacion = dynamic(() => import("@/components/clientes/selector-u
 
 type Valores = Omit<ConfiguracionVista, "version" | "versionAvisoPrivacidad" | "estiloMapaUrl">;
 
-const CAMPOS_NUMERICOS: { campo: keyof Valores; titulo: string; paso: string }[] = [
+const CAMPOS_NUMERICOS: { campo: keyof Valores; titulo: string; paso: string; nota?: string }[] = [
   { campo: "factorCamion", titulo: "Factor de camión (tiempos de auto del mapa × factor)", paso: "0.05" },
   { campo: "umbralAtrasoMin", titulo: "Avisar atraso a partir de (min)", paso: "1" },
+  {
+    campo: "toleranciaReadmisionMin", titulo: "Tolerancia para una parada extra (min de tiempo muerto)", paso: "1",
+    nota: "Si una parada extra alarga el día más que esto, se queda para otro día.",
+  },
   { campo: "velocidadKmh", titulo: "Velocidad promedio (km/h, respaldo sin mapa)", paso: "1" },
   { campo: "factorCircuidad", titulo: "Factor de circuidad (respaldo sin mapa: calles contra línea recta)", paso: "0.05" },
   { campo: "descargaMin", titulo: "Descarga en el patio (min por viaje)", paso: "1" },
@@ -120,7 +124,7 @@ export function FormularioConfiguracion({ configuracion }: { configuracion: Conf
             {error(campo)}
           </div>
         ))}
-        {CAMPOS_NUMERICOS.map(({ campo, titulo, paso }) => (
+        {CAMPOS_NUMERICOS.map(({ campo, titulo, paso, nota }) => (
           <div key={campo} className="space-y-2">
             <Label htmlFor={campo}>{titulo}</Label>
             <Input
@@ -129,9 +133,10 @@ export function FormularioConfiguracion({ configuracion }: { configuracion: Conf
               step={paso}
               value={String(valores[campo])}
               aria-invalid={Boolean(errores[campo])}
-              aria-describedby={errores[campo] ? `error-${campo}` : undefined}
+              aria-describedby={[nota && `nota-${campo}`, errores[campo] && `error-${campo}`].filter(Boolean).join(" ") || undefined}
               onChange={(e) => cambiar(campo, Number(e.target.value))}
             />
+            {nota && <p id={`nota-${campo}`} className="text-xs text-muted-foreground">{nota}</p>}
             {error(campo)}
           </div>
         ))}
