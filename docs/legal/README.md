@@ -17,6 +17,8 @@
    - correo y teléfono de privacidad;
    - horario de atención;
    - proveedores de hospedaje, respaldos y mapas;
+   - las notas de seguimiento de clientes (Plan CRM) como registros de comunicación, su supresión con `scripts/suprimir-notas-cliente.mts` y la consulta a Google al seguir un enlace corto de ubicación;
+   - la exportación de la cartera (solo despachador y administrador, con bitácora): cómo se guardan y destruyen los archivos exportados;
    - los botones de navegación del operador (Waze y Google Maps, Plan 7): el teléfono envía el destino de la parada a esa aplicación cuando el operador lo toca. Confirmar si basta con informarlo en el aviso o si conviene otra medida;
    - plazos de conservación (`PLAZO_*`, según la matriz de abajo);
    - URL del aviso.

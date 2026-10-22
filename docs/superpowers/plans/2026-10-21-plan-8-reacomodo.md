@@ -275,9 +275,9 @@ scripts/verificar-todo.sh                                     # al cierre, árbo
 
 - [ ] **Paso 1** (Claude). Documentación:
   - `docs/guia-de-auditoria.md`, invariantes nuevas:
-    - 31: ninguna admitida sale y el objetivo no empeora por fase;
-    - 32: cada readmitida agrega a lo sumo la tolerancia;
-    - 33: FIFO por turno documentado;
+    - 35: ninguna admitida sale y el objetivo no empeora por fase;
+    - 36: cada readmitida agrega a lo sumo la tolerancia;
+    - 37: FIFO por turno documentado (las 31 a 34 son del Plan CRM);
   - especificación del piloto: §8 (algoritmo con fases 2 a 4 y por qué se le llama IA), §14 (decisión de la tolerancia, del usuario) y §16;
   - hoja de ruta y `docs/README.md`.
 - [ ] **Paso 2.** Revisión cruzada: Codex revisa P8-0 a P8-4; Claude revisa P8-5 y P8-6. Formato de la guía.

@@ -81,6 +81,14 @@ Este plan no usa base de datos ni pantallas, así que puede empezar en cuanto es
 - Navegación del operador con Waze o Google Maps (enlaces) y recorridos por calle en el mapa.
 - Aceptación: con la fórmula anterior el motor da el mismo plan; los planes 1.0.0 siguen funcionando; nada proyectado queda antes de ahora; sin OSRM, el plan sale aproximado con su motivo.
 
+### Plan CRM — Cartera lista para operar (antes del Plan 8)
+
+- Importación completa con plantilla (horarios, tipos de unidad, ubicación, correo y puesto), CSV de Excel en español (`;` y Windows-1252).
+- Ubicación pegada desde WhatsApp o Google Maps (enlaces cortos incluidos) con distancia a la calle.
+- Historial y números por cliente, varios contactos, notas de seguimiento sin borrado, filtros, exportación con bitácora y mapa de la cartera.
+- Propuestas de recolección por ritmo aprendido o recurrencia fija, que el despachador confirma, pospone o descarta.
+- Aceptación: nada se crea sin confirmar; exportar e importar conserva la plantilla; las pruebas de punta a punta cubren cada punto.
+
 ### Plan 8 — Optimización entre rutas
 
 - Reacomodar paradas entre rutas para recortar km sin romper ventanas, capacidad, turno ni FIFO (la "A" de la conversación con el usuario del 2026-10-15). El aprendizaje de tiempos con datos reales (la "B") va después del piloto.
