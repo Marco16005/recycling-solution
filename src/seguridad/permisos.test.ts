@@ -8,6 +8,7 @@ const ESPERADO: Record<Permiso, Rol[]> = {
   "clientes.ver": ["admin", "despachador", "gerencia"],
   "clientes.editar": ["admin", "despachador"],
   "clientes.importar": ["admin", "despachador"],
+  "clientes.exportar": ["admin", "despachador"],
   "usuarios.gestionar": ["admin"],
   "flota.ver": ["admin", "despachador", "gerencia"],
   "flota.editar": ["admin", "despachador"],

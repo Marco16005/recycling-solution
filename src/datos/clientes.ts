@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { ClienteEntrada } from "@/dominio/clientes/esquemas";
-import type { ClienteGuardado, EstadoPrivacidad } from "@/dominio/clientes/tipos";
+import type { ClienteGuardado, ContactoCliente, EstadoPrivacidad, Recurrencia } from "@/dominio/clientes/tipos";
 import type { BD, Tx } from "./bd";
 import { aceptacionesPrivacidad, clientes, documentosCliente, ventanasCliente } from "./esquema";
 
@@ -29,6 +29,10 @@ function columnas(entrada: ClienteEntrada) {
     nombre: entrada.nombre,
     contactoNombre: entrada.contactoNombre,
     contactoTelefono: entrada.contactoTelefono,
+    contactoCorreo: entrada.contactoCorreo ?? null,
+    contactoPuesto: entrada.contactoPuesto ?? null,
+    contactosAdicionales: entrada.contactosAdicionales ?? [],
+    recurrencia: entrada.recurrencia ?? null,
     direccion: entrada.direccion,
     lat: entrada.lat,
     lng: entrada.lng,
@@ -131,11 +135,10 @@ async function leerClientes(bd: Conexion, ids?: string[]): Promise<ClienteGuarda
     nombre: c.nombre,
     contactoNombre: c.contactoNombre,
     contactoTelefono: c.contactoTelefono,
-    // PC-1 las lee de sus columnas.
-    contactoCorreo: null,
-    contactoPuesto: null,
-    contactosAdicionales: [],
-    recurrencia: null,
+    contactoCorreo: c.contactoCorreo,
+    contactoPuesto: c.contactoPuesto,
+    contactosAdicionales: c.contactosAdicionales as ContactoCliente[],
+    recurrencia: c.recurrencia as Recurrencia | null,
     direccion: c.direccion,
     lat: c.lat,
     lng: c.lng,

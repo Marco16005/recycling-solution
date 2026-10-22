@@ -159,7 +159,7 @@ En la ficha, "Historial" muestra lo más reciente primero, de 20 en 20:
 ### 4.9 Exportar (punto 9)
 
 - **Formato:** CSV que abre en Excel (BOM, CRLF y fórmulas neutralizadas, como el CSV del Plan 6), con las columnas de la plantilla (§4.1) más `id`, `completa` y `habilitada_hoy`, y respetando los filtros.
-- **Permiso nuevo `clientes.exportar`:** solo el despachador. *Decisión de Claude, que corrige lo dicho en la conversación:* el administrador no ve clientes hoy (`clientes.ver` es de despachador y gerencia), así que no exporta. Gerencia tampoco, porque el archivo lleva teléfonos.
+- **Permiso nuevo `clientes.exportar`:** despachador y administrador; este último tiene todos los permisos, como en el resto del sistema. Gerencia no exporta, porque el archivo lleva teléfonos. *Corrección de Claude (2026-10-21):* la revisión 1 decía que el administrador no ve clientes, y era incorrecto.
 - **Bitácora:** `exportar_clientes` con `["filtros"]` y la cantidad de filas como dato no personal.
 
 ### 4.10 Filtros (punto 10)

@@ -34,3 +34,6 @@ REVOKE DELETE ON incidentes FROM rs_app;
 
 -- Plan 6: la instantánea diaria de K5 es historial de solo inserción.
 REVOKE UPDATE, DELETE ON instantaneas_k5 FROM rs_app;
+
+-- Plan CRM: notas de seguimiento y decisiones de propuestas solo se agregan (corregir es otra nota).
+REVOKE UPDATE, DELETE ON notas_cliente, propuestas_recoleccion FROM rs_app;

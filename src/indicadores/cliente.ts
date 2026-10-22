@@ -7,7 +7,8 @@ export interface NumerosCliente {
 }
 
 export interface DatosNumerosCliente {
-  paradas: { fecha: string; estado: string; llegadaEn: string | null; ventanaInicio: string; ventanaFin: string }[];
+  /** dentroDeHorario usa el inicio de servicio, como K3: llegar antes y esperar cuenta como cumplimiento. */
+  paradas: { fecha: string; estado: string; inicioServicioEn: string | null; ventanaInicio: string; ventanaFin: string }[];
   solicitudes: { fechaSolicitada: string; estado: string; vecesPospuesta: number }[];
 }
 

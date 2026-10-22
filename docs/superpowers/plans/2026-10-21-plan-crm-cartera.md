@@ -18,7 +18,7 @@
 - Docker y versiones exactas. Ninguna dependencia nueva.
 - Toda acción y consulta autoriza con un permiso. Cada escritura va en una transacción con su renglón de bitácora: nombres de campos, nunca valores.
 - **Permisos:**
-  - `clientes.exportar`: despachador;
+  - `clientes.exportar`: despachador, y el administrador por tener todos los permisos;
   - notas: se escriben con `clientes.editar` y se leen con `clientes.ver`;
   - propuestas: `solicitudes.registrar`;
   - plantilla: `clientes.importar`.

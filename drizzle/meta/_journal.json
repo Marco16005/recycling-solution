@@ -64,6 +64,13 @@
       "when": 1792165166394,
       "tag": "0008_traslados",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792632261555,
+      "tag": "0009_cartera",
+      "breakpoints": true
     }
   ]
 }

@@ -8,7 +8,8 @@ export interface CandidatoPropuesta {
   clienteId: string; activo: boolean; habilitadoEnFecha: boolean; tieneSolicitudAbierta: boolean;
   recurrencia: Recurrencia | null; ritmo: Ritmo | null; decisiones: DecisionPropuesta[];
 }
-export interface Propuesta { clienteId: string; motivos: ("recurrencia" | "ritmo")[]; fechaEsperada: string | null; ritmo: Ritmo | null }
+/** "pospuesta": una posposición que ya venció (se propone en el primer día de operación ≥ pospuestaHasta). */
+export interface Propuesta { clienteId: string; motivos: ("recurrencia" | "ritmo" | "pospuesta")[]; fechaEsperada: string | null; ritmo: Ritmo | null }
 
 /** Con 3 o más solicitudes atendidas en los últimos 180 días: mediana de días entre fechas consecutivas. */
 export function ritmoAprendido(fechasAtendidas: string[], hoy: string): Ritmo | null {
