@@ -12,6 +12,8 @@ export interface DatosIndicadores {
   rutas: (typeof rutas.$inferSelect & { placa: string })[];
   paradas: (typeof paradas.$inferSelect & { folio: string; cliente: string; fecha: string })[];
   capturasSeg: number[];
+  /** Plan CRM: capturas de solicitudes confirmadas desde una propuesta (canal propuesta), aparte de K2. */
+  capturasPropuestaSeg: number[];
   ejecuciones: { duracionMs: number; resultado: "ok" | "error" | "tiempo_agotado" }[];
   serieK5: { fecha: string; activos: number; completos: number }[];
 }
@@ -48,7 +50,7 @@ export async function leerDatosIndicadores(bd: Conexion, desde: string, hasta: s
     .orderBy(asc(paradas.rutaId), asc(paradas.secuencia));
 
   const capturas = await bd
-    .select({ seg: sql<number>`extract(epoch FROM ${solicitudes.capturaFinEn} - ${solicitudes.capturaInicioEn})::float8` })
+    .select({ seg: sql<number>`extract(epoch FROM ${solicitudes.capturaFinEn} - ${solicitudes.capturaInicioEn})::float8`, canal: solicitudes.canal })
     .from(solicitudes)
     .where(and(
       isNotNull(solicitudes.capturaInicioEn), isNotNull(solicitudes.capturaFinEn),
@@ -70,7 +72,8 @@ export async function leerDatosIndicadores(bd: Conexion, desde: string, hasta: s
     planes: filasPlanes.map((p) => ({ ...p, validadoEn: p.validadoEn!, resumen: p.resultado.resumen })),
     rutas: filasRutas.map((r) => ({ ...r.ruta, placa: r.placa })),
     paradas: filasParadas.map((p) => ({ ...p.parada, folio: p.folio, cliente: p.cliente, fecha: p.fecha })),
-    capturasSeg: capturas.map((c) => Number(c.seg)),
+    capturasSeg: capturas.filter((c) => c.canal !== "propuesta").map((c) => Number(c.seg)),
+    capturasPropuestaSeg: capturas.filter((c) => c.canal === "propuesta").map((c) => Number(c.seg)),
     ejecuciones,
     serieK5,
   };

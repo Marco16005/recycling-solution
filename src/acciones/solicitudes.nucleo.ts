@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { registrarEvento } from "@/datos/bitacora";
-import { leerCliente } from "@/datos/clientes";
-import { actualizarSolicitudPendiente, insertarSolicitud, siguienteConsecutivo, type ResultadoCambioSolicitud } from "@/datos/solicitudes";
+import { bloquearCliente, leerCliente } from "@/datos/clientes";
+import { actualizarSolicitudPendiente, insertarSolicitud, leerSolicitud, siguienteConsecutivo, solicitudAbiertaEnFecha, type ResultadoCambioSolicitud } from "@/datos/solicitudes";
 import { erroresPorCampo } from "@/dominio/clientes/esquemas";
 import { formatoFolio } from "@/dominio/solicitudes/cola";
 import { solicitudSchema } from "@/dominio/solicitudes/esquemas";
@@ -46,8 +46,14 @@ export async function registrarSolicitud(ctx: Contexto, entrada: unknown): Promi
   const usuarioId = permiso.usuario.id;
 
   return ctx.bd.transaction(async (tx): Promise<Resultado<{ id: string; folio: string }>> => {
+    // Plan CRM: el mismo candado que confirmar una propuesta, para que esta vea la solicitud recién capturada.
+    await bloquearCliente(tx, datos.clienteId);
     const cliente = await leerCliente(tx, datos.clienteId);
     if (cliente === null || !cliente.activo) return invalido({ clienteId: ["Elige un cliente activo"] });
+    // Revisión de Codex: con el candado, no se captura a mano otra solicitud abierta del cliente para la misma fecha
+    // (por ejemplo, una propuesta recién confirmada). Para otra fecha sigue permitida, como siempre.
+    const abierta = await solicitudAbiertaEnFecha(tx, datos.clienteId, datos.fechaSolicitada);
+    if (abierta) return invalido({ clienteId: [`Este cliente ya tiene la solicitud ${abierta} abierta para esa fecha`] });
     const folio = formatoFolio(hoy, await siguienteConsecutivo(tx, hoy));
     const id = await insertarSolicitud(tx, {
       folio,
@@ -99,7 +105,14 @@ export async function reprogramarSolicitud(ctx: Contexto, id: unknown, versionEs
   if (nueva.data < fechaEnMexico(ctx.ahora)) return invalido({ fecha: ["La fecha no puede ser anterior a hoy"] });
   const usuarioId = permiso.usuario.id;
 
-  return ctx.bd.transaction(async (tx) => {
+  return ctx.bd.transaction(async (tx): Promise<Resultado<null>> => {
+    // Revisión de Codex: reprogramar no debe dejar dos solicitudes abiertas del cliente para la misma fecha.
+    // Mismo candado que capturar y confirmar una propuesta.
+    const actual = await leerSolicitud(tx, ids.id);
+    if (!actual) return { ok: false, error: "no_encontrado" };
+    await bloquearCliente(tx, actual.clienteId);
+    const otra = await solicitudAbiertaEnFecha(tx, actual.clienteId, nueva.data, ids.id);
+    if (otra) return invalido({ fecha: [`Este cliente ya tiene la solicitud ${otra} abierta para esa fecha`] });
     const r = await actualizarSolicitudPendiente(tx, ids.id, ids.version, { fechaSolicitada: nueva.data, proximaFechaElegible: nueva.data }, ctx.ahora);
     if (r === "actualizada") {
       await registrarEvento(tx, { usuarioId, entidad: "solicitud", entidadId: ids.id, accion: "reprogramar", campos: ["fechaSolicitada", "proximaFechaElegible"] });

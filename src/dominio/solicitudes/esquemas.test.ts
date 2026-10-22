@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { solicitudSchema } from "./esquemas";
-import { CANALES, type SolicitudEntrada } from "./tipos";
+import { CANALES_CAPTURA, type SolicitudEntrada } from "./tipos";
 
 const entrada: SolicitudEntrada = {
   clienteId: "00000000-0000-4000-8000-000000000001", fechaSolicitada: "2028-02-29", canal: "telefono",
@@ -8,7 +8,9 @@ const entrada: SolicitudEntrada = {
 };
 
 describe("solicitudSchema", () => {
-  it.each(CANALES)("acepta canal %s y fecha bisiesta real", (canal) => expect(solicitudSchema.safeParse({ ...entrada, canal }).success).toBe(true));
+  it.each(CANALES_CAPTURA)("acepta canal %s y fecha bisiesta real", (canal) => expect(solicitudSchema.safeParse({ ...entrada, canal }).success).toBe(true));
+  // Plan CRM: "propuesta" solo lo pone la confirmación de una propuesta, no la captura a mano.
+  it("rechaza el canal propuesta en la captura a mano", () => expect(solicitudSchema.safeParse({ ...entrada, canal: "propuesta" }).success).toBe(false));
   it.each([null, 1, 60000])("acepta carga %s", (cargaEstimadaKg) => expect(solicitudSchema.safeParse({ ...entrada, cargaEstimadaKg, capturaInicioEn: null }).success).toBe(true));
   it("recorta notas y admite el límite de 500", () => {
     expect(solicitudSchema.parse({ ...entrada, notas: " nota " }).notas).toBe("nota");

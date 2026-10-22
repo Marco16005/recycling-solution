@@ -90,3 +90,11 @@ export function conTraslados(entrada: EntradaPlan, r: ResultadoMatriz): EntradaP
 }
 
 export { reiniciarCacheDeTrazos, trazosDeViajes, type Trazo } from "./trazos";
+
+/** Plan CRM, §4.2: metros del punto a la calle más cercana según OSRM (/nearest); null sin OSRM o si falla. */
+export async function distanciaACalle(punto: Coordenada, opciones: { url: string | undefined; fetch?: typeof fetch; plazoMs?: number }): Promise<number | null> {
+  if (!opciones.url) return null;
+  const r = await pedir(opciones.fetch ?? fetch, `${opciones.url.replace(/\/+$/, "")}/nearest/v1/driving/${coordenadasDeRuta([punto])}`, opciones.plazoMs ?? 2000);
+  if (!r.ok) return null;
+  return leerCercano(r.cuerpo)?.ajusteM[0] ?? null;
+}

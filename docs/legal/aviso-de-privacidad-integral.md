@@ -33,6 +33,7 @@ La Empresa **no trata datos personales sensibles** (artículo 2, fracción VI, d
 |---|---|
 | A. Clientes y contactos | Nombre completo; teléfono y, en su caso, correo electrónico de contacto; puesto o área; domicilio del establecimiento donde se recoge el material y su ubicación en mapa; horarios de recepción; indicaciones de acceso; registro de la aceptación o retiro de este aviso (fecha, versión y medio) |
 | B. Usuarios del sistema | Nombre; correo electrónico de trabajo; rol; contraseña (solo se guarda su hash, generado con un algoritmo de derivación de claves; nunca la contraseña legible); registro de las sesiones (fecha, dirección IP y tipo de navegador) y de las acciones realizadas en el sistema (qué registro se creó o modificó y cuándo; no se copian los valores capturados) |
+| A. Clientes y contactos (registros de comunicación) | Notas de seguimiento que escribe la Empresa sobre llamadas, quejas y acuerdos con el cliente, con su fecha y su autor. No se registran datos sensibles |
 | C. Operadores | Nombre; teléfono de trabajo; tipo y vigencia de la licencia de conducir y de las capacitaciones que exigen los clientes; unidad y jornada asignadas; registros de la ruta (llegadas, salidas, incidencias, kilometraje) y, cuando el operador marca un evento en su teléfono, la ubicación de ese momento. No se rastrea la ubicación de forma continua |
 
 ## 4. Para qué usamos sus datos
@@ -83,6 +84,8 @@ Por separado, el sistema muestra las calles con un servicio de mapas de un terce
 Las distancias y los tiempos de recorrido por calle se calculan **dentro de los propios equipos de la Empresa**, con datos de OpenStreetMap (© colaboradores de OpenStreetMap, licencia ODbL). Para eso, ninguna ubicación sale del sistema.
 
 En el teléfono del operador, junto a cada parada, hay botones para abrir la navegación en Waze o en Google Maps. La aplicación no consulta esos servicios por su cuenta: solo cuando el operador toca uno de esos botones, su teléfono abre esa aplicación con el destino de la parada, que es la ubicación del establecimiento, sin nombres ni datos de contacto. A partir de ahí, ese tratamiento se rige por los términos del proveedor de la aplicación.
+
+Cuando el personal de la Empresa pega en el sistema un enlace corto de ubicación de Google Maps que envió el cliente, el sistema consulta a Google solo para seguir ese enlace hasta las coordenadas. No envía nombres ni datos de contacto.
 
 ## 6. Cuánto tiempo conservamos sus datos
 

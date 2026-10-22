@@ -68,6 +68,7 @@ export const ETIQUETA_CANAL: Record<Canal, string> = {
   correo: "Correo electrónico",
   presencial: "Presencial",
   otro: "Otro",
+  propuesta: "Propuesta del sistema",
 };
 
 export const ETIQUETA_ESTADO_SOLICITUD: Record<EstadoSolicitud, string> = {

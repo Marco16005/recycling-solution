@@ -5,7 +5,7 @@ Piloto de un asistente de logística para una recicladora de cartón. Lo desarro
 ## Leer antes de cambiar algo
 
 1. `docs/superpowers/specs/2026-10-07-recycling-solution-piloto-design.md` (revisión 2): qué debe hacer el sistema.
-2. El plan vigente en `docs/superpowers/plans/` (contratos y tareas con responsable). Plan 1: `2026-10-13-plan-1-v2-…`; Plan 2: `2026-10-14-plan-2-…`; Plan 3: `2026-10-14-plan-3-…`; Plan 4: `2026-10-15-plan-4-…`; Plan 5: `2026-10-15-plan-5-…`; Plan 6: `2026-10-15-plan-6-…`; Plan 7: `2026-10-15-plan-7-…` (y su diseño en `docs/superpowers/specs/`).
+2. El plan vigente en `docs/superpowers/plans/` (contratos y tareas con responsable). Plan 1: `2026-10-13-plan-1-v2-…`; Plan 2: `2026-10-14-plan-2-…`; Plan 3: `2026-10-14-plan-3-…`; Plan 4: `2026-10-15-plan-4-…`; Plan 5: `2026-10-15-plan-5-…`; Plan 6: `2026-10-15-plan-6-…`; Plan 7: `2026-10-15-plan-7-…`; Plan CRM: `2026-10-21-plan-crm-cartera…`; Plan 8: `2026-10-21-plan-8-reacomodo…` (y sus diseños en `docs/superpowers/specs/`).
 3. `docs/guia-de-auditoria.md`: invariantes que siempre deben cumplirse.
 
 ## Responsables (especificación §15)

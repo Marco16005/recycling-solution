@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { analizarImportacionAccion, confirmarImportacionAccion } from "@/acciones/importacion";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { COLUMNAS_CSV, LIMITES_CSV } from "@/dominio/clientes/csv";
+import { LIMITES_CSV } from "@/dominio/clientes/csv";
 import { generarOperacionId } from "./generar-operacion-id";
 import { Campo, ResumenErrores, type Errores } from "./campos-formulario";
 import { ResultadoFallido, type Fallo } from "./resultado-fallido";
@@ -55,7 +55,12 @@ export function FormularioImportar() {
     iniciar(async () => {
       let contenido: string;
       try {
-        contenido = await archivo.text();
+        const bytes = await archivo.arrayBuffer();
+        try {
+          contenido = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        } catch {
+          contenido = new TextDecoder("windows-1252").decode(bytes);
+        }
       } catch {
         setErrores({ archivo: ["No pudimos leer el archivo. Vuelve a seleccionarlo e inténtalo de nuevo."] });
         return;
@@ -133,7 +138,7 @@ export function FormularioImportar() {
         <p className="text-xs uppercase tracking-widest text-muted-foreground">Importación terminada</p>
         <h2 className="text-2xl font-semibold">{importados} clientes importados</h2>
         <p className="text-sm text-muted-foreground">
-          Completa las ventanas horarias, los tipos de unidad y el aviso de privacidad en cada ficha.
+          Revisa los datos importados y registra el aviso de privacidad en cada ficha.
         </p>
         <div className="flex flex-wrap gap-2">
           <Link href="/despacho/clientes" className={buttonVariants()}>
@@ -169,15 +174,14 @@ export function FormularioImportar() {
           1 · Seleccionar y analizar
         </h2>
         <p className="text-sm text-muted-foreground">
-          CSV en UTF-8, hasta {LIMITES_CSV.registros.toLocaleString("es-MX")} registros y 1 MB. Acepta coma o
+          CSV en UTF-8 o Windows-1252, hasta {LIMITES_CSV.registros.toLocaleString("es-MX")} registros y 1 MB. Acepta coma o
           punto y coma como separador. Solo la columna «nombre» es obligatoria.
         </p>
         <a
-          href={`data:text/csv;charset=utf-8,${encodeURIComponent("\uFEFF" + COLUMNAS_CSV.join(",") + "\r\n")}`}
-          download="plantilla-clientes.csv"
+          href="/api/clientes/plantilla"
           className="inline-block text-sm underline underline-offset-4"
         >
-          Descargar encabezados de la plantilla
+          Descargar plantilla
         </a>
         <Campo nombre="archivo" titulo="Archivo CSV" prefijo={prefijo} errores={errores}>
           {(a) => (
@@ -314,7 +318,7 @@ export function FormularioImportar() {
             </div>
           )}
           <p className="text-sm text-muted-foreground">
-            Los clientes se crearán activos, sin ventanas, unidades admitidas ni aceptación de privacidad.
+            Los clientes se crearán activos con los datos del archivo. La aceptación de privacidad se registra en cada ficha.
           </p>
           <Button
             type="button"

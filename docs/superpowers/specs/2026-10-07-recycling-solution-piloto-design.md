@@ -261,7 +261,8 @@ El paso 3 es agrupamiento no supervisado: las zonas se forman cada día con las 
 
 | Rol | Pantalla | Qué permite |
 |---|---|---|
-| Despachador | Clientes | Lista con búsqueda; K5 global, independiente de la búsqueda; insignias "completa" y "habilitada hoy" por separado; ficha con ventanas, documentos, aviso de privacidad y pin en mapa; aviso de conflicto si otro despachador guardó antes |
+| Despachador | Clientes | Lista con búsqueda y filtros (residuo, estado, sin ubicación, documentos por vencer); K5 global, independiente de la búsqueda; insignias "completa", "habilitada hoy" y "documento por vencer"; ficha con ventanas, documentos, aviso de privacidad, pin en mapa (también pegando la ubicación de WhatsApp o Google Maps), contactos, recurrencia, historial, números del cliente y notas de seguimiento; exportación a CSV y mapa de la cartera (Plan CRM); aviso de conflicto si otro despachador guardó antes |
+| Despachador | Propuestas de recolección | En Solicitudes: clientes que probablemente piden pronto (ritmo aprendido o recurrencia fija) para confirmar, posponer o descartar (Plan CRM) |
 | Gerencia | Clientes (solo lectura) | Las mismas pantallas, sin botones de alta, edición, importación ni registro de privacidad |
 | Despachador | Importar clientes | Dos pasos: analizar (vista previa con errores, posibles duplicados y conteos, sin escribir) y confirmar (escribe todo el lote o nada) |
 | Despachador | Unidades, operadores, jornada, solicitudes, plan del día | Planes 2 y 4 |
@@ -392,3 +393,4 @@ Actualizado el 2026-10-14 con lo que respondió el dueño. "Dueño" indica que l
 | Re-ruteo ante incidente (§6 del DI, paso 4 del motor) | §8 Re-ruteo; Plan 5 §4 |
 | Cartas X̄-R y panel (Tabla 1) | Plan 6: `/gerencia/panel`, `src/indicadores`, CSV en `/api/indicadores/csv` |
 | Tiempos de traslado reales y reacción ante retrasos (tiempos muertos, §1; K1 y K4) | Plan 7: OSRM (`src/traslados`, `infra/mapa`), `tramo` y horas pico en `src/motor`, `proyectarJornada` y alertas en el seguimiento |
+| CRM de clientes (Tabla 9) y tiempo administrativo de captura (K2, objetivo de 30 %) | Plan CRM: importación completa, propuestas de recolección (K2 de canal propuesta aparte), ficha con historial y números, `src/consultas/cartera.nucleo.ts` |

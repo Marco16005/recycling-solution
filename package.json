@@ -23,7 +23,8 @@
     "desactivar-usuario": "tsx scripts/desactivar-usuario.mts",
     "restablecer-clave": "tsx scripts/restablecer-clave.mts",
     "publicar-aviso": "tsx scripts/publicar-aviso.mts",
-    "instantanea-k5": "tsx scripts/instantanea-k5.mts"
+    "instantanea-k5": "tsx scripts/instantanea-k5.mts",
+    "suprimir-notas-cliente": "tsx scripts/suprimir-notas-cliente.mts"
   },
   "dependencies": {
     "@base-ui/react": "1.9.0",

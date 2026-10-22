@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ciclo, csv, k1, k2, k3, k4, k5, k6, k7, type RecoleccionMedida } from "./index";
+import { celda, ciclo, csv, k1, k2, k3, k4, k5, k6, k7, type RecoleccionMedida } from "./index";
 
 /** 2026-10-15 en Ciudad de México (UTC−6): "08:00" → 14:00Z. */
 const h = (hhmm: string, seg = 0) => new Date(`2026-10-15T${String(Number(hhmm.slice(0, 2)) + 6).padStart(2, "0")}:${hhmm.slice(3)}:${String(seg).padStart(2, "0")}Z`);
@@ -115,10 +115,17 @@ describe("indicadores (valores calculados a mano)", () => {
 
   it("CSV: un nombre que empieza como fórmula se neutraliza para que Excel no lo ejecute", () => {
     const [p1] = viaje();
-    for (const nombre of ["=HYPERLINK(\"http://x\")", "+1", "-2+3", "@SUMA(A1)"]) {
+    for (const nombre of ["=HYPERLINK(\"http://x\")", "+1+1", "-2+3", "@SUMA(A1)"]) {
       const fila = csv([{ ...p1, cliente: nombre }]).slice(1).split("\r\n")[1];
       expect(fila.split(",")[2].replace(/^"/, "").startsWith("'")).toBe(true);
     }
     expect(csv([{ ...p1, folio: "=F1" }]).slice(1).split("\r\n")[1].startsWith("2026-10-15,'=F1,")).toBe(true);
+    // Plan CRM: un número puro no es fórmula; "-1+1" sí.
+    expect(celda("-100.3")).toBe("-100.3");
+    expect(celda("-1+1")).toBe("'-1+1");
+    expect(celda("+52 442")).toBe("'+52 442");
+    // Revisión de Codex: un apóstrofo inicial también se protege, para que la importación quite solo el de la exportación.
+    expect(celda("'Los Pinos'")).toBe("''Los Pinos'");
+    expect(celda("Los 'Pinos'")).toBe("Los 'Pinos'");
   });
 });

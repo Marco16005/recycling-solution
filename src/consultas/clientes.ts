@@ -1,4 +1,5 @@
 import "server-only";
+import type { FiltrosCartera } from "./cartera.nucleo";
 import type { Resultado } from "@/acciones/tipos";
 import { contextoDeLaPeticion } from "@/seguridad/sesion";
 import {
@@ -7,7 +8,7 @@ import {
 
 export type { ClienteResumen, ContextoAlta, FichaCliente, ListadoClientes } from "./clientes.nucleo";
 
-export async function listarClientesConsulta(filtro: { texto?: string }): Promise<Resultado<ListadoClientes>> {
+export async function listarClientesConsulta(filtro: FiltrosCartera): Promise<Resultado<ListadoClientes>> {
   return listarClientes(await contextoDeLaPeticion(), filtro);
 }
 

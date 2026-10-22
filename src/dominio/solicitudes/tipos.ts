@@ -1,6 +1,8 @@
 import type { MotivoBloqueo } from "../clientes/habilitacion";
 
-export const CANALES = ["telefono", "whatsapp", "correo", "presencial", "otro"] as const;
+export const CANALES = ["telefono", "whatsapp", "correo", "presencial", "otro", "propuesta"] as const;
+/** Los que el despachador elige al capturar a mano; "propuesta" solo lo pone la confirmación de una propuesta (Plan CRM). */
+export const CANALES_CAPTURA = ["telefono", "whatsapp", "correo", "presencial", "otro"] as const;
 export type Canal = (typeof CANALES)[number];
 
 export const ESTADOS_SOLICITUD = ["pendiente", "cancelada", "atendida", "no_atendida", "programada", "en_ruta"] as const;

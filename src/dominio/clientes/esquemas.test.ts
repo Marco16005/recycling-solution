@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { clienteSchema, documentoSchema, privacidadSchema, erroresPorCampo, type ClienteEntrada } from "./esquemas";
+import { clienteNuevo } from "./formulario";
 
 export const clienteValido: ClienteEntrada = {
   nombre: "Cartonera del Bajío",
@@ -145,5 +146,31 @@ describe("tipo de documento del catálogo", () => {
       ...clienteValido, documentos: [{ ...documento, tipoDocumentoId: "contrato_servicio" }],
     });
     expect(resultado.documentos[0].tipoDocumentoId).toBe("contrato_servicio");
+  });
+});
+
+describe("contactos adicionales y recurrencia (Plan CRM)", () => {
+  const conContactos = (telefono: string | null, n = 1) => clienteSchema.safeParse({
+    ...clienteNuevo(), nombre: "Cliente sintético",
+    contactosAdicionales: Array.from({ length: n }, (_, i) => ({ nombre: `Contacto ${i}`, puesto: null, telefono, correo: null })),
+  });
+  const conPrincipal = (contactoTelefono: string) => clienteSchema.safeParse({ ...clienteNuevo(), nombre: "Cliente sintético", contactoTelefono });
+  it.each(["+52 442 123 4567", "442-123-45-67 ext 3", "(442) 123 4567"])("el teléfono %s vale igual que en el contacto principal", (tel) =>
+    expect(conContactos(tel).success).toBe(conPrincipal(tel).success));
+  it("hasta 10 contactos adicionales", () => {
+    expect(conContactos(null, 10).success).toBe(true);
+    expect(conContactos(null, 11).success).toBe(false);
+  });
+  it("recurrencia válida e inválida", () => {
+    const con = (recurrencia: unknown) => clienteSchema.safeParse({ ...clienteNuevo(), nombre: "Cliente sintético", recurrencia }).success;
+    expect(con({ tipo: "dias_semana", dias: [2, 5] })).toBe(true);
+    expect(con({ tipo: "dias_semana", dias: [2, 2] })).toBe(false);
+    expect(con({ tipo: "cada_n_dias", cadaDias: 1, desde: "2026-10-01" })).toBe(false);
+    expect(con({ tipo: "cada_n_dias", cadaDias: 14, desde: "2026-10-01" })).toBe(true);
+  });
+  it("una entrada anterior sin los campos nuevos sigue siendo válida y toma valores vacíos", () => {
+    const { contactoCorreo: _a, contactoPuesto: _b, contactosAdicionales: _c, recurrencia: _d, ...anterior } = clienteNuevo();
+    void _a; void _b; void _c; void _d;
+    expect(clienteSchema.parse({ ...anterior, nombre: "Cliente sintético" })).toMatchObject({ contactoCorreo: null, contactosAdicionales: [], recurrencia: null });
   });
 });

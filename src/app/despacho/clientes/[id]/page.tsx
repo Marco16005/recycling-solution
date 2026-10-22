@@ -1,18 +1,24 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { fichaCarteraConsulta } from "@/consultas/cartera";
+import { ResumenCartera } from "@/components/clientes/resumen-cartera";
 import { obtenerFichaConsulta } from "@/consultas/clientes";
 import { FormularioCliente } from "@/components/clientes/formulario-cliente";
 import { PrivacidadCliente } from "@/components/clientes/privacidad-cliente";
 import { EstadoCliente } from "@/components/clientes/estado-cliente";
 import { ResultadoFallido } from "@/components/clientes/resultado-fallido";
 
-type Props = { params: Promise<{ id: string }> };
+type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ pagina?: string | string[] }> };
 
-async function Ficha({ params }: Props) {
+async function Ficha({ params, searchParams }: Props) {
   const { id } = await params;
   const resultado = await obtenerFichaConsulta(id);
   if (!resultado.ok) return <ResultadoFallido resultado={resultado} />;
   const ficha = resultado.valor;
+  const parametros = await searchParams;
+  const numeroPagina = typeof parametros.pagina === "string" ? Number(parametros.pagina) : 1;
+  const pagina = Number.isSafeInteger(numeroPagina) && numeroPagina > 0 ? numeroPagina : 1;
+  const cartera = await fichaCarteraConsulta(id, pagina);
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
@@ -31,6 +37,7 @@ async function Ficha({ params }: Props) {
         <EstadoCliente faltantes={ficha.faltantes} motivos={ficha.motivosHoy} />
       </section>
       <FormularioCliente key={id} ficha={ficha} estiloMapaUrl={ficha.estiloMapaUrl} />
+      {cartera.ok ? <ResumenCartera clienteId={id} ficha={cartera.valor} /> : <ResultadoFallido resultado={cartera} />}
       <PrivacidadCliente
         key={`${id}-${ficha.cliente.privacidad?.id ?? "sin-registro"}-${ficha.versionAvisoVigente}`}
         clienteId={id}

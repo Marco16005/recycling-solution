@@ -17,7 +17,10 @@ export const accionPrivacidadEnum = pgEnum("accion_privacidad", ["aceptado", "re
 export const medioPrivacidadEnum = pgEnum("medio_privacidad", ["papel", "correo", "verbal", "otro"]);
 export const aplicaDocumentoEnum = pgEnum("aplica_documento", ["cliente", "unidad", "operador"]);
 export const origenDocumentoEnum = pgEnum("origen_documento", ["ley", "contrato", "politica"]);
-export const canalSolicitudEnum = pgEnum("canal_solicitud", ["telefono", "whatsapp", "correo", "presencial", "otro"]);
+export const canalSolicitudEnum = pgEnum("canal_solicitud", ["telefono", "whatsapp", "correo", "presencial", "otro", "propuesta"]);
+/** Plan CRM. */
+export const tipoNotaEnum = pgEnum("tipo_nota_cliente", ["llamada", "queja", "acuerdo", "otro"]);
+export const estadoPropuestaEnum = pgEnum("estado_propuesta", ["confirmada", "descartada", "pospuesta"]);
 /** programada: tiene parada vigente en un plan validado; en_ruta: su unidad ya salió (Plan 5). */
 export const estadoSolicitudEnum = pgEnum("estado_solicitud", ["pendiente", "cancelada", "atendida", "no_atendida", "programada", "en_ruta"]);
 export const estadoPlanEnum = pgEnum("estado_plan", ["propuesto", "validado", "descartado", "reemplazado"]);
@@ -65,6 +68,11 @@ export const clientes = pgTable(
     nombre: text("nombre").notNull(),
     contactoNombre: text("contacto_nombre"),
     contactoTelefono: text("contacto_telefono"),
+    /** Plan CRM. */
+    contactoCorreo: text("contacto_correo"),
+    contactoPuesto: text("contacto_puesto"),
+    contactosAdicionales: jsonb("contactos_adicionales").notNull().default([]),
+    recurrencia: jsonb("recurrencia"),
     direccion: text("direccion"),
     lat: doublePrecision("lat"),
     lng: doublePrecision("lng"),
@@ -84,6 +92,47 @@ export const clientes = pgTable(
     check("clientes_tiempo_servicio", sql`${t.tiempoServicioMin} BETWEEN 5 AND 480`),
     check("clientes_carga", sql`${t.cargaEstimadaKg} IS NULL OR ${t.cargaEstimadaKg} BETWEEN 0 AND 40000`),
     check("clientes_version", sql`${t.version} >= 1`),
+    check("clientes_contactos_adicionales", sql`jsonb_typeof(${t.contactosAdicionales}) = 'array' AND jsonb_array_length(${t.contactosAdicionales}) <= 10`),
+  ],
+);
+
+/** Plan CRM: notas de seguimiento. Solo se agregan; corregir es otra nota que apunta a la anterior. */
+export const notasCliente = pgTable(
+  "notas_cliente",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clienteId: uuid("cliente_id").notNull().references(() => clientes.id, { onDelete: "restrict" }),
+    tipo: tipoNotaEnum("tipo").notNull(),
+    texto: text("texto").notNull(),
+    autor: uuid("autor").notNull().references(() => usuarios.id),
+    en: timestamp("en", { withTimezone: true }).notNull(),
+    corrigeA: uuid("corrige_a").references((): AnyPgColumn => notasCliente.id),
+  },
+  (t) => [
+    index("notas_cliente_cliente_idx").on(t.clienteId, t.en),
+    check("notas_cliente_texto", sql`length(${t.texto}) BETWEEN 1 AND 1000`),
+  ],
+);
+
+/** Plan CRM: decisiones del despachador sobre propuestas de recolección. Una por cliente y fecha; solo se agregan. */
+export const propuestasRecoleccion = pgTable(
+  "propuestas_recoleccion",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clienteId: uuid("cliente_id").notNull().references(() => clientes.id, { onDelete: "restrict" }),
+    fecha: date("fecha", { mode: "string" }).notNull(),
+    estado: estadoPropuestaEnum("estado").notNull(),
+    pospuestaHasta: date("pospuesta_hasta", { mode: "string" }),
+    solicitudId: uuid("solicitud_id").references(() => solicitudes.id),
+    nota: text("nota"),
+    decididaPor: uuid("decidida_por").notNull().references(() => usuarios.id),
+    decididaEn: timestamp("decidida_en", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("propuestas_recoleccion_cliente_fecha").on(t.clienteId, t.fecha),
+    check("propuestas_recoleccion_pospuesta", sql`(${t.estado} = 'pospuesta') = (${t.pospuestaHasta} IS NOT NULL)`),
+    check("propuestas_recoleccion_confirmada", sql`(${t.estado} = 'confirmada') = (${t.solicitudId} IS NOT NULL)`),
+    check("propuestas_recoleccion_nota", sql`${t.nota} IS NULL OR length(${t.nota}) <= 300`),
   ],
 );
 

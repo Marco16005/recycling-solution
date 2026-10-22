@@ -31,11 +31,32 @@ export const documentoSchema = z.object({
   venceEl: z.iso.date("Usa una fecha real con formato AAAA-MM-DD").nullable(),
 });
 
+/** Plan CRM: contacto adicional; el teléfono se valida igual que el del contacto principal. */
+export const contactoSchema = z.object({
+  nombre: z.string().trim().min(2, "Escribe el nombre del contacto").max(120),
+  puesto: z.string().trim().max(80).nullable(),
+  telefono: z.string().trim().refine(telefonoValido, "Teléfono no válido").nullable(),
+  correo: z.email("Correo no válido").trim().toLowerCase().max(160).nullable(),
+});
+
+/** Plan CRM: día fijo opcional para proponer recolecciones. */
+export const recurrenciaSchema = z.discriminatedUnion("tipo", [
+  z.object({ tipo: z.literal("dias_semana"), dias: z.array(z.number().int().min(0).max(6)).min(1, "Elige al menos un día").max(7)
+    .refine((d) => new Set(d).size === d.length, "Días repetidos") }),
+  z.object({ tipo: z.literal("cada_n_dias"), cadaDias: z.number().int().min(2, "De 2 a 90 días").max(90, "De 2 a 90 días"),
+    desde: z.iso.date("Fecha no válida") }),
+]);
+
 export const clienteSchema = z
   .object({
     nombre: z.string().trim().min(2, "Escribe el nombre del cliente").max(160),
     contactoNombre: z.string().trim().max(120).nullable(),
     contactoTelefono: z.string().trim().refine(telefonoValido, "Teléfono no válido").nullable(),
+    // Plan CRM: con valor por omisión, para que las entradas anteriores sigan siendo válidas.
+    contactoCorreo: z.email("Correo no válido").trim().toLowerCase().max(160).nullable().default(null),
+    contactoPuesto: z.string().trim().max(80).nullable().default(null),
+    contactosAdicionales: z.array(contactoSchema).max(10, "Máximo 10 contactos adicionales").default([]),
+    recurrencia: recurrenciaSchema.nullable().default(null),
     direccion: z.string().trim().max(300).nullable(),
     lat: z.number().min(MEXICO.latMin, "Latitud fuera de México").max(MEXICO.latMax, "Latitud fuera de México").nullable(),
     lng: z.number().min(MEXICO.lngMin, "Longitud fuera de México").max(MEXICO.lngMax, "Longitud fuera de México").nullable(),

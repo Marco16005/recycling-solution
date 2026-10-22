@@ -18,6 +18,8 @@ export interface ResumenImportacion {
   posiblesDuplicados: PosibleDuplicado[];
   muestra: { fila: number; nombre: string; direccion: string | null }[];
   huella: string;
+  /** Plan CRM: avisos que no impiden importar. */
+  avisos: string[];
 }
 
 const TAMANO_MUESTRA = 20;
@@ -67,6 +69,7 @@ export async function analizarImportacion(ctx: Contexto, csv: unknown): Promise<
         .slice(0, TAMANO_MUESTRA)
         .map(({ fila, entrada }) => ({ fila, nombre: entrada.nombre, direccion: entrada.direccion })),
       huella: huellaDe(csv, duplicados),
+      avisos: analisis.avisos,
     },
   };
 }

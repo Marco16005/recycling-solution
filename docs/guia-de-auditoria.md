@@ -56,6 +56,10 @@ Cada una debe cumplirse siempre. Si alguna falla, es un hallazgo.
 | 28 | La proyección nunca pone algo que no ha ocurrido antes de la hora actual ni antes de un hito real, y no cambia los hitos reales | Propiedad de `src/dominio/operacion/proyeccion.test.ts` |
 | 29 | Solo se liberan paradas pendientes y vigentes de viajes futuros de jornadas disponibles; las apariciones históricas en otra jornada no cuentan | `src/dominio/operacion/proyeccion.test.ts`, re-ruteo encadenado en `src/acciones/plan7.integracion.test.ts` |
 | 30 | Ninguna ubicación sale de la instalación para calcular rutas: OSRM corre en su contenedor, sin puertos publicados; si falla, el plan usa la fórmula y lo dice | `compose.yaml` (servicio `osrm`), `src/traslados/traslados.test.ts` y `.integracion.test.ts` |
+| 31 | Ninguna solicitud se crea desde una propuesta sin que el despachador la confirme; confirmar y la captura manual bloquean al cliente, así que una confirmación no duplica una solicitud abierta | `src/acciones/propuestas.nucleo.ts`, `src/acciones/crm.integracion.test.ts` |
+| 32 | Notas de seguimiento y decisiones de propuestas solo se agregan: `rs_app` no tiene UPDATE ni DELETE; corregir es otra nota y la supresión ARCO usa el script del migrador | `infra/db/permisos.sql`, `src/datos/crm.integracion.test.ts`, `scripts/suprimir-notas-cliente.mts` |
+| 33 | Cada exportación de la cartera queda en la bitácora (sin valores) y solo la hacen despachador y administrador; el CSV neutraliza fórmulas salvo números puros | `src/consultas/cartera.nucleo.ts`, `src/consultas/crm.integracion.test.ts`, `src/indicadores/indicadores.test.ts` |
+| 34 | Un enlace corto de ubicación solo se sigue hacia hosts de Google, hasta 3 saltos y 3 s; ningún dato del cliente sale en esa petición | `src/acciones/enlaces.ts`, `src/acciones/enlaces.test.ts` |
 
 ## Qué intentar romper
 

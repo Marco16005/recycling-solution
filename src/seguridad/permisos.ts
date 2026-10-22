@@ -13,6 +13,8 @@ export const PERMISOS = {
   "clientes.ver": ["despachador", "gerencia"],
   "clientes.editar": ["despachador"],
   "clientes.importar": ["despachador"],
+  /** Plan CRM: el archivo lleva teléfonos y correos; cada exportación queda en la bitácora. */
+  "clientes.exportar": ["despachador"],
   "usuarios.gestionar": [],
   "flota.ver": ["despachador", "gerencia"],
   "flota.editar": ["despachador"],

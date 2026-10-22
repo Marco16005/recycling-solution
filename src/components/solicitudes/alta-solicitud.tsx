@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ETIQUETA_CANAL } from "@/dominio/clientes/etiquetas";
-import { CANALES, type Canal } from "@/dominio/solicitudes/tipos";
+import { CANALES_CAPTURA, type Canal } from "@/dominio/solicitudes/tipos";
 import { solicitudSchema } from "@/dominio/solicitudes/esquemas";
 import { erroresPorCampo } from "@/dominio/clientes/esquemas";
 import { MotivosCliente } from "./motivos-cliente";
@@ -177,7 +177,7 @@ export function AltaSolicitud({ hoy }: { hoy: string }) {
               <select
                 {...a} className={CLASE_SELECT} value={canal} onChange={(e) => setCanal(e.target.value as Canal)}
               >
-                {CANALES.map((c) => <option key={c} value={c}>{ETIQUETA_CANAL[c]}</option>)}
+                {CANALES_CAPTURA.map((c) => <option key={c} value={c}>{ETIQUETA_CANAL[c]}</option>)}
               </select>
             )}
           </Campo>
