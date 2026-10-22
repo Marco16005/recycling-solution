@@ -16,7 +16,7 @@ import { agregarNota, ubicacionDesdeTexto } from "./cartera.nucleo";
 import { registrarPrivacidad } from "./clientes.nucleo";
 import { analizarImportacion, confirmarImportacion } from "./importacion.nucleo";
 import { confirmarPropuestas, descartarPropuesta, posponerPropuesta } from "./propuestas.nucleo";
-import { registrarSolicitud } from "./solicitudes.nucleo";
+import { registrarSolicitud, reprogramarSolicitud } from "./solicitudes.nucleo";
 import type { Contexto, Resultado } from "./tipos";
 
 // Plan CRM, PC-3, con Postgres y OSRM reales (mapa sintético). AHORA es 2026-10-21 (miércoles) 09:00 en Ciudad de México.
@@ -110,7 +110,7 @@ describe("acciones del Plan CRM", () => {
     const manual = (fechaSolicitada = MANANA) =>
       registrarSolicitud(ctx(), { clienteId, fechaSolicitada, canal: "telefono", cargaEstimadaKg: null, notas: null, capturaInicioEn: AHORA });
     const abiertas = async () => (await base.bd.select().from(solicitudes).where(eq(solicitudes.clienteId, clienteId)))
-      .filter((s) => s.fechaSolicitada === MANANA && s.estado === "pendiente");
+      .filter((s) => s.fechaSolicitada === MANANA && ["pendiente", "programada", "en_ruta"].includes(s.estado));
 
     it("confirmar y luego capturar a mano para la misma fecha: la captura se rechaza y queda una sola abierta", async () => {
       const { creadas } = valor(await confirmarPropuestas(ctx(), MANANA, [clienteId]));
@@ -119,6 +119,19 @@ describe("acciones del Plan CRM", () => {
       expect(await abiertas()).toHaveLength(1);
       // Para otra fecha sigue permitida, como siempre.
       valor(await manual("2026-10-23"));
+    });
+
+    it("reprogramar a la fecha de otra abierta del cliente se rechaza; a otra fecha, sí", async () => {
+      valor(await confirmarPropuestas(ctx(), MANANA, [clienteId]));
+      const { id } = valor(await manual("2026-10-23"));
+      const [s] = await base.bd.select().from(solicitudes).where(eq(solicitudes.id, id));
+      expect(await reprogramarSolicitud(ctx(), id, s.version, MANANA))
+        .toMatchObject({ ok: false, error: "invalido", campos: { fecha: [expect.stringContaining("abierta para esa fecha")] } });
+      expect(await abiertas()).toHaveLength(1);
+      valor(await reprogramarSolicitud(ctx(), id, s.version, "2026-10-24"));
+      // Reprogramarla a su propia fecha no choca consigo misma.
+      const [despues] = await base.bd.select().from(solicitudes).where(eq(solicitudes.id, id));
+      valor(await reprogramarSolicitud(ctx(), id, despues.version, "2026-10-24"));
     });
 
     it("capturar a mano y luego confirmar: la confirmación no crea otra (solicitud_abierta)", async () => {

@@ -110,11 +110,15 @@ export async function actualizarSolicitudPendiente(
   return actual.version !== version ? "conflicto" : "no_pendiente";
 }
 
-/** Plan CRM: folio de una solicitud abierta (pendiente, programada o en ruta) del cliente para esa fecha, o null. */
-export async function solicitudAbiertaEnFecha(tx: Tx, clienteId: string, fecha: string): Promise<string | null> {
+/**
+ * Plan CRM: folio de una solicitud abierta (pendiente, programada o en ruta) del cliente con esa fecha solicitada, o null.
+ * excluirId: la propia, al reprogramar.
+ */
+export async function solicitudAbiertaEnFecha(tx: Tx, clienteId: string, fecha: string, excluirId?: string): Promise<string | null> {
   const [fila] = await tx.select({ folio: solicitudes.folio }).from(solicitudes)
     .where(and(eq(solicitudes.clienteId, clienteId), eq(solicitudes.fechaSolicitada, fecha),
-      inArray(solicitudes.estado, ["pendiente", "programada", "en_ruta"])))
+      inArray(solicitudes.estado, ["pendiente", "programada", "en_ruta"]),
+      ...(excluirId ? [sql`${solicitudes.id} <> ${excluirId}`] : [])))
     .orderBy(asc(solicitudes.registradaEn)).limit(1);
   return fila?.folio ?? null;
 }

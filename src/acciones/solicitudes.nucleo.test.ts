@@ -30,7 +30,8 @@ describe("solicitudes", () => {
 
   it("registra con folio consecutivo del día y guarda inicio y fin de captura", async () => {
     expect(await registrarSolicitud(ctx(), entrada())).toMatchObject({ ok: true, valor: { folio: "S-20261014-001" } });
-    expect(await registrarSolicitud(ctx(), entrada())).toMatchObject({ ok: true, valor: { folio: "S-20261014-002" } });
+    // Otra fecha: para la misma, el cliente ya tiene una abierta (Plan CRM).
+    expect(await registrarSolicitud(ctx(), entrada({ fechaSolicitada: "2026-10-15" }))).toMatchObject({ ok: true, valor: { folio: "S-20261014-002" } });
     const [s] = await bd.select().from(solicitudes).limit(1);
     expect(s).toMatchObject({ registradaEn: AHORA, capturaFinEn: AHORA, proximaFechaElegible: "2026-10-14", registradaPor: despachador.id });
   });

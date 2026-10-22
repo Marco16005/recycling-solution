@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { registrarEvento } from "@/datos/bitacora";
 import { bloquearCliente, leerCliente } from "@/datos/clientes";
-import { actualizarSolicitudPendiente, insertarSolicitud, siguienteConsecutivo, solicitudAbiertaEnFecha, type ResultadoCambioSolicitud } from "@/datos/solicitudes";
+import { actualizarSolicitudPendiente, insertarSolicitud, leerSolicitud, siguienteConsecutivo, solicitudAbiertaEnFecha, type ResultadoCambioSolicitud } from "@/datos/solicitudes";
 import { erroresPorCampo } from "@/dominio/clientes/esquemas";
 import { formatoFolio } from "@/dominio/solicitudes/cola";
 import { solicitudSchema } from "@/dominio/solicitudes/esquemas";
@@ -105,7 +105,14 @@ export async function reprogramarSolicitud(ctx: Contexto, id: unknown, versionEs
   if (nueva.data < fechaEnMexico(ctx.ahora)) return invalido({ fecha: ["La fecha no puede ser anterior a hoy"] });
   const usuarioId = permiso.usuario.id;
 
-  return ctx.bd.transaction(async (tx) => {
+  return ctx.bd.transaction(async (tx): Promise<Resultado<null>> => {
+    // Revisión de Codex: reprogramar no debe dejar dos solicitudes abiertas del cliente para la misma fecha.
+    // Mismo candado que capturar y confirmar una propuesta.
+    const actual = await leerSolicitud(tx, ids.id);
+    if (!actual) return { ok: false, error: "no_encontrado" };
+    await bloquearCliente(tx, actual.clienteId);
+    const otra = await solicitudAbiertaEnFecha(tx, actual.clienteId, nueva.data, ids.id);
+    if (otra) return invalido({ fecha: [`Este cliente ya tiene la solicitud ${otra} abierta para esa fecha`] });
     const r = await actualizarSolicitudPendiente(tx, ids.id, ids.version, { fechaSolicitada: nueva.data, proximaFechaElegible: nueva.data }, ctx.ahora);
     if (r === "actualizada") {
       await registrarEvento(tx, { usuarioId, entidad: "solicitud", entidadId: ids.id, accion: "reprogramar", campos: ["fechaSolicitada", "proximaFechaElegible"] });
