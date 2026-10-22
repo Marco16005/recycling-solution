@@ -7,8 +7,13 @@ const AYUDA = "usa, por ejemplo, lun-vie 08:00-14:00; sab 09:00-12:00";
 const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
 /** Sin retroceso: el horario se busca solo al final de la franja; el texto de los días se toma de lo anterior. */
 const FINAL = /(\d{2}:\d{2}) ?- ?(\d{2}:\d{2})$/;
-/** Límites de largo antes de leer (un CSV viene de fuera). */
-export const MAXIMO_HORARIOS = 300;
+/**
+ * 21 ventanas sin agrupar: 21 × 15 + 20 × 2 = 355 caracteres.
+ * La franja agrupada más larga tiene 5 días sin ternas consecutivas:
+ * "lun, mar, jue, vie, dom 08:00-09:00" (35 caracteres, menos que 5 franjas).
+ * Agrupar siempre acorta la salida; 512 deja margen sobre la cota de 355.
+ */
+export const MAXIMO_HORARIOS = 512;
 const MAXIMO_FRANJA = 80;
 
 const sinAcentos = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();

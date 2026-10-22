@@ -33,6 +33,36 @@ describe("leerHorarios (Plan CRM, §4.1)", () => {
     expect(leerHorarios(escribirHorarios(r.ventanas))).toEqual(r);
     expect(escribirHorarios([])).toBe("");
   });
+  it("ida y vuelta con 21 ventanas no agrupables, con minutos distintos por día", () => {
+    const ventanas = Array.from({ length: 7 }, (_, diaSemana) =>
+      [8, 12, 16].map((hora) => ({
+        diaSemana,
+        horaInicio: `${hora.toString().padStart(2, "0")}:0${diaSemana}`,
+        horaFin: `${(hora + 1).toString().padStart(2, "0")}:0${diaSemana}`,
+      })),
+    ).flat();
+    const texto = escribirHorarios(ventanas);
+    expect(texto).toHaveLength(355);
+    expect(texto.split(";")).toHaveLength(21);
+    expect(leerHorarios(texto)).toEqual({ ok: true, ventanas });
+  });
+  it("ida y vuelta con las franjas agrupadas más largas y 21 ventanas", () => {
+    const ventanas = [0, 1, 2, 4, 5].flatMap((diaSemana) =>
+      [8, 10, 12, 14].map((hora) => ({
+        diaSemana, horaInicio: `${hora.toString().padStart(2, "0")}:00`, horaFin: `${hora + 1}:00`.padStart(5, "0"),
+      })),
+    );
+    ventanas.push({ diaSemana: 6, horaInicio: "16:00", horaFin: "17:00" });
+    const texto = escribirHorarios(ventanas);
+    expect(ventanas).toHaveLength(21);
+    expect(texto.split("; ").slice(0, 4)).toEqual([
+      "lun, mar, jue, vie, dom 08:00-09:00",
+      "lun, mar, jue, vie, dom 10:00-11:00",
+      "lun, mar, jue, vie, dom 12:00-13:00",
+      "lun, mar, jue, vie, dom 14:00-15:00",
+    ]);
+    expect(leerHorarios(texto)).toEqual({ ok: true, ventanas });
+  });
   it("un texto enorme o lleno de espacios se rechaza rápido (sin retroceso catastrófico)", () => {
     for (const texto of ["lun" + " ".repeat(50_000) + "x", "a ".repeat(20_000) + "08:00-09:00", ("lun 08:00-09:00;").repeat(100)]) {
       const inicio = performance.now();

@@ -75,7 +75,10 @@ export function analizarClientesCsv(entradaCruda: string | Uint8Array): Analisis
     const campos: Record<string, string> = Object.fromEntries(encabezados.map((h, i) => [h, valores[i] ?? ""]));
     const texto = (campo: string): string | null => {
       const valor = campos[campo];
-      return typeof valor === "string" ? valor.trim() || null : null;
+      if (typeof valor !== "string") return null;
+      // Revierte solo un apóstrofo protector de la exportación, antes de validar.
+      const desprotegido = /^'[=+@\t\r'-]/.test(valor) ? valor.slice(1) : valor;
+      return desprotegido.trim() || null;
     };
     const numero = (campo: string): number | null => {
       const valor = texto(campo);

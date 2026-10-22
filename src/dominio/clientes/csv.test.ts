@@ -44,6 +44,33 @@ describe("analizarClientesCsv", () => {
     expect(r.errores[0].mensajes).toEqual(expect.arrayContaining([expect.stringContaining("contactoTelefono"), expect.stringContaining("lat"), expect.stringContaining("tiempoServicioMin")]));
   });
 
+  it("importa el teléfono, las notas y los números que produce la exportación protegida", () => {
+    const r = analizarClientesCsv("nombre,telefono,notas_acceso,lat,lng,servicio_min\r\nCartonera,'+52 442 123 4567,'=SUMA(A1),20.62,-100.3,+5\r\n");
+    expect(r.errores).toEqual([]);
+    expect(r.validas).toHaveLength(1);
+    expect(r.validas[0].entrada).toMatchObject({
+      contactoTelefono: "+52 442 123 4567", notasAcceso: "=SUMA(A1)", lat: 20.62, lng: -100.3, tiempoServicioMin: 5,
+    });
+  });
+
+  it.each([
+    ["''Los Pinos'", "'Los Pinos'"],
+    ["'hola", "'hola"],
+    ["'''Los Pinos'", "''Los Pinos'"],
+    ["'=SUMA(A1)", "=SUMA(A1)"],
+    ["'+texto", "+texto"],
+    ["'-texto", "-texto"],
+    ["'@texto", "@texto"],
+    ["'\ttexto", "texto"],
+    ["'\rtexto", "texto"],
+    ["'", "'"],
+  ])("quita un solo apóstrofo protector en texto: %s", (exportado, esperado) => {
+    // Las celdas van entre comillas CSV; tabulador y retorno se recortan como antes.
+    const r = analizarClientesCsv(`nombre,notas_acceso\r\nCartonera,"${exportado}"\r\n`);
+    expect(r.errores).toEqual([]);
+    expect(r.validas[0].entrada.notasAcceso).toBe(esperado);
+  });
+
   it("acepta 2000 registros y rechaza 2001 sin contar vacíos", () => {
     const csv = "nombre\n" + "Cliente\n".repeat(LIMITES_CSV.registros);
     expect(analizarClientesCsv(csv).validas).toHaveLength(2000);
