@@ -1,20 +1,22 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { listarClientesConsulta } from "@/consultas/clientes";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EstadoCliente } from "@/components/clientes/estado-cliente";
 import { ResultadoFallido } from "@/components/clientes/resultado-fallido";
 import { ETIQUETA_RESIDUO } from "@/dominio/clientes/etiquetas";
 
-type Props = { searchParams: Promise<{ q?: string | string[] }> };
+import { FiltrosDeCartera, filtrosDeParametros, parametrosDeFiltros, type ParametrosCartera } from "@/components/clientes/filtros-cartera";
+
+type Props = { searchParams: Promise<ParametrosCartera> };
 
 async function Cartera({ searchParams }: Props) {
   const parametros = await searchParams;
-  const q = typeof parametros.q === "string" ? parametros.q : "";
-  const resultado = await listarClientesConsulta({ texto: q });
+  const filtros = filtrosDeParametros(parametros);
+  const q = filtros.texto ?? "";
+  const consulta = parametrosDeFiltros(filtros);
+  const resultado = await listarClientesConsulta(filtros);
   if (!resultado.ok) return <ResultadoFallido resultado={resultado} />;
   const { k5, clientes, fecha, puedeEditar } = resultado.valor;
   return (
@@ -52,24 +54,15 @@ async function Cartera({ searchParams }: Props) {
             {k5.completos} de {k5.activos} clientes activos
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Toda la cartera. La búsqueda no modifica este indicador.
+            Toda la cartera. Los filtros no modifican este indicador.
           </p>
         </div>
       </section>
-      <form action="/despacho/clientes" method="get" className="flex flex-wrap items-end gap-2">
-        <div className="min-w-48 flex-1 space-y-2">
-          <Label htmlFor="buscar">Buscar clientes</Label>
-          <Input key={q} id="buscar" name="q" defaultValue={q} placeholder="Nombre, contacto o dirección" />
-        </div>
-        <Button type="submit" variant="secondary">
-          Buscar
-        </Button>
-        {q && (
-          <Link href="/despacho/clientes" className={buttonVariants({ variant: "ghost" })}>
-            Limpiar
-          </Link>
-        )}
-      </form>
+      <div className="flex flex-wrap gap-3">
+        <Link href={`/despacho/clientes/mapa?${consulta}`} className={buttonVariants({ variant: "outline" })}>Mapa de la cartera</Link>
+        {puedeEditar && <a href={`/api/clientes/csv?${consulta}`} className={buttonVariants({ variant: "outline" })}>Exportar CSV</a>}
+      </div>
+      <FiltrosDeCartera filtros={filtros} ruta="/despacho/clientes" />
       <section className="overflow-hidden rounded-xl border bg-background" aria-label="Listado de clientes">
         <div className="border-b px-4 py-3 text-sm text-muted-foreground">
           {clientes.length} {clientes.length === 1 ? "cliente" : "clientes"}
@@ -77,10 +70,10 @@ async function Cartera({ searchParams }: Props) {
         </div>
         {clientes.length === 0 ? (
           <div className="px-6 py-12 text-center">
-            <h2 className="font-medium">{q ? "No hay coincidencias" : "La cartera está vacía"}</h2>
+            <h2 className="font-medium">{consulta ? "No hay coincidencias" : "La cartera está vacía"}</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              {q
-                ? "Prueba con otro texto o limpia la búsqueda."
+              {consulta
+                ? "Prueba con otro texto o limpia los filtros."
                 : "Registra el primer cliente o importa un archivo CSV."}
             </p>
           </div>
@@ -104,6 +97,7 @@ async function Cartera({ searchParams }: Props) {
                       {c.nombre}
                     </Link>
                     <p className="mt-1 text-xs text-muted-foreground">{c.direccion ?? "Sin dirección"}</p>
+                    {c.documentoPorVencer && <p className="mt-2 inline-block rounded border border-amber-600/40 px-2 py-1 text-xs">Documento por vencer</p>}
                     {!c.activo && <p className="mt-2 text-xs">Inactivo</p>}
                   </TableCell>
                   <TableCell className="align-top">

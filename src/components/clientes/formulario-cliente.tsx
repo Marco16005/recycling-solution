@@ -26,6 +26,8 @@ import {
   type TipoResiduo,
 } from "@/dominio/clientes/tipos";
 import { Campo, CLASE_SELECT, ResumenErrores, type Errores } from "./campos-formulario";
+import { ContactosRecurrencia } from "./contactos-recurrencia";
+import { PegarUbicacion } from "./pegar-ubicacion";
 import { ResultadoFallido, type Fallo } from "./resultado-fallido";
 
 const SelectorUbicacion = dynamic(() => import("./selector-ubicacion").then((m) => m.SelectorUbicacion), {
@@ -56,6 +58,7 @@ export function FormularioCliente({ ficha, estiloMapaUrl, catalogoDocumentos = f
   const [conflicto, setConflicto] = useState(false);
   const [respaldo, setRespaldo] = useState<ClienteEntrada | null>(null);
   const [pendiente, iniciar] = useTransition();
+  const [ubicando, setUbicando] = useState(false);
   const editable = ficha?.puedeEditar ?? true;
 
   function cambiar<K extends keyof ClienteEntrada>(campo: K, valor: ClienteEntrada[K]) {
@@ -75,7 +78,7 @@ export function FormularioCliente({ ficha, estiloMapaUrl, catalogoDocumentos = f
 
   function guardar(evento: FormEvent) {
     evento.preventDefault();
-    if (!editable || pendiente || conflicto) return;
+    if (!editable || pendiente || ubicando || conflicto) return;
     setErrores({});
     setFallo(null);
     setMensaje("");
@@ -187,7 +190,7 @@ export function FormularioCliente({ ficha, estiloMapaUrl, catalogoDocumentos = f
       {!editable && (
         <p className="rounded-lg border bg-background p-4 text-sm">Consulta de gerencia · Solo lectura</p>
       )}
-      <fieldset disabled={!editable || pendiente} className="space-y-6">
+      <fieldset disabled={!editable || pendiente || ubicando} className="space-y-6">
         <section
           className="space-y-5 rounded-xl border bg-background p-5 sm:p-6"
           aria-labelledby={`${prefijo}-generales`}
@@ -197,8 +200,6 @@ export function FormularioCliente({ ficha, estiloMapaUrl, catalogoDocumentos = f
           </h2>
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="sm:col-span-2">{campo("nombre", "Nombre del cliente")}</div>
-            {campo("contactoNombre", "Nombre del contacto")}
-            {campo("contactoTelefono", "Teléfono", "tel")}
           </div>
           <Campo nombre="activo" titulo="Estado del cliente" prefijo={prefijo} errores={errores}>
             {(a) => (
@@ -222,6 +223,10 @@ export function FormularioCliente({ ficha, estiloMapaUrl, catalogoDocumentos = f
           <h2 id={`${prefijo}-ubicacion`} className="text-lg font-semibold">
             02 · Ubicación y acceso
           </h2>
+          {editable && <PegarUbicacion alConsultar={setUbicando} lat={datos.lat} lng={datos.lng} alCambiar={(lat, lng) => {
+            setDatos((d) => ({ ...d, lat, lng }));
+            setMensaje("");
+          }} />}
           {campo("direccion", "Dirección")}
           <div className="grid gap-5 sm:grid-cols-2">
             {campo("lat", "Latitud", "number")}
@@ -236,7 +241,7 @@ export function FormularioCliente({ ficha, estiloMapaUrl, catalogoDocumentos = f
             lat={datos.lat}
             lng={datos.lng}
             estiloMapaUrl={estiloMapaUrl}
-            soloLectura={!editable || pendiente}
+            soloLectura={!editable || pendiente || ubicando}
             alCambiar={(lat, lng) => {
               setDatos((d) => ({ ...d, lat, lng }));
               setMensaje("");
@@ -623,13 +628,14 @@ export function FormularioCliente({ ficha, estiloMapaUrl, catalogoDocumentos = f
             </Button>
           )}
         </section>
+        <ContactosRecurrencia datos={datos} cambiar={cambiar} prefijo={prefijo} errores={errores} editable={editable} />
       </fieldset>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-5">
         <Link href="/despacho/clientes" className={buttonVariants({ variant: "outline" })}>
           Volver a clientes
         </Link>
         {editable && (
-          <Button type="submit" disabled={pendiente || conflicto}>
+          <Button type="submit" disabled={pendiente || ubicando || conflicto}>
             {pendiente ? "Guardando…" : "Guardar cliente"}
           </Button>
         )}
