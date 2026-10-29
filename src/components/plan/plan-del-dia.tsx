@@ -16,12 +16,41 @@ const motivos = {
   sin_unidades_disponibles: "No hay unidades disponibles.",
   sin_unidad_compatible: "No hay una unidad disponible del tipo admitido por el cliente.",
   sin_cupo: "No hay una posición factible con la capacidad, ventanas y turnos actuales.",
-  // Plan 8 (P8-0): el texto con el Δ real llega en P8-5.
-  alarga_la_jornada: "Cabría, pero alarga la jornada más que la tolerancia.",
+  alarga_la_jornada: "Cabría, pero alarga la jornada",
   pospuesta_a_mano: "Pospuesta por el despachador.",
   carga_mayor_a_capacidad_compatible: "La carga supera la capacidad de todas las unidades compatibles.",
 };
 const numero = (n: number) => n.toLocaleString("es-MX", { maximumFractionDigits: 1 });
+const diferencia = (n: number, decimales = 0) => `${n < 0 ? "−" : "+"}${Math.abs(n).toLocaleString("es-MX", { minimumFractionDigits: decimales, maximumFractionDigits: decimales })}`;
+
+function ReacomodoDelPlan({ reacomodo }: { reacomodo: NonNullable<VistaPlan["reacomodo"]> }) {
+  const { antes, despues, readmitidas, alargaLaJornada, ajustesManualesDespues } = reacomodo;
+  const metricas = [
+    ["ruteadas", "Ruteadas"],
+    ["pospuestas", "Pospuestas"],
+    ["tiempoMuertoMin", "Tiempo muerto (min)"],
+    ["km", "Kilómetros"],
+    ["minutosTraslado", "Minutos de traslado (sin horas pico)"],
+  ] as const;
+  const sinMejoras = metricas.every(([campo]) => antes[campo] === despues[campo]);
+  return <section aria-label="Reacomodo" className="space-y-4">
+    <h2 className="text-xl font-semibold">{ajustesManualesDespues > 0
+      ? `Reacomodo automático (antes de ${ajustesManualesDespues} ajustes manuales)`
+      : "Reacomodo automático"}</h2>
+    <p className="rounded-lg border bg-muted px-3 py-2 text-sm font-medium">{sinMejoras ? "Sin mejoras"
+      : `Reacomodo: ${diferencia(despues.ruteadas - antes.ruteadas)} paradas atendidas · tiempo muerto ${diferencia(despues.tiempoMuertoMin - antes.tiempoMuertoMin)} min · ${diferencia(despues.km - antes.km, 1)} km`}</p>
+    <div className="overflow-x-auto rounded-xl border"><table className="w-full text-left text-sm">
+      <caption className="p-4 text-left font-semibold">Antes y después del reacomodo automático</caption>
+      <thead><tr><th scope="col" className="p-3">Métrica</th><th scope="col" className="p-3">Antes</th><th scope="col" className="p-3">Después</th></tr></thead>
+      <tbody>{metricas.map(([campo, titulo]) => <tr key={campo}>
+        <th scope="row" className="p-3">{titulo}{campo === "tiempoMuertoMin" && <span className="block text-xs font-normal text-muted-foreground">con horas pico, incluye espera y descargas</span>}</th>
+        <td className="p-3 tabular-nums">{numero(antes[campo])}</td><td className="p-3 tabular-nums">{numero(despues[campo])}</td>
+      </tr>)}</tbody>
+    </table></div>
+    <p className="text-sm">Readmitidas: {readmitidas}{alargaLaJornada > 0 && ` · ${alargaLaJornada} pospuestas alargarían la jornada`}</p>
+  </section>;
+}
+
 const motivosAproximados = {
   sin_configurar: "mapa de calles sin configurar",
   sin_respuesta: "el servicio de mapas no respondió",
@@ -137,6 +166,7 @@ function ContenidoPlan({ vista }: { vista: VistaPlan }) {
       </table></div>
       <p className="text-xs text-muted-foreground">Estimaciones de distancia y tiempo; no son resultados de recorridos reales.</p>
     </section>}
+    {vista.reacomodo !== null && <ReacomodoDelPlan reacomodo={vista.reacomodo} />}
     {vista.pinesARevisar.length > 0 && <section aria-label="Pins por revisar" className="space-y-3 rounded-xl border p-4">
       <h2 className="text-xl font-semibold">Pins por revisar</h2>
       <ul className="list-inside list-disc space-y-2 text-sm">{vista.pinesARevisar.map(p => <li key={p.clienteId}>
@@ -171,7 +201,7 @@ function ContenidoPlan({ vista }: { vista: VistaPlan }) {
         <p className="text-sm text-muted-foreground">Al validar, pasarán al siguiente día de operación conservando su registro original.</p>
         {vista.pospuestas.length === 0 && <p className="text-sm">Sin solicitudes pospuestas.</p>}
         {vista.pospuestas.map(p => <article key={p.solicitudId} aria-label={`Pospuesta ${p.folio}`} className="space-y-3 rounded-xl border p-4">
-          <h3 className="font-mono font-semibold">{p.folio}</h3><p>{p.cliente}</p><p className="text-sm">{motivos[p.motivo]}</p>
+          <h3 className="font-mono font-semibold">{p.folio}</h3><p>{p.cliente}</p><p className="text-sm">{motivos[p.motivo]}{p.motivo === "alarga_la_jornada" && p.diagnostico?.deltaMinimoMin !== undefined && ` ${p.diagnostico.deltaMinimoMin} min`}</p>
           {p.diagnostico && <p className="text-sm text-muted-foreground">Posiciones rechazadas: capacidad {p.diagnostico.capacidad}; ventana {p.diagnostico.ventana}; fin de turno {p.diagnostico.finDeTurno}; afecta a otra parada {p.diagnostico.afectaAOtra}.</p>}
           {editable && !vista.congeladas.includes(p.solicitudId) && <MoverSolicitud solicitudId={p.solicitudId} folio={p.folio} unidades={vista.unidades} mover={ajustar} />}
         </article>)}
