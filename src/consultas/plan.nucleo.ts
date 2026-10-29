@@ -96,6 +96,24 @@ export interface ReacomodoVista {
   ajustesManualesDespues: number;
 }
 
+/**
+ * Plan 8, P8-4: lo que ganó el reacomodo del motor (S1 contra S4). despues es el del motor y no cambia con los
+ * ajustes manuales; null en planes anteriores a 1.2.0.
+ */
+function vistaReacomodo(resultado: Plan, ajustes: number): ReacomodoVista | null {
+  const r = resultado.versionMotor === "1.2.0" ? resultado.reacomodo : undefined;
+  if (!r) return null;
+  const metricas = (m: NonNullable<Plan["reacomodo"]>["antes"]): MetricasReacomodo =>
+    ({ ruteadas: m.ruteadas, pospuestas: m.pospuestas, tiempoMuertoMin: m.tiempoMuertoMin, km: m.km, minutosTraslado: m.minutosTraslado });
+  return {
+    antes: metricas(r.antes), despues: metricas(r.despues),
+    readmitidas: r.readmision.filter((d) => d.resultado === "admitida").length,
+    alargaLaJornada: r.readmision.filter((d) => d.resultado === "pospuesta" && d.motivo === "alarga_la_jornada").length,
+    movimientos: r.movimientos.fase2 + r.movimientos.fase4,
+    ajustesManualesDespues: ajustes,
+  };
+}
+
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 
 /** Permiso planes.ver. El validado de la fecha o, si no hay, el propuesto vigente. fecha: "AAAA-MM-DD" o undefined para hoy. */
@@ -226,7 +244,7 @@ export async function obtenerPlan(ctx: Contexto, fecha: unknown, planId?: unknow
       revisionIniciada: plan.revisionIniciadaEn !== null, ajustes: plan.ajustes.length,
       unidades: vistaUnidades,
       pinesARevisar: pinesARevisar(plan.entrada, clientes),
-      reacomodo: null, // P8-4
+      reacomodo: vistaReacomodo(plan.resultado, plan.ajustes.length),
       pospuestas: plan.resultado.pospuestas.map((p) => ({
         solicitudId: p.solicitudId, folio: folio(p.solicitudId), cliente: nombreCliente(p.solicitudId), motivo: p.motivo, diagnostico: p.diagnostico,
       })),
