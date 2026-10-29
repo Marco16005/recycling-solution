@@ -64,11 +64,6 @@ describe("acciones del Plan 7 con calles reales", () => {
     valor(await validar(planId));
     return planId;
   }
-  /**
-   * Plan 8: las pruebas de re-ruteo necesitan un viaje por unidad. Con horas pico, el reacomodo junta los dos viajes en
-   * una (el segundo sale después de la hora pico y gasta 9 min menos de tiempo muerto) y la otra queda sin viajes.
-   */
-  const sinHorasPico = () => base.bd.update(configuracion).set({ horasPico: [], version: sql`${configuracion.version} + 1` }).where(eq(configuracion.id, 1));
   const rutasDe = (jornadaId: string) => base.bd.select().from(rutas).where(eq(rutas.jornadaId, jornadaId)).orderBy(asc(rutas.salidaEstimada));
   const paradasDe = (rutaId: string) => base.bd.select().from(paradas).where(eq(paradas.rutaId, rutaId)).orderBy(asc(paradas.secuencia));
 
@@ -167,7 +162,6 @@ describe("acciones del Plan 7 con calles reales", () => {
   });
 
   it("liberar una parada de un viaje futuro la reubica y queda en las restricciones; una del viaje en curso es invalido", async () => {
-    await sinHorasPico();
     await generarYValidar();
     const [primera, segunda] = await rutasDe(A.jornadaId);
     expect(segunda).toBeDefined();
@@ -190,7 +184,6 @@ describe("acciones del Plan 7 con calles reales", () => {
   });
 
   it("re-ruteo encadenado: se libera una parada que sigue como reasignada en la ruta iniciada de otra jornada", async () => {
-    await sinHorasPico();
     await generarYValidar();
     // B sale del patio y se descompone: su ruta queda iniciada (en su secuencia operativa) con las paradas retiradas.
     await salirConElPrimerViaje(B, a(60));
@@ -213,7 +206,6 @@ describe("acciones del Plan 7 con calles reales", () => {
   });
 
   it("frontera_vencida: la unidad no registra su llegada y, al validar, su viaje en curso termina después de la salida propuesta", async () => {
-    await sinHorasPico();
     await generarYValidar();
     await salirConElPrimerViaje(A, a(60)); // 08:00
     const [base0] = await base.bd.select().from(planes).where(eq(planes.estado, "validado"));

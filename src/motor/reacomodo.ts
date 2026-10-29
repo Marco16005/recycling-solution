@@ -14,6 +14,15 @@ export const PRESUPUESTO_EVALUACIONES = 100_000;
 export const PRESUPUESTO_READMISION = 20_000;
 /** Mejora mínima de km para contar como estricta: evita aceptar ruido de punto flotante. */
 const EPSILON_KM = 1e-9;
+/** Plan 8: si la entrada no la trae (entradas de pruebas y anteriores a la 0010), la de la configuración por omisión. */
+export const TOLERANCIA_POR_OMISION_MIN = 15;
+
+/** La tolerancia de la entrada, validada: entero de 0 a 60. */
+export function toleranciaDe(entrada: EntradaPlan): number {
+  const t = entrada.parametros.toleranciaReadmisionMin ?? TOLERANCIA_POR_OMISION_MIN;
+  if (!Number.isInteger(t) || t < 0 || t > 60) throw new Error("Tolerancia de readmisión inválida");
+  return t;
+}
 
 const inicioEfectivo = (entrada: EntradaPlan, u: UnidadMotor) =>
   Math.max(entrada.instanteMin, u.libreDesdeMin, entrada.parametros.turnoInicioMin);
@@ -37,7 +46,8 @@ export function tiempoMuerto(entrada: EntradaPlan, rutas: RutaPlan[]): number {
   return rutas.reduce((suma, r) => suma + tiempoMuertoDeRuta(entrada, unidades.get(r.unidadId)!, r, solicitudes), 0);
 }
 
-interface Valor { tm: number; km: number }
+/** tm: tiempo muerto; km; fin: fin de descarga del último viaje (sin viajes, el inicio efectivo). */
+interface Valor { tm: number; km: number; fin: number }
 const mejor = (a: Valor, b: Valor) => a.tm < b.tm || (a.tm === b.tm && a.km < b.km - EPSILON_KM);
 const ids = (r: RutaPlan) => r.viajes.map(v => v.paradas.map(p => p.solicitudId));
 const clave = (viajes: string[][]) => viajes.map(v => v.join(",")).join("/");
@@ -73,12 +83,23 @@ class Estado {
     this.protegidas = new Set(this.admitidas.flat(2));
   }
 
+  /** Solo tm y km cuentan para el objetivo. */
   total(): Valor {
-    return this.valores.reduce((a, v) => ({ tm: a.tm + v.tm, km: a.km + v.km }), { tm: 0, km: 0 });
+    return this.valores.reduce((a, v) => ({ tm: a.tm + v.tm, km: a.km + v.km, fin: 0 }), { tm: 0, km: 0, fin: 0 });
+  }
+
+  /**
+   * Decisión del usuario (2026-10-29): en un reacomodo ninguna unidad termina más de la tolerancia después que al
+   * empezar la fase. null en la readmisión, que se rige por el Δ de tiempo muerto.
+   */
+  limites: number[] | null = null;
+  fijarLimites(tolerancia: number): void {
+    this.limites = this.valores.map(v => v.fin + tolerancia);
   }
 
   private valorDe(i: number, r: RutaPlan): Valor {
-    return { tm: tiempoMuertoDeRuta(this.entrada, this.unidades[i], r, this.solicitudes), km: r.viajes.reduce((s, v) => s + v.km, 0) };
+    return { tm: tiempoMuertoDeRuta(this.entrada, this.unidades[i], r, this.solicitudes), km: r.viajes.reduce((s, v) => s + v.km, 0),
+      fin: r.viajes.at(-1)?.finDescargaMin ?? inicioEfectivo(this.entrada, this.unidades[i]) };
   }
 
   /** Comprobaciones que el cálculo de horarios no hace: viajes vacíos y protegidas (§4.4). El tipo lo revisa quien mueve. */
@@ -202,15 +223,17 @@ class Busqueda {
     if (!cambios.every(c => this.estado.estructuraValida(c))) return true;
     let { tm, km } = this.base;
     const calculadas: (RutaPlan | undefined)[] = [];
+    // El fin de cada ruta tocada no puede pasar su límite de la fase (estado.limites).
     for (const c of cambios) {
       const v = this.presupuesto.valor(this.estado, c);
       if (v === "agotado") return false;
       if (!v) return true;
+      if (this.estado.limites && v.valor.fin > this.estado.limites[c.i]) return true;
       calculadas.push(v.ruta);
       tm += v.valor.tm - this.estado.valores[c.i].tm;
       km += v.valor.km - this.estado.valores[c.i].km;
     }
-    const valor = { tm, km };
+    const valor = { tm, km, fin: 0 };
     if (!mejor(valor, this.mejor?.valor ?? this.base)) return true;
     const listos = this.presupuesto.rutas(this.estado, cambios, calculadas);
     if (!listos) return false;
@@ -305,11 +328,13 @@ const VECINDARIOS = [mover, intercambiar, moverCadena, invertir];
  * Fases 2 y 4 (§4.4): descenso por vecindarios. Del primer vecindario con alguna mejora estricta de (tiempo muerto, km)
  * se aplica la mejor (la primera en el orden canónico si empatan) y se vuelve a empezar. Termina cuando ninguno mejora
  * o se agota el presupuesto; si se agota a mitad de un vecindario, se aplica la mejor mejora encontrada hasta ahí.
+ * Ninguna unidad termina más de la tolerancia de la entrada después que en las rutas recibidas (decisión del usuario).
  * rutas: una por unidad. No muta sus argumentos.
  */
 export function reacomodar(entrada: EntradaPlan, rutas: RutaPlan[], solicitudes: Map<string, SolicitudMotor>,
   restricciones: RestriccionesPlan | undefined, presupuesto: number): { rutas: RutaPlan[]; movimientos: number; evaluaciones: number } {
   const estado = new Estado(entrada, rutas, solicitudes, crearTraslados(entrada), restricciones);
+  estado.fijarLimites(toleranciaDe(entrada));
   const gasto = new Presupuesto(presupuesto);
   let movimientos = 0;
   for (;;) {

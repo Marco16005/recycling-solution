@@ -27,6 +27,7 @@
   - `PRESUPUESTO_EVALUACIONES` (supuesto: 100 000 por fase de reacomodo);
   - `PRESUPUESTO_READMISION` (supuesto: 20 000 por pospuesta).
 - **Motivos:** `MotivoPospuesta` agrega `"alarga_la_jornada"`, solo en la fase 3. Etiqueta: "Cabría, pero alarga la jornada N min".
+- **Límite de fin por unidad** (decisión del usuario del 2026-10-29, especificación §11): en las fases 2 y 4 ninguna unidad termina más de la tolerancia después que al empezar la fase; la validación lo comprueba en S2 y S4.
 - **Rendimiento:** `generarPlan` con validación en menos de 2000 ms en los escenarios de la especificación §3.
 - **Capas:** las pantallas solo llaman a consultas y acciones. La bitácora guarda nombres de campos. Textos en español. Solo datos sintéticos.
 

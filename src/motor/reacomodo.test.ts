@@ -163,12 +163,14 @@ describe("tiempo muerto y reacomodo (fases 2 y 4)", () => {
 
 describe("presupuesto y orden canónico (revisión de Codex)", () => {
   /** Solicitudes en puntos distintos y una ruta inicial por unidad, sin pasar por la admisión. */
-  function inicial(ids: string[], viajesPorUnidad: Record<string, string[][]>, minutos: (a: string, b: string) => number, descargaMin = 0) {
+  function inicial(ids: string[], viajesPorUnidad: Record<string, string[][]>, minutos: (a: string, b: string) => number,
+    descargaMin = 0, tiempoServicioMin = 20, toleranciaReadmisionMin = 15) {
     const puntos = [patio, ...ids.map((_, i) => ({ lat: 20.7 + i / 1000, lng: -100.2 }))];
     const nombres = ["P", ...ids];
-    const e = conMatriz(entrada(ids.map((id, i) => solicitud(id, { ubicacion: puntos[i + 1], registradaEn: registro(i % 10), cargaKg: 100 })),
+    const e = conMatriz(entrada(ids.map((id, i) => solicitud(id, { ubicacion: puntos[i + 1], registradaEn: registro(i % 10), cargaKg: 100, tiempoServicioMin })),
       Object.keys(viajesPorUnidad).map(u => unidad(u))), puntos, (i, j) => minutos(nombres[i], nombres[j]));
     e.parametros.descargaMin = descargaMin;
+    e.parametros.toleranciaReadmisionMin = toleranciaReadmisionMin;
     const rutas = Object.entries(viajesPorUnidad).map(([u, viajes]) => {
       const r = recalcularRuta(e, u, viajes);
       if (!r.ok) throw new Error("ruta inicial");
@@ -203,14 +205,71 @@ describe("presupuesto y orden canónico (revisión de Codex)", () => {
     // Ningún viaje tiene una sola parada: mover una sola quita 5 en su viaje y agrega 5 en otro (0), e intercambiar
     // tampoco cambia nada. Mover la cadena de 3 de u1 a u2 vacía u1: −(65 + 5 + 15) + 15 = −70; mover la de 2 de u2
     // vacía u2: −(60 + 5 + 15) + 10 = −70. Con el presupuesto justo para la primera mejora, se ve cuál se tomó.
+    // Servicios de 5 min y tolerancia 60: la unidad que recibe la cadena termina 30 (u2) o 20 (u1) min después,
+    // dentro del límite de la fase.
     const { e, rutas, porId } = inicial(["X1", "X2", "X3", "Z1", "Z2", "W1", "W2"],
-      { u1: [["X1", "X2", "X3"]], u2: [["Z1", "Z2"]], u3: [["W1", "W2"]] }, (a, b) => (a === "P" || b === "P" ? 30 : 5), 15);
+      { u1: [["X1", "X2", "X3"]], u2: [["Z1", "Z2"]], u3: [["W1", "W2"]] }, (a, b) => (a === "P" || b === "P" ? 30 : 5), 15, 5, 60);
     let r = reacomodar(e, rutas, porId, undefined, 0);
-    for (let presupuesto = 1; r.movimientos === 0 && presupuesto < 20_000; presupuesto++) r = reacomodar(e, rutas, porId, undefined, presupuesto);
+    for (let presupuesto = 1; r.movimientos === 0 && presupuesto < 3000; presupuesto++) r = reacomodar(e, rutas, porId, undefined, presupuesto);
     expect(r.movimientos).toBe(1);
     expect(tiempoMuerto(e, r.rutas)).toBe(tiempoMuerto(e, rutas) - 70);
     expect(secuencias(r.rutas.find(x => x.unidadId === "u1")!)).toEqual([]);
     expect(atendidas([r.rutas.find(x => x.unidadId === "u2")!])).toEqual(["X1", "X2", "X3", "Z1", "Z2"]);
+  });
+});
+
+describe("límite de fin por unidad (decisión del usuario, 2026-10-29)", () => {
+  it("un reacomodo no hace terminar a una unidad más de la tolerancia después", () => {
+    // A y B a 5 min entre sí y a 30 del patio; servicios de 5 y descarga 15. u1 = [A] y u2 = [B], cada una termina a
+    // las 560. Juntar las dos en una unidad ahorra 55 de tiempo muerto, y esa unidad termina a las 570 (+10).
+    const lugar = (i: number) => ({ lat: 20.7 + i / 1000, lng: -100.2 });
+    const armar = (tolerancia: number) => {
+      const e = conMatriz(entrada([solicitud("A", { ubicacion: lugar(0), tiempoServicioMin: 5, registradaEn: registro(0) }),
+        solicitud("B", { ubicacion: lugar(1), tiempoServicioMin: 5, registradaEn: registro(1) })], [unidad("u1"), unidad("u2")]),
+        [patio, lugar(0), lugar(1)], (i, j) => (i === 0 || j === 0 ? 30 : 5));
+      e.parametros.toleranciaReadmisionMin = tolerancia;
+      const rutas = [["u1", "A"], ["u2", "B"]].map(([u, id]) => { const r = recalcularRuta(e, u, [[id]]); if (!r.ok) throw new Error("ruta"); return r.ruta; });
+      return { e, rutas, porId: new Map(e.solicitudes.map(x => [x.id, x])) };
+    };
+    const con15 = armar(15);
+    const junto = reacomodar(con15.e, con15.rutas, con15.porId, undefined, 1000);
+    expect(junto.movimientos).toBe(1);
+    expect(junto.rutas.map(r => r.viajes.at(-1)?.finDescargaMin ?? null)).toEqual(expect.arrayContaining([570, null]));
+    const con5 = armar(5);
+    const separado = reacomodar(con5.e, con5.rutas, con5.porId, undefined, 1000);
+    expect(separado.movimientos).toBe(0);
+    expect(separado.rutas).toEqual(con5.rutas);
+  });
+
+  it("el caso que dio pie a la decisión: con horas pico, dos viajes repartidos no se juntan en una unidad", () => {
+    // Dos unidades de 1700 kg y cuatro clientes de 800 kg en línea; horas pico de la configuración por omisión.
+    // Juntar los dos viajes en una unidad ahorraría 9 min de tiempo muerto pero la haría terminar 97 min después.
+    const e = entrada([1, 2, 3, 4].map(i => solicitud(`s${i}`, { registradaEn: registro(i), cargaKg: 800,
+      ubicacion: { lat: patio.lat + 0.01 * i, lng: patio.lng + 0.01 * i }, ventanas: [{ inicioMin: 480, finMin: 840 }] })),
+      [unidad("u-a", { capacidadKg: 1700 }), unidad("u-b", { capacidadKg: 1700 })]);
+    e.instanteMin = 420;
+    e.parametros.horasPico = [{ inicioMin: 420, finMin: 570, factor: 1.3 }, { inicioMin: 810, finMin: 900, factor: 1.15 }];
+    const plan = generarPlan(e);
+    expect(validarPlan(e, plan)).toEqual([]);
+    expect(plan.rutas.every(r => r.viajes.length === 1)).toBe(true);
+    const f1 = admitir(e);
+    for (const [k, r] of plan.rutas.entries()) expect(r.viajes.at(-1)!.finDescargaMin).toBeLessThanOrEqual(f1.rutas[k].viajes.at(-1)!.finDescargaMin + 15);
+  });
+
+  it("la validación rechaza un reacomodo que alarga una unidad más de la tolerancia", () => {
+    // El escenario de horas pico, con un S2 manipulado que junta los dos viajes en u-a (ahorra 9 min, termina 97 después).
+    const e = entrada([1, 2, 3, 4].map(i => solicitud(`s${i}`, { registradaEn: registro(i), cargaKg: 800,
+      ubicacion: { lat: patio.lat + 0.01 * i, lng: patio.lng + 0.01 * i }, ventanas: [{ inicioMin: 480, finMin: 840 }] })),
+      [unidad("u-a", { capacidadKg: 1700 }), unidad("u-b", { capacidadKg: 1700 })]);
+    e.instanteMin = 420;
+    e.parametros.horasPico = [{ inicioMin: 420, finMin: 570, factor: 1.3 }, { inicioMin: 810, finMin: 900, factor: 1.15 }];
+    const plan = generarPlan(e);
+    const viajes = plan.rutas.flatMap(r => r.viajes.map(v => v.paradas.map(p => p.solicitudId)));
+    const ruta = (u: string, v: string[][]) => { const r = recalcularRuta(e, u, v); if (!r.ok) throw new Error("ruta"); return r.ruta; };
+    const manipulado: Plan = JSON.parse(JSON.stringify(plan));
+    manipulado.reacomodo!.rutasReacomodadas = [ruta("u-a", viajes), ruta("u-b", [])];
+    expect(tiempoMuerto(e, manipulado.reacomodo!.rutasReacomodadas)).toBeLessThan(tiempoMuerto(e, plan.rutas));
+    expect(validarPlan(e, manipulado)).toContain("Reacomodo: u-a termina más de la tolerancia después");
   });
 });
 

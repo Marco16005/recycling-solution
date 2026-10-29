@@ -147,6 +147,18 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
   const objetivo = (rutas: RutaPlan[]) => ({ tm: tiempoMuertoDe(rutas), km: rutas.reduce((a, r) => a + r.viajes.reduce((b, v) => b + v.km, 0), 0) });
   /** a no empeora a b en el orden (tiempo muerto, km). */
   const noEmpeora = (a: { tm: number; km: number }, b: { tm: number; km: number }) => a.tm < b.tm || (a.tm === b.tm && a.km <= b.km + 1e-6);
+  /** Fin de descarga del último viaje; sin viajes, el inicio efectivo de la unidad. */
+  const finDe = (r: RutaPlan) => {
+    const u = unidades.get(r.unidadId);
+    return r.viajes.at(-1)?.finDescargaMin ?? (u ? Math.max(entrada.instanteMin, p.turnoInicioMin, u.libreDesdeMin) : 0);
+  };
+  /** Decisión del usuario (2026-10-29): un reacomodo no hace terminar a ninguna unidad más de la tolerancia después. */
+  function sinAlargar(antes: RutaPlan[], despues: RutaPlan[], etiqueta: string): void {
+    for (const r of despues) {
+      const a = antes.find(x => x.unidadId === r.unidadId);
+      if (a && finDe(r) > finDe(a) + tolerancia) errores.push(`${etiqueta}: ${r.unidadId} termina más de la tolerancia después`);
+    }
+  }
   const atendidas = (rutas: RutaPlan[]) => rutas.flatMap(r => r.viajes.flatMap(v => v.paradas.map(x => x.solicitudId))).sort(texto);
   /** Una ruta por unidad, en orden, cada una reconstruida de forma independiente y factible. */
   function rutasFactibles(rutas: RutaPlan[], etiqueta: string): boolean {
@@ -370,6 +382,7 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
         if (!iguales(atendidas(s2), atendidas(s1))) errores.push("Reacomodo: cambió las solicitudes atendidas");
         protegidasIntactas(s2, "Reacomodo");
         if (!noEmpeora(objetivo(s2), objetivo(s1))) errores.push("Reacomodo: empeoró el tiempo muerto o los km");
+        sinAlargar(s1, s2, "Reacomodo");
       }
       // §4.6, paso 3: la readmisión se reproduce desde S2; da S3 y las pospuestas finales.
       let s3 = s2;
@@ -426,6 +439,7 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
       if (rutasFactibles(plan.rutas, "Reacomodo final")) {
         if (!iguales(atendidas(plan.rutas), atendidas(s3))) errores.push("Reacomodo final: cambió las solicitudes atendidas");
         if (!noEmpeora(objetivo(plan.rutas), objetivo(s3))) errores.push("Reacomodo final: empeoró el tiempo muerto o los km");
+        sinAlargar(s3, plan.rutas, "Reacomodo final");
       }
       if (!iguales(r.despues, plan.resumen)) errores.push("reacomodo.despues no coincide con el resumen del plan");
       const contadores = [r.movimientos.fase2, r.movimientos.fase4, r.evaluaciones.fase2, r.evaluaciones.readmision, r.evaluaciones.fase4];

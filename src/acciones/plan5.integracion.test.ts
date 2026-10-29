@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { miRuta } from "@/consultas/operador.nucleo";
-import { configuracion, eventosOperador, incidentes, paradas, planes } from "@/datos/esquema";
+import { eventosOperador, incidentes, paradas, planes } from "@/datos/esquema";
 import {
   AHORA_PLAN, clienteHabilitado, FECHA_PLAN, jornadaDisponible, ponerPatio, solicitudPendiente, usuarioOperadorDe,
 } from "@/datos/pruebas/escenario-plan";
@@ -34,9 +34,6 @@ describe("operación del día con Postgres real (concurrencia)", () => {
     base = await crearBasePostgres();
     despachador = await usuarioDePrueba(base.bd, "despachador");
     await ponerPatio(base.bd);
-    // Plan 8: sin horas pico. Con ellas, el reacomodo junta los dos viajes en una unidad (el segundo sale después de la
-    // hora pico y gasta menos tiempo muerto) y estas pruebas necesitan un viaje por unidad.
-    await base.bd.update(configuracion).set({ horasPico: [] }).where(eq(configuracion.id, 1));
     jornadaA = await jornadaDisponible(base.bd, FECHA_PLAN, "CONA01", { capacidadKg: 1700 });
     jornadaB = await jornadaDisponible(base.bd, FECHA_PLAN, "CONB02", { capacidadKg: 1700 });
     operador = await usuarioOperadorDe(base.bd, jornadaA.operadorId);

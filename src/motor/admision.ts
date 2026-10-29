@@ -1,7 +1,7 @@
 import { calcular, diagnosticoVacio, resumenDe } from "./calculo";
 import { crearTraslados, VERSION_MOTOR } from "./traslados";
 import { compararTexto, ordenarFifo } from "./orden";
-import { PRESUPUESTO_EVALUACIONES, PRESUPUESTO_READMISION, reacomodar, readmitir, tiempoMuerto } from "./reacomodo";
+import { PRESUPUESTO_EVALUACIONES, PRESUPUESTO_READMISION, reacomodar, readmitir, tiempoMuerto, TOLERANCIA_POR_OMISION_MIN, toleranciaDe } from "./reacomodo";
 import { agruparZonas } from "./zonas";
 import { ErrorAdmitidas } from "./tipos";
 import { validarPlan } from "./validacion";
@@ -9,15 +9,7 @@ import type { EntradaPlan, Plan, RestriccionesPlan, RutaPlan } from "./tipos";
 
 /** La fase 1 de un 1.2.0 es exactamente el motor 1.1.0. */
 const VERSION_FASE_1 = "1.1.0";
-/** Plan 8: si la entrada no la trae (entradas de pruebas y anteriores a la 0010), la de la configuración por omisión. */
-export const TOLERANCIA_POR_OMISION_MIN = 15;
-
-/** La tolerancia de la entrada, validada: entero de 0 a 60. */
-export function toleranciaDe(entrada: EntradaPlan): number {
-  const t = entrada.parametros.toleranciaReadmisionMin ?? TOLERANCIA_POR_OMISION_MIN;
-  if (!Number.isInteger(t) || t < 0 || t > 60) throw new Error("Tolerancia de readmisión inválida");
-  return t;
-}
+export { TOLERANCIA_POR_OMISION_MIN, toleranciaDe };
 
 /** Fase 1 sin validar: admisión FIFO de la 1.1.0, con lo que las fases siguientes necesitan. */
 function admision(entrada: EntradaPlan, restricciones?: RestriccionesPlan) {

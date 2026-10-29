@@ -1,7 +1,7 @@
 # Plan 8 — Reacomodo de rutas: más paradas atendidas y menos tiempo muerto (diseño)
 
 - **Fecha:** 2026-10-21.
-- **Revisión:** 2.1. Incorpora el chequeo de constructor y los 11 hallazgos de Codex sobre la revisión 1, la respuesta del usuario a la única pregunta que era suya (§9) y los hallazgos de Codex sobre la revisión 2 (§10). Va después del Plan CRM y usa la migración `0010`.
+- **Revisión:** 2.2. Incorpora el chequeo de constructor y los 11 hallazgos de Codex sobre la revisión 1, la respuesta del usuario a la única pregunta que era suya (§9), los hallazgos de Codex sobre la revisión 2 (§10) y la decisión del usuario del 2026-10-29 sobre el fin de cada unidad (§11). Va después del Plan CRM y usa la migración `0010`.
 - **Base:** `main` en f89983c, con los Planes 1 a 7 validados.
 - **Lo que pidió el usuario (2026-10-21):**
   - Que el reacomodo mejore "el tiempo y la cobertura y paradas". Confirmó las suposiciones de la conversación:
@@ -100,6 +100,7 @@ Para el Documento Integrador, el motor pasa a ser "agrupamiento no supervisado (
 - **Aceptación:** un movimiento se acepta solo si **mejora estrictamente** ese par.
 - **Desempate:** entre candidatos con la misma mejora gana el primero en el orden canónico de enumeración (unidad, viaje, posición), y ese orden nunca cuenta como mejora.
 - **`movimientos`** cuenta solo mejoras estrictas.
+- **Límite de fin por unidad** (decisión del usuario, §11): en una fase de reacomodo ninguna unidad termina más de `tolerancia_readmision_min` después que al empezar la fase (S1 en la fase 2, S3 en la fase 4). Una unidad sin viajes "termina" en su inicio efectivo. La readmisión no tiene este límite: se rige por el Δ de tiempo muerto.
 
 ### 4.4 Reacomodo (búsqueda local)
 
@@ -114,11 +115,12 @@ Para el Documento Integrador, el motor pasa a ser "agrupamiento no supervisado (
   - sin repetidos;
   - sin viajes vacíos, salvo el de regreso obligatorio;
   - protegidas intactas;
-  - capacidad, ventanas y fin de turno según el cálculo de horarios.
+  - capacidad, ventanas y fin de turno según el cálculo de horarios;
+  - el límite de fin por unidad (§4.3).
   
   El cálculo de horarios de la admisión no revisa por sí solo el tipo de unidad ni los viajes vacíos, así que esas comprobaciones van aparte.
 - **Recálculo:** solo de las rutas de las unidades afectadas, con el contexto de traslados de la evaluación.
-- **Presupuesto:** `PRESUPUESTO_EVALUACIONES` por fase (supuesto inicial: 100 000 evaluaciones de ruta), fijado en el motor. Cada candidato cuesta tantas evaluaciones como rutas recalcula. Si el presupuesto se agota a mitad de un vecindario, se aplica la mejor mejora estricta encontrada hasta ese candidato, si la hay, y la fase termina. Es determinista porque la enumeración es fija.
+- **Presupuesto:** `PRESUPUESTO_EVALUACIONES` por fase (supuesto inicial: 100 000 evaluaciones de ruta), fijado en el motor. Una evaluación es una ruta recalculada de verdad: un valor que ya está en la caché de la corrida no cuesta, y aplicar el candidato ganador no vuelve a calcular. Si el presupuesto se agota a mitad de un vecindario, se aplica la mejor mejora estricta encontrada hasta ese candidato, si la hay, y la fase termina. Es determinista porque la enumeración es fija.
 
 ### 4.5 Readmisión (fase 3)
 
@@ -145,7 +147,8 @@ La validación no repite las búsquedas: comprueba sus resultados. Para un `1.2.
    - cada ruta se reconstruye de forma independiente y es factible;
    - contiene exactamente las solicitudes de S1;
    - protegidas intactas;
-   - objetivo(S2) ≤ objetivo(S1).
+   - objetivo(S2) ≤ objetivo(S1);
+   - ninguna unidad termina más de la tolerancia después que en S1.
 3. **Readmisión.** Se reproduce desde S2:
    - exactamente una decisión por cada `sin_cupo` de la fase 1, en orden FIFO, sin omisiones, repetidos ni bloqueos nuevos;
    - cada `rutasAntes` es igual al estado reconstruido;
@@ -158,7 +161,8 @@ La validación no repite las búsquedas: comprueba sus resultados. Para un `1.2.
    - se reconstruyen y son factibles;
    - tienen exactamente las solicitudes de S3;
    - protegidas intactas;
-   - objetivo(S4) ≤ objetivo(S3).
+   - objetivo(S4) ≤ objetivo(S3);
+   - ninguna unidad termina más de la tolerancia después que en S3.
 5. **Resto.** `pospuestas`, `bloqueadas`, `resumen` (con `tiempoMuertoMin`) y `reacomodo.antes` coinciden con lo reconstruido.
 6. **Pruebas de manipulación:**
    - traza alterada;
@@ -313,3 +317,9 @@ Si Codex se queda sin cuota, Claude puede tomar tareas del motor que no sean pan
 | 8 y 9 | Faltaba conservar el resumen automático S4 | `reacomodo.despues` inmutable, validado igual al resumen de S4 y conservado en los ajustes (§4.7 y §4.8) |
 | 10 | Migración 0009 | Pasa a `0010`, con el Plan CRM como prerrequisito |
 | 11 | Dos formas de `DecisionReadmision` | Una sola, con `posicion: PosicionPlan` (§4.7) |
+
+## 11. Decisión del usuario del 2026-10-29: el fin de cada unidad
+
+Al probar el motor, el reacomodo juntaba en una unidad dos viajes que la admisión repartía entre dos: el segundo salía después de la hora pico y el tiempo muerto bajaba 9 min, pero esa unidad terminaba 75 min más tarde y la otra quedaba sin viajes. Cumplía el objetivo de §4.3 (una unidad sin viajes aporta 0). Codex lo señaló como límite del diseño: el objetivo no controla la hora final de cada unidad, y ponerla como desempate no lo resuelve porque los 9 min ya deciden.
+
+Se le preguntó al usuario y eligió **limitar el alargue**: un reacomodo no puede hacer que una unidad termine más de la tolerancia (15 min por omisión) después que antes de reacomodar. Queda en §4.3, §4.4 y §4.6; las pruebas de re-ruteo vuelven a correr con horas pico.
