@@ -1,5 +1,6 @@
 import { crearTraslados } from "./traslados";
 import { ErrorTraslados, type Traslados } from "./tipos";
+import { tiempoMuerto } from "./reacomodo";
 import { validarPlan } from "./validacion";
 import type { AjusteManual, CausaNoFactible, EntradaPlan, Plan, RestriccionesPlan, ResultadoAjuste, ResultadoRecalculo, ViajePlan } from "./tipos";
 
@@ -141,6 +142,8 @@ export function ajustarPlan(entrada: EntradaPlan, plan: Plan, ajuste: AjusteManu
       origen = p.patio;
     }
   }
+  // Plan 8, §4.8: en un 1.2.0 el resumen refleja el plan ajustado (con su tiempo muerto) y reacomodo se conserva intacto.
+  if (plan.versionMotor === "1.2.0") resumen.tiempoMuertoMin = tiempoMuerto(nuevaEntrada, rutas);
   const nuevo = { ...plan, rutas, pospuestas, resumen };
   if (validarPlan(nuevaEntrada, nuevo, { ajustadoAMano: true, restricciones }).length) return invalida("El ajuste produce un plan inválido");
   return { ok: true, plan: nuevo, entrada: nuevaEntrada };

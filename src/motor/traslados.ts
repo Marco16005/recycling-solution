@@ -2,7 +2,7 @@ import { distanciaKm } from "./geometria";
 import { ErrorTraslados } from "./tipos";
 import type { Coordenada, EntradaPlan, FranjaPico, Traslados } from "./tipos";
 
-export const VERSION_MOTOR = "1.1.0";
+export const VERSION_MOTOR = "1.2.0";
 const clave = (p: Coordenada) => `${p.lat}|${p.lng}`;
 
 /** null si son válidas; la configuración admite minutos de 00:00 a 23:59. */

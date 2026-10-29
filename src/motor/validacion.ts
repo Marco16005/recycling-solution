@@ -75,7 +75,16 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
   const unidades = new Map(flota.map(u => [u.id, u]));
   if (porId.size !== entrada.solicitudes.length) errores.push("Entrada con solicitudes repetidas");
   if (unidades.size !== flota.length) errores.push("Entrada con unidades repetidas");
-  if (plan.versionMotor !== "1.0.0" && plan.versionMotor !== "1.1.0") errores.push("Versión de motor desconocida");
+  if (!["1.0.0", "1.1.0", "1.2.0"].includes(plan.versionMotor)) errores.push("Versión de motor desconocida");
+  // Plan 8: reacomodo y tiempo muerto son obligatorios en 1.2.0 y no existen en las versiones anteriores.
+  const v12 = plan.versionMotor === "1.2.0";
+  if (!v12 && (plan.reacomodo !== undefined || plan.resumen.tiempoMuertoMin !== undefined))
+    errores.push("Reacomodo y tiempo muerto solo existen en la versión 1.2.0");
+  if (v12 && (plan.reacomodo === undefined || plan.resumen.tiempoMuertoMin === undefined))
+    errores.push("La versión 1.2.0 exige reacomodo y tiempo muerto");
+  if (!v12 && plan.pospuestas.some(x => x.motivo === "alarga_la_jornada")) errores.push("Motivo alarga_la_jornada fuera de la versión 1.2.0");
+  const tolerancia = entrada.parametros.toleranciaReadmisionMin ?? 15;
+  if (v12 && (!Number.isInteger(tolerancia) || tolerancia < 0 || tolerancia > 60)) errores.push("Tolerancia de readmisión inválida");
   if (plan.versionMotor === "1.0.0" && (entrada.traslados !== undefined || p.horasPico !== undefined))
     errores.push("La versión 1.0.0 no admite matriz ni horas pico");
   const bloqueada = (s: SolicitudMotor) => s.cargaKg
@@ -126,6 +135,68 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
       viajes.push(v);
     }
     return { unidadId: u.id, viajes };
+  }
+
+  /** §4.2: fin de descarga del último viaje − inicio efectivo − servicios, por unidad. */
+  const tiempoMuertoDe = (rutas: RutaPlan[]) => rutas.reduce((suma, r) => {
+    const u = unidades.get(r.unidadId), ultimo = r.viajes.at(-1);
+    if (!u || !ultimo) return suma;
+    const servicios = r.viajes.reduce((a, v) => a + v.paradas.reduce((b, x) => b + (porId.get(x.solicitudId)?.tiempoServicioMin ?? 0), 0), 0);
+    return suma + ultimo.finDescargaMin - Math.max(entrada.instanteMin, p.turnoInicioMin, u.libreDesdeMin) - servicios;
+  }, 0);
+  const objetivo = (rutas: RutaPlan[]) => ({ tm: tiempoMuertoDe(rutas), km: rutas.reduce((a, r) => a + r.viajes.reduce((b, v) => b + v.km, 0), 0) });
+  /** a no empeora a b en el orden (tiempo muerto, km). */
+  const noEmpeora = (a: { tm: number; km: number }, b: { tm: number; km: number }) => a.tm < b.tm || (a.tm === b.tm && a.km <= b.km + 1e-6);
+  const atendidas = (rutas: RutaPlan[]) => rutas.flatMap(r => r.viajes.flatMap(v => v.paradas.map(x => x.solicitudId))).sort(texto);
+  /** Una ruta por unidad, en orden, cada una reconstruida de forma independiente y factible. */
+  function rutasFactibles(rutas: RutaPlan[], etiqueta: string): boolean {
+    if (rutas.length !== flota.length || rutas.some((r, k) => r.unidadId !== flota[k].id)) {
+      errores.push(`${etiqueta}: no hay una ruta por unidad en orden`);
+      return false;
+    }
+    let bien = true;
+    for (const [k, r] of rutas.entries()) {
+      const reconstruida = reconstruir(flota[k], r.viajes.map(v => v.paradas.map(x => x.solicitudId)));
+      if (!reconstruida || !iguales(reconstruida, r)) { errores.push(`${etiqueta}: ruta no factible o inconsistente: ${r.unidadId}`); bien = false; }
+    }
+    return bien;
+  }
+  /** Las protegidas conservan unidad, índice de viaje y orden relativo. */
+  function protegidasIntactas(rutas: RutaPlan[], etiqueta: string): void {
+    for (const [unidadId, viajes] of Object.entries(restricciones)) {
+      const ruta = rutas.find(r => r.unidadId === unidadId);
+      for (const [k, protegidas] of viajes.entries()) {
+        const reales = ruta?.viajes[k]?.paradas.map(x => x.solicitudId) ?? [];
+        let desde = 0;
+        for (const id of protegidas) {
+          const j = reales.indexOf(id, desde);
+          if (j < 0) { errores.push(`${etiqueta}: protegida movida: ${id}`); break; }
+          desde = j + 1;
+        }
+      }
+    }
+  }
+  function resumenDe(rutas: RutaPlan[], pospuestas: number, bloqueadas: number): Plan["resumen"] {
+    const r: Plan["resumen"] = { ruteadas: 0, pospuestas, bloqueadas, km: 0, minutosTraslado: 0, kmMetodoActual: 0, minutosTrasladoMetodoActual: 0 };
+    for (const ruta of rutas) {
+      let origen = unidades.get(ruta.unidadId)?.ubicacionInicial ?? p.patio;
+      for (const viaje of ruta.viajes) {
+        r.km += viaje.km;
+        for (const parada of viaje.paradas) {
+          r.ruteadas++;
+          const s = porId.get(parada.solicitudId);
+          if (!s) continue;
+          r.minutosTraslado += Math.ceil(t.tramo(origen, s.ubicacion).minLibres);
+          origen = s.ubicacion;
+          const ida = t.tramo(p.patio, s.ubicacion), vuelta = t.tramo(s.ubicacion, p.patio);
+          r.kmMetodoActual += ida.km + vuelta.km;
+          r.minutosTrasladoMetodoActual += Math.ceil(ida.minLibres) + Math.ceil(vuelta.minLibres);
+        }
+        r.minutosTraslado += Math.ceil(t.tramo(origen, p.patio).minLibres);
+        origen = p.patio;
+      }
+    }
+    return r;
   }
 
   if (entrada.solicitudes.some(s => !Number.isFinite(segundosUtc(s.registradaEn)))) errores.push("Registro ISO inválido");
@@ -238,19 +309,41 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
         pospuestas.push({ solicitudId: s.id, motivo: decision.motivo, diagnostico: motivo === "sin_cupo" ? d : null });
       }
     }
-    if (!iguales(estado, plan.rutas)) errores.push(
-      "Las rutas finales no coinciden con la reconstrucción factible de la traza "
-      + "(horarios, ventanas, capacidad o secuencias)"
-    );
+    if (!v12) {
+      if (!iguales(estado, plan.rutas)) errores.push(
+        "Las rutas finales no coinciden con la reconstrucción factible de la traza "
+        + "(horarios, ventanas, capacidad o secuencias)"
+      );
+    } else if (plan.reacomodo) {
+      // Plan 8, §4.6. La traza da S1; se comprueban los resultados de cada fase sin repetir las búsquedas.
+      const r = plan.reacomodo, s1 = estado;
+      if (!iguales(r.antes, { ...resumenDe(s1, pospuestas.length, bloqueadas.length), tiempoMuertoMin: tiempoMuertoDe(s1) }))
+        errores.push("reacomodo.antes no coincide con la admisión");
+      const s2 = r.rutasReacomodadas;
+      if (rutasFactibles(s2, "Reacomodo")) {
+        if (!iguales(atendidas(s2), atendidas(s1))) errores.push("Reacomodo: cambió las solicitudes atendidas");
+        protegidasIntactas(s2, "Reacomodo");
+        if (!noEmpeora(objetivo(s2), objetivo(s1))) errores.push("Reacomodo: empeoró el tiempo muerto o los km");
+      }
+      // P8-3: readmisión. Mientras tanto S3 = S2 y las pospuestas finales son las de la fase 1.
+      if (r.readmision.length) errores.push("Readmisión todavía no admitida");
+      const s3 = s2;
+      if (rutasFactibles(plan.rutas, "Reacomodo final")) {
+        if (!iguales(atendidas(plan.rutas), atendidas(s3))) errores.push("Reacomodo final: cambió las solicitudes atendidas");
+        if (!noEmpeora(objetivo(plan.rutas), objetivo(s3))) errores.push("Reacomodo final: empeoró el tiempo muerto o los km");
+      }
+      if (!iguales(r.despues, plan.resumen)) errores.push("reacomodo.despues no coincide con el resumen del plan");
+      const contadores = [r.movimientos.fase2, r.movimientos.fase4, r.evaluaciones.fase2, r.evaluaciones.readmision, r.evaluaciones.fase4];
+      if (contadores.some(n => !Number.isInteger(n) || n < 0)) errores.push("Contadores del reacomodo inválidos");
+    }
     if (!iguales(pospuestas, plan.pospuestas)) errores.push("Pospuestas inconsistentes con la traza");
     if (!iguales(bloqueadas, plan.bloqueadas)) errores.push("Bloqueadas inconsistentes con la traza");
   }
 
   const apariciones = new Map<string, number>();
   const contar = (id: string) => apariciones.set(id, (apariciones.get(id) ?? 0) + 1);
-  const resumen: Plan["resumen"] = {
-    ruteadas: 0, pospuestas: plan.pospuestas.length, bloqueadas: plan.bloqueadas.length,
-    km: 0, minutosTraslado: 0, kmMetodoActual: 0, minutosTrasladoMetodoActual: 0 };
+  const resumen: Plan["resumen"] = resumenDe(plan.rutas, plan.pospuestas.length, plan.bloqueadas.length);
+  if (v12) resumen.tiempoMuertoMin = tiempoMuertoDe(plan.rutas);
   const rutasVistas = new Set<string>();
   for (const ruta of plan.rutas) {
     const u = unidades.get(ruta.unidadId);
@@ -260,23 +353,7 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
       const reconstruida = reconstruir(u, ruta.viajes.map(v => v.paradas.map(s => s.solicitudId)));
       if (!reconstruida || !iguales(reconstruida, ruta)) errores.push(`Ruta final no factible o inconsistente: ${ruta.unidadId}`);
     }
-    let origen = u?.ubicacionInicial ?? p.patio;
-    for (const viaje of ruta.viajes) {
-      resumen.km += viaje.km;
-      for (const parada of viaje.paradas) {
-        contar(parada.solicitudId);
-        resumen.ruteadas++;
-        const s = porId.get(parada.solicitudId);
-        if (!s) continue;
-        resumen.minutosTraslado += Math.ceil(t.tramo(origen, s.ubicacion).minLibres);
-        origen = s.ubicacion;
-        const ida = t.tramo(p.patio, s.ubicacion), vuelta = t.tramo(s.ubicacion, p.patio);
-        resumen.kmMetodoActual += ida.km + vuelta.km;
-        resumen.minutosTrasladoMetodoActual += Math.ceil(ida.minLibres) + Math.ceil(vuelta.minLibres);
-      }
-      resumen.minutosTraslado += Math.ceil(t.tramo(origen, p.patio).minLibres);
-      origen = p.patio;
-    }
+    for (const viaje of ruta.viajes) for (const parada of viaje.paradas) contar(parada.solicitudId);
   }
   if (manual) for (const id of unidades.keys()) {
     if (!rutasVistas.has(id)) errores.push(`Falta la ruta de la unidad: ${id}`);

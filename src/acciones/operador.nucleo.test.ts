@@ -5,7 +5,7 @@ import { miRuta } from "@/consultas/operador.nucleo";
 import { obtenerPlan } from "@/consultas/plan.nucleo";
 import { seguimiento } from "@/consultas/operacion.nucleo";
 import type { BD } from "@/datos/bd";
-import { eventosOperador, incidentes, jornadas, paradas, planes, rutas, solicitudes } from "@/datos/esquema";
+import { configuracion, eventosOperador, incidentes, jornadas, paradas, planes, rutas, solicitudes } from "@/datos/esquema";
 import { crearBdPrueba } from "@/datos/pruebas/bd-prueba";
 import {
   AHORA_PLAN, clienteHabilitado, FECHA_PLAN, jornadaDisponible, ponerPatio, solicitudPendiente, usuarioOperadorDe,
@@ -40,6 +40,9 @@ describe("operación del día", () => {
     bd = await crearBdPrueba();
     despachador = await usuarioDePrueba(bd, "despachador");
     await ponerPatio(bd);
+    // Plan 8: sin horas pico. Con ellas, el reacomodo junta los dos viajes en una unidad (el segundo sale después de la
+    // hora pico y gasta menos tiempo muerto) y estas pruebas necesitan un viaje por unidad.
+    await bd.update(configuracion).set({ horasPico: [] }).where(eq(configuracion.id, 1));
     jornadaA = await jornadaDisponible(bd, FECHA_PLAN, "OPA001", { capacidadKg: 1700 });
     jornadaB = await jornadaDisponible(bd, FECHA_PLAN, "OPB002", { capacidadKg: 1700 });
     operadorA = await usuarioOperadorDe(bd, jornadaA.operadorId);

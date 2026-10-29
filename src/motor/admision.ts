@@ -1,59 +1,26 @@
+import { calcular, diagnosticoVacio, resumenDe } from "./calculo";
 import { crearTraslados, VERSION_MOTOR } from "./traslados";
-import type { Traslados } from "./tipos";
 import { compararTexto, ordenarFifo } from "./orden";
+import { PRESUPUESTO_EVALUACIONES, reacomodar, tiempoMuerto } from "./reacomodo";
 import { agruparZonas } from "./zonas";
 import { ErrorAdmitidas } from "./tipos";
 import { validarPlan } from "./validacion";
-import type { Diagnostico, EntradaPlan, Plan, RestriccionesPlan, RutaPlan, SolicitudMotor, UnidadMotor, ViajePlan } from "./tipos";
+import type { EntradaPlan, Plan, RestriccionesPlan, RutaPlan } from "./tipos";
 
-const diagnosticoVacio = (): Diagnostico => ({ capacidad: 0, ventana: 0, finDeTurno: 0, afectaAOtra: 0 });
-type Calculo = { ruta: RutaPlan } | { causa: keyof Diagnostico; afectaAOtra: boolean };
+/** La fase 1 de un 1.2.0 es exactamente el motor 1.1.0. */
+const VERSION_FASE_1 = "1.1.0";
+/** Plan 8: si la entrada no la trae (entradas de pruebas y anteriores a la 0010), la de la configuración por omisión. */
+export const TOLERANCIA_POR_OMISION_MIN = 15;
 
-/** Recalcula desde el origen libre, nunca desde los horarios de la propuesta anterior. */
-function calcular(
-  entrada: EntradaPlan, unidad: UnidadMotor, viajes: string[][],
-  solicitudes: Map<string, SolicitudMotor>, t: Traslados, nueva?: string
-): Calculo {
-  const p = entrada.parametros;
-  let hora = Math.max(entrada.instanteMin, unidad.libreDesdeMin, p.turnoInicioMin);
-  let origen = unidad.ubicacionInicial;
-  const resultado: ViajePlan[] = [];
-  for (let i = 0; i < viajes.length; i++) {
-    const ids = viajes[i];
-    const cargaKg = (i === 0 ? unidad.cargaActualKg : 0)
-      + ids.reduce((suma, id) => suma + solicitudes.get(id)!.cargaKg, 0);
-    if (cargaKg > unidad.capacidadKg) return { causa: "capacidad", afectaAOtra: false };
-    const viaje: ViajePlan = {
-      numero: i + 1, salidaMin: hora, paradas: [], regresoPatioMin: 0, finDescargaMin: 0, cargaKg, km: 0
-    };
-    for (const id of ids) {
-      const s = solicitudes.get(id)!;
-      const km = t.tramo(origen, s.ubicacion).km;
-      const llegada = t.llegada(origen, s.ubicacion, hora);
-      const ventana = [...s.ventanas].sort((a, b) => a.inicioMin - b.inicioMin || a.finMin - b.finMin)
-        .find(v => Math.max(llegada, v.inicioMin) <= v.finMin);
-      if (!ventana) return { causa: "ventana", afectaAOtra: id !== nueva };
-      const inicio = Math.max(llegada, ventana.inicioMin);
-      hora = inicio + s.tiempoServicioMin;
-      viaje.paradas.push({ solicitudId: id, secuencia: viaje.paradas.length + 1, kmDesdeAnterior: km,
-        llegadaMin: llegada, esperaMin: inicio - llegada, inicioServicioMin: inicio, finServicioMin: hora,
-        ventana: { ...ventana } });
-      viaje.km += km;
-      origen = s.ubicacion;
-    }
-    const regresoKm = t.tramo(origen, p.patio).km;
-    viaje.km += regresoKm;
-    viaje.regresoPatioMin = t.llegada(origen, p.patio, hora);
-    hora = viaje.finDescargaMin = viaje.regresoPatioMin + p.descargaMin;
-    if (hora > p.turnoFinMin) return { causa: "finDeTurno",
-      afectaAOtra: ids.some(id => id !== nueva) || viajes.slice(i + 1).some(v => v.length > 0) };
-    resultado.push(viaje);
-    origen = p.patio;
-  }
-  return { ruta: { unidadId: unidad.id, viajes: resultado } };
+/** La tolerancia de la entrada, validada: entero de 0 a 60. */
+export function toleranciaDe(entrada: EntradaPlan): number {
+  const t = entrada.parametros.toleranciaReadmisionMin ?? TOLERANCIA_POR_OMISION_MIN;
+  if (!Number.isInteger(t) || t < 0 || t > 60) throw new Error("Tolerancia de readmisión inválida");
+  return t;
 }
 
-export function generarPlan(entrada: EntradaPlan, restricciones?: RestriccionesPlan): Plan {
+/** Fase 1 sin validar: admisión FIFO de la 1.1.0, con lo que las fases siguientes necesitan. */
+function admision(entrada: EntradaPlan, restricciones?: RestriccionesPlan) {
   const solicitudes = new Map(entrada.solicitudes.map(s => [s.id, s]));
   if (solicitudes.size !== entrada.solicitudes.length) throw new Error("Solicitudes repetidas en la entrada");
   if (new Set(entrada.unidades.map(u => u.id)).size !== entrada.unidades.length)
@@ -89,7 +56,7 @@ export function generarPlan(entrada: EntradaPlan, restricciones?: RestriccionesP
   });
   const fifo = ordenarFifo(entrada.solicitudes.filter(s => !admitidas.has(s.id)));
   const zonas = agruparZonas(fifo.map(s => s.ubicacion), unidades.length, p.patio, p.semilla);
-  const plan: Plan = { versionMotor: VERSION_MOTOR, rutas: [], pospuestas: [], bloqueadas: [], traza: [],
+  const plan: Plan = { versionMotor: VERSION_FASE_1, rutas: [], pospuestas: [], bloqueadas: [], traza: [],
     resumen: { ruteadas: 0, pospuestas: 0, bloqueadas: 0, km: 0, minutosTraslado: 0,
       kmMetodoActual: 0, minutosTrasladoMetodoActual: 0 } };
   for (const [indice, s] of fifo.entries()) {
@@ -144,26 +111,48 @@ export function generarPlan(entrada: EntradaPlan, restricciones?: RestriccionesP
     }
   }
   plan.rutas = rutas;
-  for (const ruta of rutas) {
-    let origen = unidades.find(u => u.id === ruta.unidadId)!.ubicacionInicial;
-    for (const viaje of ruta.viajes) {
-      plan.resumen.km += viaje.km;
-      for (const parada of viaje.paradas) {
-        const s = solicitudes.get(parada.solicitudId)!;
-        const ida = t.tramo(p.patio, s.ubicacion), vuelta = t.tramo(s.ubicacion, p.patio);
-        plan.resumen.ruteadas++;
-        plan.resumen.kmMetodoActual += ida.km + vuelta.km;
-        plan.resumen.minutosTrasladoMetodoActual += Math.ceil(ida.minLibres) + Math.ceil(vuelta.minLibres);
-        plan.resumen.minutosTraslado += Math.ceil(t.tramo(origen, s.ubicacion).minLibres);
-        origen = s.ubicacion;
-      }
-      plan.resumen.minutosTraslado += Math.ceil(t.tramo(origen, p.patio).minLibres);
-      origen = p.patio;
-    }
-  }
-  plan.resumen.pospuestas = plan.pospuestas.length;
-  plan.resumen.bloqueadas = plan.bloqueadas.length;
+  plan.resumen = resumenDe(entrada, t, rutas, plan.pospuestas.length, plan.bloqueadas.length);
+  return { plan, solicitudes, t };
+}
+
+/**
+ * Fase 1 sola: el plan exacto del motor 1.1.0 (versión "1.1.0"), validado como tal. Para la simulación (comparar con y
+ * sin reacomodo) y las pruebas de regresión; la aplicación usa generarPlan.
+ */
+export function admitir(entrada: EntradaPlan, restricciones?: RestriccionesPlan): Plan {
+  const { plan } = admision(entrada, restricciones);
   const errores = validarPlan(entrada, plan, { restricciones });
   if (errores.length) throw new Error(`Plan inválido: ${errores.join("; ")}`);
   return plan;
 }
+
+/**
+ * Motor 1.2.0 (Plan 8, §4.1): admisión FIFO (fase 1, igual a la 1.1.0), reacomodo (fase 2), readmisión de las
+ * pospuestas sin cupo (fase 3) y reacomodo final (fase 4). Valida el plan completo antes de devolverlo.
+ */
+export function generarPlan(entrada: EntradaPlan, restricciones?: RestriccionesPlan): Plan {
+  toleranciaDe(entrada);
+  const { plan: fase1, solicitudes, t } = admision(entrada, restricciones);
+  const fase2 = reacomodar(entrada, fase1.rutas, solicitudes, restricciones, PRESUPUESTO_EVALUACIONES);
+  // P8-3: readmisión. Mientras tanto S3 = S2 y las pospuestas son las de la fase 1.
+  const fase3 = { rutas: fase2.rutas, readmision: [] as NonNullable<Plan["reacomodo"]>["readmision"], evaluaciones: 0, pospuestas: fase1.pospuestas };
+  const fase4 = reacomodar(entrada, fase3.rutas, solicitudes, restricciones, PRESUPUESTO_EVALUACIONES);
+  const resumen = { ...resumenDe(entrada, t, fase4.rutas, fase3.pospuestas.length, fase1.bloqueadas.length),
+    tiempoMuertoMin: tiempoMuerto(entrada, fase4.rutas) };
+  const plan: Plan = {
+    versionMotor: VERSION_MOTOR, rutas: fase4.rutas, pospuestas: fase3.pospuestas, bloqueadas: fase1.bloqueadas,
+    traza: fase1.traza, resumen,
+    reacomodo: {
+      antes: { ...fase1.resumen, tiempoMuertoMin: tiempoMuerto(entrada, fase1.rutas) },
+      despues: { ...resumen },
+      rutasReacomodadas: fase2.rutas,
+      readmision: fase3.readmision,
+      movimientos: { fase2: fase2.movimientos, fase4: fase4.movimientos },
+      evaluaciones: { fase2: fase2.evaluaciones, readmision: fase3.evaluaciones, fase4: fase4.evaluaciones },
+    },
+  };
+  const errores = validarPlan(entrada, plan, { restricciones });
+  if (errores.length) throw new Error(`Plan inválido: ${errores.join("; ")}`);
+  return plan;
+}
+
