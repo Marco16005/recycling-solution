@@ -60,6 +60,9 @@ Cada una debe cumplirse siempre. Si alguna falla, es un hallazgo.
 | 32 | Notas de seguimiento y decisiones de propuestas solo se agregan: `rs_app` no tiene UPDATE ni DELETE; corregir es otra nota y la supresión ARCO usa el script del migrador | `infra/db/permisos.sql`, `src/datos/crm.integracion.test.ts`, `scripts/suprimir-notas-cliente.mts` |
 | 33 | Cada exportación de la cartera queda en la bitácora (sin valores) y solo la hacen despachador y administrador; el CSV neutraliza fórmulas salvo números puros | `src/consultas/cartera.nucleo.ts`, `src/consultas/crm.integracion.test.ts`, `src/indicadores/indicadores.test.ts` |
 | 34 | Un enlace corto de ubicación solo se sigue hacia hosts de Google, hasta 3 saltos y 3 s; ningún dato del cliente sale en esa petición | `src/acciones/enlaces.ts`, `src/acciones/enlaces.test.ts` |
+| 35 | En el motor 1.2.0 ninguna solicitud admitida en la fase 1 sale del plan, y cada reacomodo (fases 2 y 4) no empeora (tiempo muerto, km) ni hace terminar a una unidad más de la tolerancia después; las protegidas del re-ruteo no se mueven | `src/motor/reacomodo.ts`, `src/motor/validacion.ts`, `src/motor/reacomodo.test.ts`, `src/acciones/plan8.integracion.test.ts` |
+| 36 | Cada readmitida agrega a lo sumo `tolerancia_readmision_min` de tiempo muerto; una pospuesta `alarga_la_jornada` trae el Δ mínimo real, mayor que la tolerancia | `src/motor/reacomodo.ts` (`readmitir`), `src/motor/validacion.ts`, `src/motor/readmision.test.ts` |
+| 37 | La readmisión respeta la fila por turno: una decisión por pospuesta sin cupo, en orden FIFO, cada una sobre el estado de su turno (`rutasAntes`); una antigua que no cabe se decide antes que una nueva que sí | `src/motor/validacion.ts`, `src/motor/readmision.test.ts` |
 
 ## Qué intentar romper
 
@@ -77,6 +80,7 @@ Cada una debe cumplirse siempre. Si alguna falla, es un hallazgo.
 - Validar dos planes de fechas distintas que comparten solicitudes; validar mientras otro despachador cancela, reprograma, edita una unidad, asigna una jornada o el cliente retira su consentimiento.
 - Validar el plan de hoy cuando la hora ya pasó la primera salida; ajustar a mano hasta dejar una ruta imposible.
 - Generar dos veces la misma fecha a la vez, o generar mientras otro despachador ajusta la propuesta.
+- Plan 8: matrices no triangulares con tolerancia 0, un día con muchas pospuestas, un re-ruteo con todo protegido en una unidad, y planes 1.2.0 con `reacomodo` o `readmision` manipulados (orden, Δ, `rutasAntes`, una protegida movida).
 
 ## Formato de un hallazgo
 
