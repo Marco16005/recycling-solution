@@ -3,10 +3,10 @@
  * Puro y determinista: los presupuestos se cuentan en evaluaciones de ruta, nunca en tiempo de reloj, y la única caché
  * vive dentro de una corrida.
  */
-import { calcular } from "./calculo";
+import { calcular, diagnosticoVacio, type Calculo } from "./calculo";
 import { compararTexto } from "./orden";
 import { crearTraslados } from "./traslados";
-import type { EntradaPlan, RestriccionesPlan, RutaPlan, SolicitudMotor, Traslados, UnidadMotor } from "./tipos";
+import type { DecisionReadmision, EntradaPlan, PosicionPlan, RestriccionesPlan, RutaPlan, SolicitudMotor, Traslados, UnidadMotor } from "./tipos";
 
 /** Rutas recalculadas que puede gastar cada fase de reacomodo (§4.4). */
 export const PRESUPUESTO_EVALUACIONES = 100_000;
@@ -111,6 +111,12 @@ class Estado {
     const valor = "ruta" in c ? this.valorDe(i, c.ruta) : null;
     this.cache.set(k, valor);
     return valor;
+  }
+
+  /** Sin caché: con la causa del rechazo para el diagnóstico de la readmisión (nueva = la que se inserta). */
+  intentar({ i, viajes }: Cambio, nueva: string): Valor | Extract<Calculo, { causa: unknown }> {
+    const c = calcular(this.entrada, this.unidades[i], viajes, this.solicitudes, this.t, nueva);
+    return "ruta" in c ? this.valorDe(i, c.ruta) : c;
   }
 
   aplicar(cambios: Cambio[]): void {
@@ -278,4 +284,109 @@ export function reacomodar(entrada: EntradaPlan, rutas: RutaPlan[], solicitudes:
     if (agotado || !aplicado) break;
   }
   return { rutas: estado.rutas, movimientos, evaluaciones };
+}
+
+/**
+ * Fase 3 (§4.5): readmisión de las pospuestas sin cupo de la fase 1, en orden FIFO, sobre el estado vigente.
+ * 1. Inserción directa exhaustiva: la de menor Δ de tiempo muerto total dentro de la tolerancia (desempate canónico).
+ * 2. Si no hubo, "mover una y meter": mover una parada no protegida a otra posición factible y después insertar, con Δ
+ *    conjunto ≤ tolerancia y el presupuesto propio por pospuesta. La inserción se prueba en las unidades que tocó el
+ *    movimiento: en las demás el estado no cambió y la directa ya se probó (estructura interna, §5).
+ * 3. Si no hubo lugar: "sin_cupo" sin ninguna directa factible, o "alarga_la_jornada" con el Δ mínimo de las directas.
+ * evaluaciones cuenta todas las rutas recalculadas de la fase.
+ */
+export function readmitir(entrada: EntradaPlan, rutas: RutaPlan[], solicitudes: Map<string, SolicitudMotor>,
+  restricciones: RestriccionesPlan | undefined, pospuestasFifo: string[], tolerancia: number, presupuesto: number):
+  { rutas: RutaPlan[]; decisiones: DecisionReadmision[]; evaluaciones: number } {
+  const estado = new Estado(entrada, rutas, solicitudes, crearTraslados(entrada), restricciones);
+  const decisiones: DecisionReadmision[] = [];
+  let evaluaciones = 0;
+  const posicion = (i: number, viaje: number, lugar: number): PosicionPlan =>
+    ({ unidadId: estado.unidades[i].id, viaje: viaje + 1, secuencia: lugar + 1 });
+
+  for (const id of pospuestasFifo) {
+    const rutasAntes = estado.rutas;
+    const diagnostico = diagnosticoVacio();
+    let deltaMinimo = Infinity;
+    let directa: { cambio: Cambio; delta: number; posicion: PosicionPlan } | null = null;
+    for (let i = 0; i < estado.unidades.length; i++) {
+      if (!estado.admite(i, id)) continue;
+      const base = estado.secuencias[i];
+      for (let viaje = 0; viaje <= base.length; viaje++) {
+        const largo = viaje === base.length ? 0 : base[viaje].length;
+        for (let lugar = 0; lugar <= largo; lugar++) {
+          const cambio = { i, viajes: poner(base, viaje, lugar, [id]) };
+          evaluaciones++;
+          const r = estado.intentar(cambio, id);
+          if ("causa" in r) {
+            diagnostico[r.causa]++;
+            if (r.afectaAOtra) diagnostico.afectaAOtra++;
+            continue;
+          }
+          const delta = r.tm - estado.valores[i].tm;
+          deltaMinimo = Math.min(deltaMinimo, delta);
+          if (delta <= tolerancia && (!directa || delta < directa.delta)) directa = { cambio, delta, posicion: posicion(i, viaje, lugar) };
+        }
+      }
+    }
+    if (directa) {
+      estado.aplicar([directa.cambio]);
+      decisiones.push({ solicitudId: id, resultado: "admitida", posicion: directa.posicion, deltaMin: directa.delta, movida: null, rutasAntes });
+      continue;
+    }
+
+    let gastadas = 0;
+    let mejor: { cambios: Cambio[]; delta: number; posicion: PosicionPlan; movida: { solicitudId: string; de: PosicionPlan; a: PosicionPlan } } | null = null;
+    buscar: for (const p of paradas(estado)) {
+      if (estado.protegidas.has(p.id)) continue;
+      const sinParada = estado.quitar(p.i, p.viaje, p.posicion, 1);
+      for (let w = 0; w < estado.unidades.length; w++) {
+        if (w !== p.i && !estado.admite(w, p.id)) continue;
+        const base = w === p.i ? sinParada : estado.secuencias[w];
+        for (let viaje = 0; viaje <= base.length; viaje++) {
+          const largo = viaje === base.length ? 0 : base[viaje].length;
+          for (let lugar = 0; lugar <= largo; lugar++) {
+            const destino = poner(base, viaje, lugar, [p.id]);
+            const movimiento: Cambio[] = w === p.i ? [{ i: w, viajes: destino }] : [{ i: p.i, viajes: sinParada }, { i: w, viajes: destino }];
+            if (movimiento.length === 1 && iguales(destino, estado.secuencias[p.i])) continue;
+            if (!movimiento.every(c => estado.estructuraValida(c))) continue;
+            if (gastadas + movimiento.length > presupuesto) break buscar;
+            gastadas += movimiento.length;
+            const valores = movimiento.map(c => estado.evaluar(c));
+            if (valores.some(v => v === null)) continue;
+            const deltaMovimiento = movimiento.reduce((s, c, k) => s + valores[k]!.tm - estado.valores[c.i].tm, 0);
+            for (const [k, c] of movimiento.entries()) {
+              if (!estado.admite(c.i, id)) continue;
+              for (let viaje2 = 0; viaje2 <= c.viajes.length; viaje2++) {
+                const largo2 = viaje2 === c.viajes.length ? 0 : c.viajes[viaje2].length;
+                for (let lugar2 = 0; lugar2 <= largo2; lugar2++) {
+                  const insercion = { i: c.i, viajes: poner(c.viajes, viaje2, lugar2, [id]) };
+                  if (!estado.estructuraValida(insercion)) continue;
+                  if (gastadas + 1 > presupuesto) break buscar;
+                  gastadas++;
+                  const v = estado.evaluar(insercion);
+                  if (!v) continue;
+                  const delta = deltaMovimiento + v.tm - valores[k]!.tm;
+                  if (delta <= tolerancia && (!mejor || delta < mejor.delta)) mejor = {
+                    cambios: movimiento.map((m, j) => j === k ? insercion : m), delta, posicion: posicion(c.i, viaje2, lugar2),
+                    movida: { solicitudId: p.id, de: posicion(p.i, p.viaje, p.posicion), a: posicion(w, viaje, lugar) },
+                  };
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    evaluaciones += gastadas;
+    if (mejor) {
+      estado.aplicar(mejor.cambios);
+      decisiones.push({ solicitudId: id, resultado: "admitida", posicion: mejor.posicion, deltaMin: mejor.delta, movida: mejor.movida, rutasAntes });
+    } else if (Number.isFinite(deltaMinimo)) {
+      decisiones.push({ solicitudId: id, resultado: "pospuesta", motivo: "alarga_la_jornada", diagnostico: { ...diagnostico, deltaMinimoMin: deltaMinimo }, rutasAntes });
+    } else {
+      decisiones.push({ solicitudId: id, resultado: "pospuesta", motivo: "sin_cupo", diagnostico, rutasAntes });
+    }
+  }
+  return { rutas: estado.rutas, decisiones, evaluaciones };
 }

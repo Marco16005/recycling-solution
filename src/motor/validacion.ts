@@ -232,6 +232,14 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
           if (!flota.length || compatibles) errores.push(`Motivo de compatibilidad incorrecto: ${s.id}`);
           break;
         case "pospuesta_a_mano": break;
+        case "alarga_la_jornada": {
+          const d = item.diagnostico;
+          const campos = ["capacidad", "ventana", "finDeTurno", "afectaAOtra"] as const;
+          if (!v12) errores.push(`Motivo de posposición incorrecto: ${s.id}`);
+          else if (!d || campos.some(c => !Number.isInteger(d[c]) || d[c] < 0) || !Number.isInteger(d.deltaMinimoMin) || d.deltaMinimoMin! < 0)
+            errores.push(`Diagnóstico inválido: ${s.id}`);
+          break;
+        }
         case "sin_cupo": {
           const d = item.diagnostico;
           const campos = ["capacidad", "ventana", "finDeTurno", "afectaAOtra"] as const;
@@ -243,7 +251,7 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
         }
         default: errores.push(`Motivo de posposición incorrecto: ${s.id}`);
       }
-      if (item.motivo !== "sin_cupo" && item.diagnostico !== null) errores.push(`Diagnóstico debe ser null: ${s.id}`);
+      if (item.motivo !== "sin_cupo" && item.motivo !== "alarga_la_jornada" && item.diagnostico !== null) errores.push(`Diagnóstico debe ser null: ${s.id}`);
     }
   } else {
     // La reconstrucción inicia con las descargas obligatorias, incluso sin decisiones.
@@ -309,6 +317,44 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
         pospuestas.push({ solicitudId: s.id, motivo: decision.motivo, diagnostico: motivo === "sin_cupo" ? d : null });
       }
     }
+    let pospuestasEsperadas = pospuestas;
+    /** Δ de tiempo muerto de cada inserción directa factible de s en el estado (todas las unidades, viajes y posiciones). */
+    const deltasDirectos = (rutas: RutaPlan[], s: SolicitudMotor) => rutas.flatMap(ruta => {
+      const deltas: number[] = [];
+      for (let v = 0; v <= ruta.viajes.length; v++) {
+        const largo = ruta.viajes[v]?.paradas.length ?? 0;
+        for (let lugar = 0; lugar <= largo; lugar++) {
+          const nueva = insertar(ruta, s, v, lugar);
+          if (nueva) deltas.push(tiempoMuertoDe([nueva]) - tiempoMuertoDe([ruta]));
+        }
+      }
+      return deltas;
+    });
+    /** "Mover una y meter": quita la parada de `de` (un viaje que se vacía se elimina, salvo el regreso con carga) y la pone en `a`. */
+    function moverEn(rutas: RutaPlan[], m: { solicitudId: string; de: { unidadId: string; viaje: number; secuencia: number };
+      a: { unidadId: string; viaje: number; secuencia: number } }): RutaPlan[] | undefined {
+      const iDe = rutas.findIndex(x => x.unidadId === m.de.unidadId), iA = rutas.findIndex(x => x.unidadId === m.a.unidadId);
+      if (iDe < 0 || iA < 0) return;
+      const listas = rutas.map(x => x.viajes.map(v => v.paradas.map(y => y.solicitudId)));
+      const origen = listas[iDe][m.de.viaje - 1];
+      if (!origen || origen[m.de.secuencia - 1] !== m.solicitudId) return;
+      origen.splice(m.de.secuencia - 1, 1);
+      if (!origen.length && !(m.de.viaje === 1 && (unidades.get(m.de.unidadId)?.cargaActualKg ?? 0) > 0)) listas[iDe].splice(m.de.viaje - 1, 1);
+      const destino = listas[iA];
+      if (!Number.isInteger(m.a.viaje) || m.a.viaje < 1 || m.a.viaje > destino.length + 1) return;
+      if (m.a.viaje === destino.length + 1) destino.push([]);
+      const lista = destino[m.a.viaje - 1];
+      if (!Number.isInteger(m.a.secuencia) || m.a.secuencia < 1 || m.a.secuencia > lista.length + 1) return;
+      lista.splice(m.a.secuencia - 1, 0, m.solicitudId);
+      const nuevo = [...rutas];
+      for (const i of new Set([iDe, iA])) {
+        const u = unidades.get(rutas[i].unidadId);
+        const reconstruida = u && reconstruir(u, listas[i]);
+        if (!reconstruida) return;
+        nuevo[i] = reconstruida;
+      }
+      return nuevo;
+    }
     if (!v12) {
       if (!iguales(estado, plan.rutas)) errores.push(
         "Las rutas finales no coinciden con la reconstrucción factible de la traza "
@@ -325,9 +371,58 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
         protegidasIntactas(s2, "Reacomodo");
         if (!noEmpeora(objetivo(s2), objetivo(s1))) errores.push("Reacomodo: empeoró el tiempo muerto o los km");
       }
-      // P8-3: readmisión. Mientras tanto S3 = S2 y las pospuestas finales son las de la fase 1.
-      if (r.readmision.length) errores.push("Readmisión todavía no admitida");
-      const s3 = s2;
+      // §4.6, paso 3: la readmisión se reproduce desde S2; da S3 y las pospuestas finales.
+      let s3 = s2;
+      const sinCupo = pospuestas.filter(x => x.motivo === "sin_cupo").map(x => x.solicitudId);
+      if (r.readmision.length !== sinCupo.length || r.readmision.some((d, i) => d.solicitudId !== sinCupo[i]))
+        errores.push("Readmisión: no hay exactamente una decisión por pospuesta sin cupo, en orden FIFO");
+      const finales = new Map<string, Plan["pospuestas"][number] | null>();
+      for (const d of r.readmision) {
+        const s = porId.get(d.solicitudId);
+        if (!s || !sinCupo.includes(d.solicitudId) || finales.has(d.solicitudId)) continue;
+        if (!iguales(d.rutasAntes, s3)) errores.push(`Readmisión: la decisión de ${s.id} altera las rutas anteriores`);
+        const directas = deltasDirectos(s3, s);
+        const minimo = directas.length ? Math.min(...directas) : Infinity;
+        if (d.resultado === "admitida") {
+          finales.set(s.id, null);
+          let base = s3;
+          if (d.movida) {
+            if (minimo <= tolerancia) errores.push(`Readmisión: ${s.id} tenía una inserción directa dentro de la tolerancia`);
+            if (admitidas.has(d.movida.solicitudId)) errores.push(`Readmisión: "mover una y meter" movió una protegida (${d.movida.solicitudId})`);
+            const movido = moverEn(s3, d.movida);
+            if (!movido) { errores.push(`Readmisión: el movimiento para ${s.id} no es factible`); continue; }
+            base = movido;
+          }
+          const k = base.findIndex(x => x.unidadId === d.posicion.unidadId);
+          const ruta = k < 0 ? undefined : insertar(base[k], s, d.posicion.viaje - 1, d.posicion.secuencia - 1);
+          if (!ruta) { errores.push(`Readmisión: inserción no factible de ${s.id}`); continue; }
+          const nuevo = base.map((x, j) => j === k ? ruta : x);
+          const delta = tiempoMuertoDe(nuevo) - tiempoMuertoDe(s3);
+          if (delta !== d.deltaMin) errores.push(`Readmisión: el Δ de ${s.id} no coincide`);
+          if (delta > tolerancia) errores.push(`Readmisión: ${s.id} excede la tolerancia`);
+          if (!d.movida && delta !== minimo) errores.push(`Readmisión: ${s.id} no entró en la inserción directa de menor Δ`);
+          s3 = nuevo;
+        } else {
+          const dg = d.diagnostico;
+          const campos = ["capacidad", "ventana", "finDeTurno", "afectaAOtra"] as const;
+          const contadores = !!dg && campos.every(c => Number.isInteger(dg[c]) && dg[c] >= 0);
+          if (d.motivo === "sin_cupo") {
+            if (directas.length) errores.push(`Readmisión: ${s.id} quedó sin cupo teniendo una inserción directa factible`);
+            if (!contadores || dg.capacidad + dg.ventana + dg.finDeTurno <= 0 || dg.deltaMinimoMin !== undefined)
+              errores.push(`Diagnóstico inválido: ${s.id}`);
+          } else if (d.motivo === "alarga_la_jornada") {
+            if (!directas.length || minimo <= tolerancia || !contadores || dg.deltaMinimoMin !== minimo)
+              errores.push(`Readmisión: ${s.id} alarga la jornada con un Δ mínimo distinto del real o dentro de la tolerancia`);
+          } else errores.push(`Motivo de posposición incorrecto: ${s.id}`);
+          finales.set(s.id, { solicitudId: s.id, motivo: d.motivo, diagnostico: dg });
+        }
+      }
+      protegidasIntactas(s3, "Readmisión");
+      pospuestasEsperadas = pospuestas.flatMap(x => {
+        if (x.motivo !== "sin_cupo" || !finales.has(x.solicitudId)) return [x];
+        const f = finales.get(x.solicitudId);
+        return f ? [f] : [];
+      });
       if (rutasFactibles(plan.rutas, "Reacomodo final")) {
         if (!iguales(atendidas(plan.rutas), atendidas(s3))) errores.push("Reacomodo final: cambió las solicitudes atendidas");
         if (!noEmpeora(objetivo(plan.rutas), objetivo(s3))) errores.push("Reacomodo final: empeoró el tiempo muerto o los km");
@@ -336,7 +431,7 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
       const contadores = [r.movimientos.fase2, r.movimientos.fase4, r.evaluaciones.fase2, r.evaluaciones.readmision, r.evaluaciones.fase4];
       if (contadores.some(n => !Number.isInteger(n) || n < 0)) errores.push("Contadores del reacomodo inválidos");
     }
-    if (!iguales(pospuestas, plan.pospuestas)) errores.push("Pospuestas inconsistentes con la traza");
+    if (!iguales(pospuestasEsperadas, plan.pospuestas)) errores.push("Pospuestas inconsistentes con la traza");
     if (!iguales(bloqueadas, plan.bloqueadas)) errores.push("Bloqueadas inconsistentes con la traza");
   }
 

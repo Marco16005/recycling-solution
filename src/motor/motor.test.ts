@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { distanciaKm, generarPlan, minutosDeTraslado, validarPlan } from "./index";
+import { admitir, distanciaKm, generarPlan, minutosDeTraslado, validarPlan } from "./index";
 import { entrada, patio, solicitud, unidad } from "./ejemplos.test-datos";
 import type { EntradaPlan, Plan } from "./tipos";
 import { casos } from "./casos.test-datos";
@@ -115,7 +115,8 @@ describe("Casos límite y regresiones", () => {
       solicitud("b", { cargaKg: 6000, tiempoServicioMin: 10, ventanas: [{ inicioMin: 505, finMin: 505 }] }),
       solicitud("c", { cargaKg: 2000, tiempoServicioMin: 20, ventanas: [{ inicioMin: 480, finMin: 500 }] }),
     ]);
-    const p = generarPlan(e);
+    // Plan 8: es la regla de la admisión (fase 1); en 1.2.0 la readmisión puede hacerle lugar a c después.
+    const p = admitir(e);
     expect(p.rutas[0].viajes).toHaveLength(2);
     expect(p.rutas[0].viajes[1].paradas[0].inicioServicioMin).toBe(505);
     expect(p.pospuestas[0]).toMatchObject({ solicitudId: "c", motivo: "sin_cupo" });

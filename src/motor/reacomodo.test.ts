@@ -206,7 +206,10 @@ describe("propiedades del reacomodo", () => {
       expect(generarPlan(e)).toEqual(plan);
       expect(validarPlan(e, plan)).toEqual([]);
       expect(plan.traza).toEqual(f1.traza);
-      expect(atendidas(plan.rutas)).toEqual(atendidas(f1.rutas));
+      // S1 ⊆ S4: la readmisión puede agregar, nunca quitar.
+      const finales = new Set(atendidas(plan.rutas));
+      expect(atendidas(f1.rutas).every(id => finales.has(id))).toBe(true);
+      expect(atendidas(r.rutasReacomodadas)).toEqual(atendidas(f1.rutas));
       expect(noEmpeora(objetivo(e, r.rutasReacomodadas), objetivo(e, f1.rutas))).toBe(true);
       expect(noEmpeora(objetivo(e, plan.rutas), objetivo(e, r.rutasReacomodadas))).toBe(true);
       const unidades = new Map(e.unidades.map(u => [u.id, u]));

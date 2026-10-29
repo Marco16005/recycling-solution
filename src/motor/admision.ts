@@ -1,7 +1,7 @@
 import { calcular, diagnosticoVacio, resumenDe } from "./calculo";
 import { crearTraslados, VERSION_MOTOR } from "./traslados";
 import { compararTexto, ordenarFifo } from "./orden";
-import { PRESUPUESTO_EVALUACIONES, reacomodar, tiempoMuerto } from "./reacomodo";
+import { PRESUPUESTO_EVALUACIONES, PRESUPUESTO_READMISION, reacomodar, readmitir, tiempoMuerto } from "./reacomodo";
 import { agruparZonas } from "./zonas";
 import { ErrorAdmitidas } from "./tipos";
 import { validarPlan } from "./validacion";
@@ -131,11 +131,21 @@ export function admitir(entrada: EntradaPlan, restricciones?: RestriccionesPlan)
  * pospuestas sin cupo (fase 3) y reacomodo final (fase 4). Valida el plan completo antes de devolverlo.
  */
 export function generarPlan(entrada: EntradaPlan, restricciones?: RestriccionesPlan): Plan {
-  toleranciaDe(entrada);
+  const tolerancia = toleranciaDe(entrada);
   const { plan: fase1, solicitudes, t } = admision(entrada, restricciones);
   const fase2 = reacomodar(entrada, fase1.rutas, solicitudes, restricciones, PRESUPUESTO_EVALUACIONES);
-  // P8-3: readmisión. Mientras tanto S3 = S2 y las pospuestas son las de la fase 1.
-  const fase3 = { rutas: fase2.rutas, readmision: [] as NonNullable<Plan["reacomodo"]>["readmision"], evaluaciones: 0, pospuestas: fase1.pospuestas };
+  // Fase 3: solo las pospuestas sin cupo, en orden FIFO; sin unidades o sin una compatible no se reintentan.
+  const sinCupo = fase1.pospuestas.filter(p => p.motivo === "sin_cupo").map(p => p.solicitudId);
+  const readmision = readmitir(entrada, fase2.rutas, solicitudes, restricciones, sinCupo, tolerancia, PRESUPUESTO_READMISION);
+  const decisiones = new Map(readmision.decisiones.map(d => [d.solicitudId, d]));
+  const fase3 = {
+    rutas: readmision.rutas, readmision: readmision.decisiones, evaluaciones: readmision.evaluaciones,
+    pospuestas: fase1.pospuestas.flatMap(p => {
+      const d = decisiones.get(p.solicitudId);
+      if (!d) return [p];
+      return d.resultado === "admitida" ? [] : [{ solicitudId: p.solicitudId, motivo: d.motivo, diagnostico: d.diagnostico }];
+    }),
+  };
   const fase4 = reacomodar(entrada, fase3.rutas, solicitudes, restricciones, PRESUPUESTO_EVALUACIONES);
   const resumen = { ...resumenDe(entrada, t, fase4.rutas, fase3.pospuestas.length, fase1.bloqueadas.length),
     tiempoMuertoMin: tiempoMuerto(entrada, fase4.rutas) };
