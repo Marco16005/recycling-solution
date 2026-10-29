@@ -1,5 +1,6 @@
 import fc from "fast-check";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import * as calculo from "./calculo";
 import { admitir } from "./admision";
 import { casos } from "./casos.test-datos";
 import { entrada, patio, solicitud, unidad } from "./ejemplos.test-datos";
@@ -8,6 +9,12 @@ import { reacomodar } from "./reacomodo";
 import type { Coordenada, EntradaPlan, Plan, RutaPlan, SolicitudMotor } from "./tipos";
 
 // Plan 8, P8-2. Matrices explícitas: cada prueba dice sus minutos libres; km = minutos / 2.
+
+// El cálculo real, espiado: así se comprueba que evaluaciones cuenta las rutas recalculadas de verdad.
+vi.mock("./calculo", async (original) => {
+  const real = await original<typeof import("./calculo")>();
+  return { ...real, calcular: vi.fn(real.calcular) };
+});
 
 const ESTE = { lat: 20.63, lng: -100.25 }, ESTE2 = { lat: 20.631, lng: -100.25 };
 const OESTE = { lat: 20.63, lng: -100.29 }, OESTE2 = { lat: 20.631, lng: -100.29 };
@@ -151,6 +158,59 @@ describe("tiempo muerto y reacomodo (fases 2 y 4)", () => {
       expect(atendidas(r.rutas)).toEqual(atendidas(f1.rutas));
       if (presupuesto === 0) expect(r).toEqual({ rutas: f1.rutas, movimientos: 0, evaluaciones: 0 });
     }
+  });
+});
+
+describe("presupuesto y orden canónico (revisión de Codex)", () => {
+  /** Solicitudes en puntos distintos y una ruta inicial por unidad, sin pasar por la admisión. */
+  function inicial(ids: string[], viajesPorUnidad: Record<string, string[][]>, minutos: (a: string, b: string) => number, descargaMin = 0) {
+    const puntos = [patio, ...ids.map((_, i) => ({ lat: 20.7 + i / 1000, lng: -100.2 }))];
+    const nombres = ["P", ...ids];
+    const e = conMatriz(entrada(ids.map((id, i) => solicitud(id, { ubicacion: puntos[i + 1], registradaEn: registro(i % 10), cargaKg: 100 })),
+      Object.keys(viajesPorUnidad).map(u => unidad(u))), puntos, (i, j) => minutos(nombres[i], nombres[j]));
+    e.parametros.descargaMin = descargaMin;
+    const rutas = Object.entries(viajesPorUnidad).map(([u, viajes]) => {
+      const r = recalcularRuta(e, u, viajes);
+      if (!r.ok) throw new Error("ruta inicial");
+      return r.ruta;
+    });
+    return { e, rutas, porId: new Map(e.solicitudes.map(x => [x.id, x])) };
+  }
+
+  it("el corte del presupuesto aplica la mejor mejora encontrada hasta ahí, y evaluaciones son las llamadas reales al cálculo", () => {
+    // P–A y P–B: 30 en ambos sentidos; A→B 200 y B→A 150; sin descarga. Inicial: [A, B] = 30 + 200 + 30 = 260.
+    // Mover A, en orden canónico: [B, A] = 210 (evaluación 1) y [B] | [A] = 120 (evaluación 2).
+    // Mover B: [B, A] ya está en la caché (no cuesta) y [A] | [B] = 120 (evaluación 3) empata y no reemplaza.
+    const { e, rutas, porId } = inicial(["A", "B"], { u1: [["A", "B"]] },
+      (a, b) => (a === "P" || b === "P" ? 30 : a === "A" ? 200 : 150));
+    const espia = vi.mocked(calculo.calcular);
+    for (const [presupuesto, esperadas] of [[1, [["B", "A"]]], [2, [["B"], ["A"]]]] as const) {
+      espia.mockClear();
+      const r = reacomodar(e, rutas, porId, undefined, presupuesto);
+      expect(secuencias(r.rutas[0])).toEqual(esperadas);
+      expect(r.movimientos).toBe(1);
+      expect(r.evaluaciones).toBe(presupuesto);
+      expect(espia.mock.calls.length).toBe(r.evaluaciones);
+    }
+    espia.mockClear();
+    const completo = reacomodar(e, rutas, porId, undefined, 1000);
+    expect(espia.mock.calls.length).toBe(completo.evaluaciones);
+    expect(tiempoMuerto(e, completo.rutas)).toBe(120);
+  });
+
+  it("entre cadenas que empatan gana la primera por unidad, viaje y posición, aunque sea más larga", () => {
+    // Todos a 5 min entre sí y a 30 del patio; descarga 15. u1 = [X1, X2, X3], u2 = [Z1, Z2], u3 = [W1, W2].
+    // Ningún viaje tiene una sola parada: mover una sola quita 5 en su viaje y agrega 5 en otro (0), e intercambiar
+    // tampoco cambia nada. Mover la cadena de 3 de u1 a u2 vacía u1: −(65 + 5 + 15) + 15 = −70; mover la de 2 de u2
+    // vacía u2: −(60 + 5 + 15) + 10 = −70. Con el presupuesto justo para la primera mejora, se ve cuál se tomó.
+    const { e, rutas, porId } = inicial(["X1", "X2", "X3", "Z1", "Z2", "W1", "W2"],
+      { u1: [["X1", "X2", "X3"]], u2: [["Z1", "Z2"]], u3: [["W1", "W2"]] }, (a, b) => (a === "P" || b === "P" ? 30 : 5), 15);
+    let r = reacomodar(e, rutas, porId, undefined, 0);
+    for (let presupuesto = 1; r.movimientos === 0 && presupuesto < 20_000; presupuesto++) r = reacomodar(e, rutas, porId, undefined, presupuesto);
+    expect(r.movimientos).toBe(1);
+    expect(tiempoMuerto(e, r.rutas)).toBe(tiempoMuerto(e, rutas) - 70);
+    expect(secuencias(r.rutas.find(x => x.unidadId === "u1")!)).toEqual([]);
+    expect(atendidas([r.rutas.find(x => x.unidadId === "u2")!])).toEqual(["X1", "X2", "X3", "Z1", "Z2"]);
   });
 });
 

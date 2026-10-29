@@ -44,6 +44,8 @@ const clave = (viajes: string[][]) => viajes.map(v => v.join(",")).join("/");
 
 /** Una ruta cambiada: índice de la unidad (orden por id) y sus viajes nuevos. */
 interface Cambio { i: number; viajes: string[][] }
+/** Un cambio con su ruta ya calculada: aplicarlo no vuelve a calcular. */
+interface CambioCalculado extends Cambio { ruta: RutaPlan }
 
 /**
  * Contexto de una corrida de reacomodo o readmisión: unidades en orden canónico (por id), secuencias y valores vigentes,
@@ -102,30 +104,28 @@ class Estado {
     return this.solicitudes.get(id)!.tiposUnidadAdmitidos.includes(this.unidades[i].tipo);
   }
 
-  /** null si no es factible por capacidad, ventana o fin de turno. */
-  evaluar({ i, viajes }: Cambio): Valor | null {
-    const k = `${i}|${clave(viajes)}`;
-    const guardado = this.cache.get(k);
-    if (guardado !== undefined) return guardado;
-    const c = calcular(this.entrada, this.unidades[i], viajes, this.solicitudes, this.t);
-    const valor = "ruta" in c ? this.valorDe(i, c.ruta) : null;
-    this.cache.set(k, valor);
-    return valor;
+  /** El valor ya calculado en esta corrida (null si no era factible), o undefined si nunca se calculó. */
+  enCache({ i, viajes }: Cambio): Valor | null | undefined {
+    return this.cache.get(`${i}|${clave(viajes)}`);
   }
 
-  /** Sin caché: con la causa del rechazo para el diagnóstico de la readmisión (nueva = la que se inserta). */
-  intentar({ i, viajes }: Cambio, nueva: string): Valor | Extract<Calculo, { causa: unknown }> {
-    const c = calcular(this.entrada, this.unidades[i], viajes, this.solicitudes, this.t, nueva);
-    return "ruta" in c ? this.valorDe(i, c.ruta) : c;
+  /**
+   * Recalcula la ruta (una evaluación: quien llama la cuenta). nueva: la que se inserta, para el diagnóstico.
+   * Devuelve la ruta con su valor, o la causa si no es factible por capacidad, ventana o fin de turno.
+   */
+  calcularCambio(c: Cambio, nueva?: string): { valor: Valor; ruta: RutaPlan } | Extract<Calculo, { causa: unknown }> {
+    const r = calcular(this.entrada, this.unidades[c.i], c.viajes, this.solicitudes, this.t, nueva);
+    const resultado = "ruta" in r ? { valor: this.valorDe(c.i, r.ruta), ruta: r.ruta } : r;
+    this.cache.set(`${c.i}|${clave(c.viajes)}`, "ruta" in r ? (resultado as { valor: Valor }).valor : null);
+    return resultado;
   }
 
-  aplicar(cambios: Cambio[]): void {
-    for (const { i, viajes } of cambios) {
-      const c = calcular(this.entrada, this.unidades[i], viajes, this.solicitudes, this.t);
-      if (!("ruta" in c)) throw new Error("Reacomodo: un cambio aceptado dejó de ser factible");
+  /** Aplica rutas ya calculadas, sin volver a calcular. */
+  aplicar(cambios: CambioCalculado[]): void {
+    for (const { i, viajes, ruta } of cambios) {
       this.secuencias = this.secuencias.map((s, j) => j === i ? viajes : s);
-      this.rutas = this.rutas.map((r, j) => j === i ? c.ruta : r);
-      this.valores = this.valores.map((v, j) => j === i ? this.valorDe(i, c.ruta) : v);
+      this.rutas = this.rutas.map((r, j) => j === i ? ruta : r);
+      this.valores = this.valores.map((v, j) => j === i ? this.valorDe(i, ruta) : v);
     }
   }
 
@@ -146,34 +146,75 @@ function poner(viajes: string[][], viaje: number, posicion: number, nuevas: stri
 
 const iguales = (a: string[][], b: string[][]) => clave(a) === clave(b) && a.length === b.length;
 
-/** Una corrida de búsqueda: gasta presupuesto por ruta recalculada y guarda la mejor mejora estricta. */
-class Busqueda {
-  evaluaciones = 0;
+/**
+ * Presupuesto de una fase: evaluaciones = rutas recalculadas de verdad (§4.4). Un valor que ya está en la caché de la
+ * corrida no cuesta; nunca se rebasa el presupuesto.
+ */
+class Presupuesto {
   agotado = false;
-  mejor: { cambios: Cambio[]; valor: Valor } | null = null;
+  constructor(readonly limite: number, public evaluaciones = 0) {}
+  /** Cuenta una evaluación si cabe; si no, marca agotado. */
+  gastar(): boolean {
+    if (this.evaluaciones + 1 > this.limite) { this.agotado = true; return false; }
+    this.evaluaciones++;
+    return true;
+  }
+  /** Valor del cambio desde la caché o recalculando (con su ruta); "agotado" si ya no cabe una evaluación más. */
+  valor(estado: Estado, c: Cambio): { valor: Valor; ruta?: RutaPlan } | null | "agotado" {
+    const guardado = estado.enCache(c);
+    if (guardado !== undefined) return guardado && { valor: guardado };
+    if (!this.gastar()) return "agotado";
+    const r = estado.calcularCambio(c);
+    return "ruta" in r ? r : null;
+  }
+  /** Rutas para aplicar los cambios: las que vinieron de la caché se recalculan (cuentan). null si ya no caben. */
+  rutas(estado: Estado, cambios: Cambio[], calculadas: (RutaPlan | undefined)[]): CambioCalculado[] | null {
+    const listos: CambioCalculado[] = [];
+    for (const [k, c] of cambios.entries()) {
+      let ruta = calculadas[k];
+      if (!ruta) {
+        if (!this.gastar()) return null;
+        const r = estado.calcularCambio(c);
+        if (!("ruta" in r)) throw new Error("Reacomodo: un valor guardado dejó de ser factible");
+        ruta = r.ruta;
+      }
+      listos.push({ ...c, ruta });
+    }
+    return listos;
+  }
+}
+
+/** Un vecindario: guarda la mejor mejora estricta, con sus rutas listas para aplicar. */
+class Busqueda {
+  mejor: { cambios: CambioCalculado[]; valor: Valor } | null = null;
   private readonly base: Valor;
 
-  constructor(private readonly estado: Estado, private readonly presupuesto: number, gastadas: number) {
-    this.evaluaciones = gastadas;
+  constructor(private readonly estado: Estado, readonly presupuesto: Presupuesto) {
     this.base = estado.total();
   }
+
+  get agotado(): boolean { return this.presupuesto.agotado; }
 
   /** false si el presupuesto se agotó y hay que dejar de enumerar. */
   probar(cambios: Cambio[]): boolean {
     if (this.agotado) return false;
     if (cambios.length === 1 && iguales(cambios[0].viajes, this.estado.secuencias[cambios[0].i])) return true;
     if (!cambios.every(c => this.estado.estructuraValida(c))) return true;
-    if (this.evaluaciones + cambios.length > this.presupuesto) { this.agotado = true; return false; }
-    this.evaluaciones += cambios.length;
     let { tm, km } = this.base;
+    const calculadas: (RutaPlan | undefined)[] = [];
     for (const c of cambios) {
-      const v = this.estado.evaluar(c);
+      const v = this.presupuesto.valor(this.estado, c);
+      if (v === "agotado") return false;
       if (!v) return true;
-      tm += v.tm - this.estado.valores[c.i].tm;
-      km += v.km - this.estado.valores[c.i].km;
+      calculadas.push(v.ruta);
+      tm += v.valor.tm - this.estado.valores[c.i].tm;
+      km += v.valor.km - this.estado.valores[c.i].km;
     }
     const valor = { tm, km };
-    if (mejor(valor, this.mejor?.valor ?? this.base)) this.mejor = { cambios, valor };
+    if (!mejor(valor, this.mejor?.valor ?? this.base)) return true;
+    const listos = this.presupuesto.rutas(this.estado, cambios, calculadas);
+    if (!listos) return false;
+    this.mejor = { cambios: listos, valor };
     return true;
   }
 }
@@ -231,10 +272,14 @@ function intercambiar(estado: Estado, b: Busqueda): void {
   }
 }
 
-/** Vecindario 3: mover una cadena de 2 o 3 paradas consecutivas (sin protegidas), conservando su orden. */
+/**
+ * Vecindario 3: mover una cadena de 2 o 3 paradas consecutivas (sin protegidas), conservando su orden.
+ * Orden canónico: unidad, viaje y posición de inicio; después el largo (2 antes que 3); después el destino.
+ */
 function moverCadena(estado: Estado, b: Busqueda): void {
-  for (const n of [2, 3]) for (const [i, viajes] of estado.secuencias.entries()) for (const [viaje, v] of viajes.entries()) {
-    for (let posicion = 0; posicion + n <= v.length; posicion++) {
+  for (const [i, viajes] of estado.secuencias.entries()) for (const [viaje, v] of viajes.entries()) {
+    for (let posicion = 0; posicion < v.length; posicion++) for (const n of [2, 3]) {
+      if (posicion + n > v.length) continue;
       const cadena = v.slice(posicion, posicion + n);
       if (cadena.some(id => estado.protegidas.has(id))) continue;
       if (!insertarEnTodos(estado, b, i, estado.quitar(i, viaje, posicion, n), cadena)) return;
@@ -265,25 +310,24 @@ const VECINDARIOS = [mover, intercambiar, moverCadena, invertir];
 export function reacomodar(entrada: EntradaPlan, rutas: RutaPlan[], solicitudes: Map<string, SolicitudMotor>,
   restricciones: RestriccionesPlan | undefined, presupuesto: number): { rutas: RutaPlan[]; movimientos: number; evaluaciones: number } {
   const estado = new Estado(entrada, rutas, solicitudes, crearTraslados(entrada), restricciones);
-  let evaluaciones = 0, movimientos = 0;
+  const gasto = new Presupuesto(presupuesto);
+  let movimientos = 0;
   for (;;) {
-    let aplicado = false, agotado = false;
+    let aplicado = false;
     for (const vecindario of VECINDARIOS) {
-      const b = new Busqueda(estado, presupuesto, evaluaciones);
+      const b = new Busqueda(estado, gasto);
       vecindario(estado, b);
-      evaluaciones = b.evaluaciones;
-      agotado = b.agotado;
       if (b.mejor) {
         estado.aplicar(b.mejor.cambios);
         movimientos++;
         aplicado = true;
         break;
       }
-      if (agotado) break;
+      if (gasto.agotado) break;
     }
-    if (agotado || !aplicado) break;
+    if (gasto.agotado || !aplicado) break;
   }
-  return { rutas: estado.rutas, movimientos, evaluaciones };
+  return { rutas: estado.rutas, movimientos, evaluaciones: gasto.evaluaciones };
 }
 
 /**
@@ -308,7 +352,8 @@ export function readmitir(entrada: EntradaPlan, rutas: RutaPlan[], solicitudes: 
     const rutasAntes = estado.rutas;
     const diagnostico = diagnosticoVacio();
     let deltaMinimo = Infinity;
-    let directa: { cambio: Cambio; delta: number; posicion: PosicionPlan } | null = null;
+    // 1. Inserción directa: exhaustiva y fuera del presupuesto (como la admisión); cada ruta calculada cuenta.
+    let directa: { cambio: CambioCalculado; delta: number; posicion: PosicionPlan } | null = null;
     for (let i = 0; i < estado.unidades.length; i++) {
       if (!estado.admite(i, id)) continue;
       const base = estado.secuencias[i];
@@ -317,15 +362,16 @@ export function readmitir(entrada: EntradaPlan, rutas: RutaPlan[], solicitudes: 
         for (let lugar = 0; lugar <= largo; lugar++) {
           const cambio = { i, viajes: poner(base, viaje, lugar, [id]) };
           evaluaciones++;
-          const r = estado.intentar(cambio, id);
-          if ("causa" in r) {
+          const r = estado.calcularCambio(cambio, id);
+          if (!("ruta" in r)) {
             diagnostico[r.causa]++;
             if (r.afectaAOtra) diagnostico.afectaAOtra++;
             continue;
           }
-          const delta = r.tm - estado.valores[i].tm;
+          const delta = r.valor.tm - estado.valores[i].tm;
           deltaMinimo = Math.min(deltaMinimo, delta);
-          if (delta <= tolerancia && (!directa || delta < directa.delta)) directa = { cambio, delta, posicion: posicion(i, viaje, lugar) };
+          if (delta <= tolerancia && (!directa || delta < directa.delta))
+            directa = { cambio: { ...cambio, ruta: r.ruta }, delta, posicion: posicion(i, viaje, lugar) };
         }
       }
     }
@@ -335,8 +381,10 @@ export function readmitir(entrada: EntradaPlan, rutas: RutaPlan[], solicitudes: 
       continue;
     }
 
-    let gastadas = 0;
-    let mejor: { cambios: Cambio[]; delta: number; posicion: PosicionPlan; movida: { solicitudId: string; de: PosicionPlan; a: PosicionPlan } } | null = null;
+    // 2. "Mover una y meter", con su propio presupuesto por pospuesta.
+    const gasto = new Presupuesto(presupuesto);
+    let mejor: { cambios: CambioCalculado[]; delta: number; posicion: PosicionPlan;
+      movida: { solicitudId: string; de: PosicionPlan; a: PosicionPlan } } | null = null;
     buscar: for (const p of paradas(estado)) {
       if (estado.protegidas.has(p.id)) continue;
       const sinParada = estado.quitar(p.i, p.viaje, p.posicion, 1);
@@ -350,11 +398,15 @@ export function readmitir(entrada: EntradaPlan, rutas: RutaPlan[], solicitudes: 
             const movimiento: Cambio[] = w === p.i ? [{ i: w, viajes: destino }] : [{ i: p.i, viajes: sinParada }, { i: w, viajes: destino }];
             if (movimiento.length === 1 && iguales(destino, estado.secuencias[p.i])) continue;
             if (!movimiento.every(c => estado.estructuraValida(c))) continue;
-            if (gastadas + movimiento.length > presupuesto) break buscar;
-            gastadas += movimiento.length;
-            const valores = movimiento.map(c => estado.evaluar(c));
-            if (valores.some(v => v === null)) continue;
-            const deltaMovimiento = movimiento.reduce((s, c, k) => s + valores[k]!.tm - estado.valores[c.i].tm, 0);
+            const valores: { valor: Valor; ruta?: RutaPlan }[] = [];
+            for (const c of movimiento) {
+              const v = gasto.valor(estado, c);
+              if (v === "agotado") break buscar;
+              if (!v) break;
+              valores.push(v);
+            }
+            if (valores.length < movimiento.length) continue;
+            const deltaMovimiento = movimiento.reduce((s, c, k) => s + valores[k].valor.tm - estado.valores[c.i].tm, 0);
             for (const [k, c] of movimiento.entries()) {
               if (!estado.admite(c.i, id)) continue;
               for (let viaje2 = 0; viaje2 <= c.viajes.length; viaje2++) {
@@ -362,15 +414,16 @@ export function readmitir(entrada: EntradaPlan, rutas: RutaPlan[], solicitudes: 
                 for (let lugar2 = 0; lugar2 <= largo2; lugar2++) {
                   const insercion = { i: c.i, viajes: poner(c.viajes, viaje2, lugar2, [id]) };
                   if (!estado.estructuraValida(insercion)) continue;
-                  if (gastadas + 1 > presupuesto) break buscar;
-                  gastadas++;
-                  const v = estado.evaluar(insercion);
+                  const v = gasto.valor(estado, insercion);
+                  if (v === "agotado") break buscar;
                   if (!v) continue;
-                  const delta = deltaMovimiento + v.tm - valores[k]!.tm;
-                  if (delta <= tolerancia && (!mejor || delta < mejor.delta)) mejor = {
-                    cambios: movimiento.map((m, j) => j === k ? insercion : m), delta, posicion: posicion(c.i, viaje2, lugar2),
-                    movida: { solicitudId: p.id, de: posicion(p.i, p.viaje, p.posicion), a: posicion(w, viaje, lugar) },
-                  };
+                  const delta = deltaMovimiento + v.valor.tm - valores[k].valor.tm;
+                  if (delta > tolerancia || (mejor && delta >= mejor.delta)) continue;
+                  const cambios = movimiento.map((m, j) => j === k ? insercion : m);
+                  const listos = gasto.rutas(estado, cambios, cambios.map((_, j) => j === k ? v.ruta : valores[j].ruta));
+                  if (!listos) break buscar;
+                  mejor = { cambios: listos, delta, posicion: posicion(c.i, viaje2, lugar2),
+                    movida: { solicitudId: p.id, de: posicion(p.i, p.viaje, p.posicion), a: posicion(w, viaje, lugar) } };
                 }
               }
             }
@@ -378,7 +431,7 @@ export function readmitir(entrada: EntradaPlan, rutas: RutaPlan[], solicitudes: 
         }
       }
     }
-    evaluaciones += gastadas;
+    evaluaciones += gasto.evaluaciones;
     if (mejor) {
       estado.aplicar(mejor.cambios);
       decisiones.push({ solicitudId: id, resultado: "admitida", posicion: mejor.posicion, deltaMin: mejor.delta, movida: mejor.movida, rutasAntes });
