@@ -15,7 +15,7 @@ Piloto de un asistente de logística para una recicladora: CRM de clientes, cat�
 | [Plan 5: operador, incidentes y re-ruteo](superpowers/plans/2026-10-15-plan-5-operador-incidentes-y-reruteo.md) | Mi ruta en el teléfono sin señal, eventos idempotentes, rechazos conciliables, incidentes y re-ruteo sin tocar lo congelado |
 | [Plan 6: indicadores y panel](superpowers/plans/2026-10-15-plan-6-indicadores-y-panel.md) | K1 a K7 y ciclo, panel de gerencia, CSV para cartas X̄-R e instantánea diaria de K5 |
 | [Plan CRM: cartera lista para operar](superpowers/plans/2026-10-21-plan-crm-cartera.md) ([diseño](superpowers/specs/2026-10-21-plan-crm-cartera-design.md)) | Importación completa, ubicación pegada, historial y números, propuestas de recolección, contactos, notas, filtros, exportación y mapa de la cartera |
-| [Plan 8: reacomodo de rutas](superpowers/plans/2026-10-21-plan-8-reacomodo.md) ([diseño](superpowers/specs/2026-10-21-plan-8-optimizacion-design.md)) | Más paradas atendidas y menos tiempo muerto, con readmisión FIFO y tolerancia de 15 min (en curso) |
+| [Plan 8: reacomodo de rutas](superpowers/plans/2026-10-21-plan-8-reacomodo.md) ([diseño](superpowers/specs/2026-10-21-plan-8-optimizacion-design.md)) | Más paradas atendidas y menos tiempo muerto, con readmisión FIFO y tolerancia de 15 min |
 | [Plan 7: calles reales y alertas](superpowers/plans/2026-10-15-plan-7-calles-reales-y-alertas.md) ([diseño](superpowers/specs/2026-10-15-plan-7-calles-reales-y-alertas-design.md)) | Tiempos por calle con OSRM local y gratuito, horas pico, alertas de ventana en riesgo en vivo, liberar en el re-ruteo y navegación con Waze o Google Maps |
 | [Catálogo de documentos](catalogo-de-documentos.md) | Qué documentos pide el sistema a unidades, operadores y clientes, y por qué |
 | [Documentos legales](legal/README.md) | Aviso de privacidad integral y simplificado, procedimiento interno y formato ARCO |
@@ -23,4 +23,4 @@ Piloto de un asistente de logística para una recicladora: CRM de clientes, cat�
 | [Guía de auditoría](guia-de-auditoria.md) | Cómo revisar el proyecto con otra persona u otro modelo |
 | [Pendientes del Documento Integrador](pendientes-documento-integrador.md) | Decisiones por confirmar y datos reales que faltan en el documento académico |
 
-Estado al 2026-10-22: Planes 1 a 7 y Plan CRM validados por Claude y Codex en `main`; siguen el Plan 8 (reacomodo, en curso) y la preparación del piloto. Las decisiones de producto están en la especificación §14. Todo se ejecuta con Docker (`scripts/verificar-todo.sh`); la operación en el VPS está en [operacion.md](operacion.md).
+Estado al 2026-11-03: Planes 1 a 8 y Plan CRM validados por Claude y Codex en `main`; sigue la preparación del piloto. Las decisiones de producto están en la especificación §14. Todo se ejecuta con Docker (`scripts/verificar-todo.sh`); la operación en el VPS está en [operacion.md](operacion.md).

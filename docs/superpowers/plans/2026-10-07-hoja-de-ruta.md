@@ -2,11 +2,11 @@
 
 - **Fecha:** 2026-10-07; revisión 2 del 2026-10-13 (Docker, Better Auth y correcciones de la revisión cruzada con Codex).
 - **Especificación:** `docs/superpowers/specs/2026-10-07-recycling-solution-piloto-design.md`
-- **Estado (2026-10-22):**
+- **Estado (2026-11-03):**
   - Planes 1 a 6 terminados y validados por Claude y Codex en `main` (etiquetas `plan-1-validado`, `plan-2-3-validado`, `plan-4-validado`, `plan-5-validado` y `plan-6-validado`).
   - Plan 7 (calles reales con OSRM y alertas en vivo, sin gasto en tráfico de terceros) validado por Claude y Codex en `main` (etiqueta `plan-7-validado`).
   - Plan CRM (cartera lista para operar: los 10 puntos) validado por Claude y Codex en `main` (etiqueta `plan-crm-validado`).
-  - Plan 8 (reacomodo de rutas: más paradas atendidas y menos tiempo muerto) en cierre en la rama `claude/plan-8`: motor 1.2.0, tolerancia configurable y franja en el plan; en la simulación, −38 % de tiempo muerto y −42 % de km con 15 unidades, y +59 atendidas con 8.
+  - Plan 8 (reacomodo de rutas: más paradas atendidas y menos tiempo muerto) validado por Claude y Codex en `main` (etiqueta `plan-8-validado`): motor 1.2.0, tolerancia configurable, ningún camión termina más de la tolerancia después, y franja en el plan; en la simulación, −38 % de tiempo muerto y −42 % de km con 15 unidades, y +59 atendidas con 8.
   - Sigue la preparación del piloto (abajo): VPS, línea base de K2, cargar la cartera real y revisión del aviso de privacidad por un abogado.
   - Decisiones del dueño en la especificación §14.
 
