@@ -143,37 +143,46 @@ test("operador: jornada, idempotencia, rechazo, cola sin señal e incidente con 
     await resolver.getByLabel("Acción").selectOption("re_ruteo");
     await resolver.getByRole("button", { name: "Resolver incidente" }).click();
     await expect(resolver).toHaveCount(0);
-    const seguimiento = d.getByRole("region", { name: "Seguimiento de operación", exact: true });
-    const otraJornada = seguimiento.getByRole("article").filter({
-      has: d.getByRole("heading", { name: new RegExp(`^${dia.otraPlaca} ·`) }),
-    });
-    const futuras = otraJornada.getByRole("listitem").filter({ hasText: "viaje futuro" });
-    await expect(futuras.first()).toBeVisible();
-    const reruteo = d.getByRole("region", { name: "Re-rutear", exact: true });
-    const foliosFuturos: string[] = [];
-    for (const futura of await futuras.all()) {
-      const texto = await futura.innerText();
-      const folio = dia.folios.find(f => texto.includes(f));
-      if (!folio) throw new Error(`Parada futura sin folio del escenario: ${texto}`);
-      foliosFuturos.push(folio);
-      const liberar = reruteo.getByRole("checkbox", { name: `Liberar ${folio}`, exact: true });
-      await expect(liberar).toBeVisible();
-      await expect(liberar).toBeEnabled();
-      await liberar.check();
-      await expect(liberar).toBeChecked();
+    // Plan 7, §4.4: si el reloj cruza un minuto entre generar y validar y el viaje en curso se proyecta con la hora,
+    // la frontera vence y la pantalla pide volver a generar el re-ruteo. El despachador lo hace; hasta tres intentos.
+    const validado = d.getByText("Validado", { exact: true });
+    const vencida = d.getByRole("alert").filter({ hasText: "terminará su viaje más tarde de lo previsto" });
+    for (let intento = 1; ; intento++) {
+      if (intento > 1) await d.goto(`/despacho/plan?fecha=${dia.fecha}`);
+      const seguimiento = d.getByRole("region", { name: "Seguimiento de operación", exact: true });
+      const otraJornada = seguimiento.getByRole("article").filter({
+        has: d.getByRole("heading", { name: new RegExp(`^${dia.otraPlaca} ·`) }),
+      });
+      const futuras = otraJornada.getByRole("listitem").filter({ hasText: "viaje futuro" });
+      await expect(futuras.first()).toBeVisible();
+      const reruteo = d.getByRole("region", { name: "Re-rutear", exact: true });
+      const foliosFuturos: string[] = [];
+      for (const futura of await futuras.all()) {
+        const texto = await futura.innerText();
+        const folio = dia.folios.find(f => texto.includes(f));
+        if (!folio) throw new Error(`Parada futura sin folio del escenario: ${texto}`);
+        foliosFuturos.push(folio);
+        const liberar = reruteo.getByRole("checkbox", { name: `Liberar ${folio}`, exact: true });
+        await expect(liberar).toBeVisible();
+        await expect(liberar).toBeEnabled();
+        await liberar.check();
+        await expect(liberar).toBeChecked();
+      }
+      await reruteo.getByRole("checkbox", { name: `No disponible: ${dia.otraPlaca}`, exact: true }).check();
+      for (const folio of foliosFuturos) {
+        const liberar = reruteo.getByRole("checkbox", { name: `Liberar ${folio}`, exact: true });
+        await expect(liberar).toBeDisabled();
+        await expect(liberar).not.toBeChecked();
+      }
+      await d.getByRole("button", { name: "Generar re-ruteo", exact: true }).click();
+      await expect(d).toHaveURL(/plan=/);
+      await expect(d.getByText(/solicitudes congeladas conservadas/)).toBeVisible();
+      for (const casilla of await d.getByRole("checkbox").all()) await casilla.check();
+      await d.getByRole("button", { name: "Validar", exact: true }).click();
+      await expect(validado.or(vencida)).toBeVisible();
+      if (await validado.isVisible()) break;
+      expect(intento, "la frontera venció en tres intentos seguidos").toBeLessThan(3);
     }
-    await reruteo.getByRole("checkbox", { name: `No disponible: ${dia.otraPlaca}`, exact: true }).check();
-    for (const folio of foliosFuturos) {
-      const liberar = reruteo.getByRole("checkbox", { name: `Liberar ${folio}`, exact: true });
-      await expect(liberar).toBeDisabled();
-      await expect(liberar).not.toBeChecked();
-    }
-    await d.getByRole("button", { name: "Generar re-ruteo", exact: true }).click();
-    await expect(d).toHaveURL(/plan=/);
-    await expect(d.getByText(/solicitudes congeladas conservadas/)).toBeVisible();
-    for (const casilla of await d.getByRole("checkbox").all()) await casilla.check();
-    await d.getByRole("button", { name: "Validar", exact: true }).click();
-    await expect(d.getByText("Validado", { exact: true })).toBeVisible();
   } finally { await despacho.close(); }
 
   await page.reload();

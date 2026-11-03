@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { admitir } from "./admision";
 import { casos } from "./casos.test-datos";
 import { entrada, patio, solicitud, unidad } from "./ejemplos.test-datos";
-import { ajustarPlan, generarPlan, tiempoMuerto, validarPlan } from "./index";
+import { ajustarPlan, generarPlan, recalcularRuta, tiempoMuerto, validarPlan } from "./index";
+import { PRESUPUESTO_READMISION, readmitir } from "./reacomodo";
 import type { Coordenada, DecisionReadmision, EntradaPlan, Plan, RestriccionesPlan, RutaPlan } from "./tipos";
 
 // Plan 8, P8-3. Matriz explícita; km = minutos / 2.
@@ -107,19 +108,20 @@ describe("readmisión (fase 3)", () => {
 });
 
 // Todos en el este, a 5 min entre sí y 30 del patio. u1 (doble rodada) y u2 (rabón), de 1000 kg; 500 kg cada solicitud.
-// A y E solo admiten doble rodada; F solo rabón; C, las dos. Turno de 08:00 a 10:50 (650): cabe un viaje por unidad
-// (120 min: termina a las 600) pero no un segundo (otros 95).
+// A y E solo admiten doble rodada; F solo rabón; C, las dos. Servicio de 5 min y turno de 08:00 a 10:40 (640): cabe un
+// viaje por unidad (90 min con dos paradas: termina a las 570) pero no un segundo (otros 80).
 // Fase 1: u1 = {A, C} (lleno), u2 = {F}; E no cabe (capacidad en u1 y fin de turno en un viaje nuevo).
-// Mover C a u2 (u2 = {F, C}) y meter E en u1: tiempo muerto 155 → 160, Δ conjunto 5. Mover C sola no mejora (155 = 155).
+// Mover C a u2 (u2 = {F, C}: termina a las 570 en vez de 560, +10, dentro de la tolerancia) y meter E en u1:
+// tiempo muerto 155 → 160, Δ conjunto 5. Mover C sola no mejora (155 = 155).
 function escenario(restricciones?: RestriccionesPlan) {
   const este = (i: number) => ({ lat: 20.63 + i / 1000, lng: -100.25 });
   const e = entrada([
-    solicitud("A", { ubicacion: este(0), registradaEn: registro(0), cargaKg: 500 }),
-    solicitud("C", { ubicacion: este(1), registradaEn: registro(1), cargaKg: 500, tiposUnidadAdmitidos: ["doble_rodada", "rabon"] }),
-    solicitud("F", { ubicacion: este(2), registradaEn: registro(2), cargaKg: 500, tiposUnidadAdmitidos: ["rabon"] }),
-    solicitud("E", { ubicacion: este(3), registradaEn: registro(3), cargaKg: 500 }),
+    solicitud("A", { ubicacion: este(0), registradaEn: registro(0), cargaKg: 500, tiempoServicioMin: 5 }),
+    solicitud("C", { ubicacion: este(1), registradaEn: registro(1), cargaKg: 500, tiempoServicioMin: 5, tiposUnidadAdmitidos: ["doble_rodada", "rabon"] }),
+    solicitud("F", { ubicacion: este(2), registradaEn: registro(2), cargaKg: 500, tiempoServicioMin: 5, tiposUnidadAdmitidos: ["rabon"] }),
+    solicitud("E", { ubicacion: este(3), registradaEn: registro(3), cargaKg: 500, tiempoServicioMin: 5 }),
   ], [unidad("u1", { capacidadKg: 1000 }), unidad("u2", { tipo: "rabon", capacidadKg: 1000 })]);
-  e.parametros.turnoFinMin = 650;
+  e.parametros.turnoFinMin = 640;
   const puntos = [patio, este(0), este(1), este(2), este(3)];
   const min = puntos.map((_, i) => puntos.map((_, j) => i === j ? 0 : i === 0 || j === 0 ? 30 : 5));
   e.traslados = { puntos, km: min.map(f => f.map(m => m / 2)), minLibres: min, ajusteM: puntos.map(() => 0), aproximados: [], mapa: "sintética" };
@@ -140,12 +142,57 @@ describe('"mover una y meter"', () => {
     expect(plan.pospuestas).toEqual([]);
   });
 
+  it("la validación rechaza un movimiento que alarga una unidad más de la tolerancia", () => {
+    // El mismo plan (C movida alarga u2 10 min), validado con tolerancia 5.
+    const { e } = escenario();
+    const plan = generarPlan(e);
+    expect(decision(plan, "E")).toMatchObject({ resultado: "admitida", deltaMin: 5 });
+    expect(validarPlan({ ...e, parametros: { ...e.parametros, toleranciaReadmisionMin: 5 } }, plan)).toContain("Readmisión: u2 termina más de la tolerancia después");
+  });
+
   it('"mover una y meter" nunca mueve una protegida', () => {
     const { e, restricciones } = escenario({ admitidas: { u1: [["C"]] } });
     const plan = generarPlan(e, restricciones);
     expect(validarPlan(e, plan, { restricciones })).toEqual([]);
     // C está protegida y A solo admite doble rodada: E no tiene lugar ni directo ni moviendo una.
     expect(decision(plan, "E")).toMatchObject({ resultado: "pospuesta", motivo: "sin_cupo" });
+  });
+});
+
+describe('"mover una y meter" con la inserción en otra unidad (revisión de Codex)', () => {
+  // u1 = [X] y u2 = [Y], ambas de doble rodada; G solo admite rabón (u3, vacía). Patio a X, Y: 30; X–Y: 5; patio a G:
+  // 20; servicio 5 y descarga 15. Tiempo muerto: X y Y solas, 75 cada una; juntas en u2, 30 + 5 + 30 + 15 = 80: ahorra
+  // 70, y u2 termina a las 570 en vez de 560 (+10). G en un viaje nuevo de u3: 20 + 20 + 15 = 55 > 15, sin directa
+  // dentro de la tolerancia. Mover X junto a Y y meter G en u3: Δ conjunto −70 + 55 = −15.
+  // Se llama a readmitir sobre un estado que no es óptimo a propósito (en generarPlan la fase 2 ya los habría juntado).
+  function escenarioOtraUnidad(tolerancia: number) {
+    const lugar = (i: number) => ({ lat: 20.7 + i / 1000, lng: -100.2 });
+    const e = entrada([
+      solicitud("X", { ubicacion: lugar(0), tiempoServicioMin: 5, registradaEn: registro(0), cargaKg: 100 }),
+      solicitud("Y", { ubicacion: lugar(1), tiempoServicioMin: 5, registradaEn: registro(1), cargaKg: 100 }),
+      solicitud("G", { ubicacion: lugar(2), tiempoServicioMin: 5, registradaEn: registro(2), cargaKg: 100, tiposUnidadAdmitidos: ["rabon"] }),
+    ], [unidad("u1"), unidad("u2"), unidad("u3", { tipo: "rabon" })]);
+    e.parametros.toleranciaReadmisionMin = tolerancia;
+    const puntos = [patio, lugar(0), lugar(1), lugar(2)];
+    const min = puntos.map((_, i) => puntos.map((_, j) => i === j ? 0 : (i === 3 || j === 3) ? (i === 0 || j === 0 ? 20 : 60) : (i === 0 || j === 0 ? 30 : 5)));
+    e.traslados = { puntos, km: min.map(f => f.map(m => m / 2)), minLibres: min, ajusteM: puntos.map(() => 0), aproximados: [], mapa: "sintética" };
+    const ruta = (u: string, v: string[][]) => { const r = recalcularRuta(e, u, v); if (!r.ok) throw new Error("ruta"); return r.ruta; };
+    return { e, rutas: [ruta("u1", [["X"]]), ruta("u2", [["Y"]]), ruta("u3", [])], porId: new Map(e.solicitudes.map(x => [x.id, x])) };
+  }
+
+  it("un movimiento que ahorra en otras unidades le hace lugar a la pospuesta en una tercera", () => {
+    const { e, rutas, porId } = escenarioOtraUnidad(15);
+    const r = readmitir(e, rutas, porId, undefined, ["G"], 15, PRESUPUESTO_READMISION);
+    expect(r.decisiones[0]).toMatchObject({ resultado: "admitida", deltaMin: -15, posicion: { unidadId: "u3", viaje: 1, secuencia: 1 },
+      movida: { solicitudId: "X", de: { unidadId: "u1" }, a: { unidadId: "u2" } } });
+    expect(tiempoMuerto(e, r.rutas)).toBe(tiempoMuerto(e, rutas) - 15);
+  });
+
+  it("con tolerancia 5 el movimiento alargaría u2 10 min: no se hace y G queda alarga_la_jornada con su Δ directo", () => {
+    const { e, rutas, porId } = escenarioOtraUnidad(5);
+    const r = readmitir(e, rutas, porId, undefined, ["G"], 5, PRESUPUESTO_READMISION);
+    expect(r.decisiones[0]).toMatchObject({ resultado: "pospuesta", motivo: "alarga_la_jornada", diagnostico: { deltaMinimoMin: 55 } });
+    expect(r.rutas).toEqual(rutas);
   });
 });
 

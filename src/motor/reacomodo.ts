@@ -358,9 +358,9 @@ export function reacomodar(entrada: EntradaPlan, rutas: RutaPlan[], solicitudes:
 /**
  * Fase 3 (§4.5): readmisión de las pospuestas sin cupo de la fase 1, en orden FIFO, sobre el estado vigente.
  * 1. Inserción directa exhaustiva: la de menor Δ de tiempo muerto total dentro de la tolerancia (desempate canónico).
- * 2. Si no hubo, "mover una y meter": mover una parada no protegida a otra posición factible y después insertar, con Δ
- *    conjunto ≤ tolerancia y el presupuesto propio por pospuesta. La inserción se prueba en las unidades que tocó el
- *    movimiento: en las demás el estado no cambió y la directa ya se probó (estructura interna, §5).
+ * 2. Si no hubo, "mover una y meter": mover una parada no protegida a otra posición factible (sin que ninguna unidad
+ *    termine más de la tolerancia después) y después insertar en cualquier unidad, con Δ conjunto ≤ tolerancia y el
+ *    presupuesto propio por pospuesta. En las unidades que el movimiento no tocó se usa su mejor inserción directa.
  * 3. Si no hubo lugar: "sin_cupo" sin ninguna directa factible, o "alarga_la_jornada" con el Δ mínimo de las directas.
  * evaluaciones cuenta todas las rutas recalculadas de la fase.
  */
@@ -379,6 +379,8 @@ export function readmitir(entrada: EntradaPlan, rutas: RutaPlan[], solicitudes: 
     let deltaMinimo = Infinity;
     // 1. Inserción directa: exhaustiva y fuera del presupuesto (como la admisión); cada ruta calculada cuenta.
     let directa: { cambio: CambioCalculado; delta: number; posicion: PosicionPlan } | null = null;
+    // La de menor Δ de cada unidad (aunque pase la tolerancia): "mover una y meter" la combina con un movimiento en otras.
+    const directasPorUnidad = new Map<number, { cambio: CambioCalculado; delta: number; posicion: PosicionPlan }>();
     for (let i = 0; i < estado.unidades.length; i++) {
       if (!estado.admite(i, id)) continue;
       const base = estado.secuencias[i];
@@ -395,8 +397,10 @@ export function readmitir(entrada: EntradaPlan, rutas: RutaPlan[], solicitudes: 
           }
           const delta = r.valor.tm - estado.valores[i].tm;
           deltaMinimo = Math.min(deltaMinimo, delta);
-          if (delta <= tolerancia && (!directa || delta < directa.delta))
-            directa = { cambio: { ...cambio, ruta: r.ruta }, delta, posicion: posicion(i, viaje, lugar) };
+          const candidata = { cambio: { ...cambio, ruta: r.ruta }, delta, posicion: posicion(i, viaje, lugar) };
+          if (delta <= tolerancia && (!directa || delta < directa.delta)) directa = candidata;
+          const deUnidad = directasPorUnidad.get(i);
+          if (!deUnidad || delta < deUnidad.delta) directasPorUnidad.set(i, candidata);
         }
       }
     }
@@ -431,9 +435,27 @@ export function readmitir(entrada: EntradaPlan, rutas: RutaPlan[], solicitudes: 
               valores.push(v);
             }
             if (valores.length < movimiento.length) continue;
+            // Decisión del usuario (2026-10-29): el movimiento tampoco hace terminar a una unidad más de la tolerancia
+            // después (revisión de Codex: si no, juntaría trabajo en un camión para meter la pospuesta).
+            if (movimiento.some((c, k) => valores[k].valor.fin > estado.valores[c.i].fin + tolerancia)) continue;
             const deltaMovimiento = movimiento.reduce((s, c, k) => s + valores[k].valor.tm - estado.valores[c.i].tm, 0);
-            for (const [k, c] of movimiento.entries()) {
-              if (!estado.admite(c.i, id)) continue;
+            const movida = { solicitudId: p.id, de: posicion(p.i, p.viaje, p.posicion), a: posicion(w, viaje, lugar) };
+            // La inserción se prueba en todas las unidades, en orden canónico (revisión de Codex): en las que tocó el
+            // movimiento se recalcula; en las demás su mejor directa ya está calculada y no cuesta.
+            for (let u = 0; u < estado.unidades.length; u++) {
+              if (!estado.admite(u, id)) continue;
+              const k = movimiento.findIndex(c => c.i === u);
+              if (k < 0) {
+                const d = directasPorUnidad.get(u);
+                if (!d) continue;
+                const delta = deltaMovimiento + d.delta;
+                if (delta > tolerancia || (mejor && delta >= mejor.delta)) continue;
+                const listos = gasto.rutas(estado, movimiento, valores.map(v => v.ruta));
+                if (!listos) break buscar;
+                mejor = { cambios: [...listos, d.cambio], delta, posicion: d.posicion, movida };
+                continue;
+              }
+              const c = movimiento[k];
               for (let viaje2 = 0; viaje2 <= c.viajes.length; viaje2++) {
                 const largo2 = viaje2 === c.viajes.length ? 0 : c.viajes[viaje2].length;
                 for (let lugar2 = 0; lugar2 <= largo2; lugar2++) {
@@ -447,8 +469,7 @@ export function readmitir(entrada: EntradaPlan, rutas: RutaPlan[], solicitudes: 
                   const cambios = movimiento.map((m, j) => j === k ? insercion : m);
                   const listos = gasto.rutas(estado, cambios, cambios.map((_, j) => j === k ? v.ruta : valores[j].ruta));
                   if (!listos) break buscar;
-                  mejor = { cambios: listos, delta, posicion: posicion(c.i, viaje2, lugar2),
-                    movida: { solicitudId: p.id, de: posicion(p.i, p.viaje, p.posicion), a: posicion(w, viaje, lugar) } };
+                  mejor = { cambios: listos, delta, posicion: posicion(c.i, viaje2, lugar2), movida };
                 }
               }
             }

@@ -6,8 +6,8 @@ Datos exclusivamente sintéticos. Semilla: 20261014. Veinte días de operación,
 
 ## Resumen
 
-- **Escenario del Documento Integrador (15 unidades):** atendidas 1119 → 1123 (+4); pendientes únicas al cierre 4 → 0; tiempo muerto 44582 → 27723 min (37.82 % menos); km 18525.18 → 10710.60 (42.18 % menos); 3 readmitidas y 0 decisiones de "alarga la jornada".
-- **Flota reducida (8 unidades):** atendidas 679 → 743 (+64); pendientes únicas al cierre 444 → 380; tiempo muerto 26236 → 19209 min (26.78 % menos); km 11047.88 → 7725.03 (30.08 % menos); 70 readmitidas y 393 decisiones de "alarga la jornada".
+- **Escenario del Documento Integrador (15 unidades):** atendidas 1119 → 1122 (+3); pendientes únicas al cierre 4 → 1; tiempo muerto 44582 → 27714 min (37.84 % menos); km 18525.18 → 10706.01 (42.21 % menos); 2 readmitidas y 1 decisiones de "alarga la jornada".
+- **Flota reducida (8 unidades):** atendidas 679 → 738 (+59); pendientes únicas al cierre 444 → 385; tiempo muerto 26236 → 19141 min (27.04 % menos); km 11047.88 → 7721.54 (30.11 % menos); 63 readmitidas y 312 decisiones de "alarga la jornada".
 
 ## Escenario del Documento Integrador (15 unidades)
 
@@ -32,37 +32,37 @@ Datos exclusivamente sintéticos. Semilla: 20261014. Veinte días de operación,
 | 2026-10-20 | 57 | 57 | 57 | 0 | 0 | 0 | 0 | 2450 | 1448 | 1001.44 | 555.65 | 1568.97 |
 | 2026-10-21 | 59 | 58 | 59 | 1 | 0 | 1 | 0 | 2622 | 1496 | 1096.53 | 573.76 | 1652.52 |
 | 2026-10-22 | 60 | 59 | 60 | 2 | 0 | 0 | 0 | 2375 | 1621 | 957.16 | 623.71 | 1613.61 |
-| 2026-10-23 | 60 | 58 | 60 | 4 | 0 | 2 | 0 | 2101 | 1392 | 889.80 | 547.41 | 1496.21 |
-| TOTAL | 1123 | 1119 | 1123 | 7 | 0 | 3 | 0 | 44582 | 27723 | 18525.18 | 10710.60 | 28432.15 |
+| 2026-10-23 | 60 | 58 | 59 | 4 | 1 | 1 | 1 | 2101 | 1383 | 889.80 | 542.82 | 1471.21 |
+| TOTAL | 1123 | 1119 | 1122 | 7 | 1 | 2 | 1 | 44582 | 27714 | 18525.18 | 10706.01 | 28407.15 |
 
-Conservación en las dos versiones: nuevas = atendidas + bloqueadas + pendientes únicas al cierre (4 con 1.1.0 y 0 con 1.2.0). Las pospuestas del total suman decisiones por día: una solicitud puede aparecer varios días. Cada versión arrastra sus propias pospuestas, así que desde el segundo día las entradas de las dos versiones pueden diferir.
+Conservación en las dos versiones: nuevas = atendidas + bloqueadas + pendientes únicas al cierre (4 con 1.1.0 y 1 con 1.2.0). Las pospuestas del total suman decisiones por día: una solicitud puede aparecer varios días. Cada versión arrastra sus propias pospuestas, así que desde el segundo día las entradas de las dos versiones pueden diferir.
 
 ## Flota reducida (8 unidades)
 
 | Fecha | Nuevas | Atendidas 1.1.0 | Atendidas 1.2.0 | Pospuestas 1.1.0 | Pospuestas 1.2.0 | Readmitidas | Alarga la jornada | Tiempo muerto 1.1.0 (min) | Tiempo muerto 1.2.0 (min) | km 1.1.0 | km 1.2.0 | km método actual |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-10-01 | 54 | 35 | 37 | 19 | 17 | 2 | 0 | 1289 | 940 | 522.40 | 357.69 | 831.34 |
-| 2026-10-02 | 51 | 33 | 38 | 37 | 30 | 4 | 4 | 1276 | 963 | 527.28 | 381.94 | 843.11 |
-| 2026-10-03 | 52 | 34 | 37 | 55 | 45 | 4 | 12 | 1333 | 820 | 554.98 | 331.92 | 889.04 |
-| 2026-10-05 | 56 | 33 | 38 | 78 | 63 | 3 | 0 | 1370 | 890 | 591.26 | 372.35 | 992.75 |
-| 2026-10-06 | 55 | 35 | 37 | 98 | 81 | 2 | 7 | 1303 | 993 | 574.62 | 421.38 | 1017.67 |
-| 2026-10-07 | 59 | 34 | 37 | 123 | 103 | 4 | 3 | 1403 | 969 | 627.52 | 395.05 | 997.81 |
-| 2026-10-08 | 51 | 34 | 35 | 140 | 119 | 2 | 5 | 1327 | 1054 | 550.92 | 434.88 | 879.58 |
-| 2026-10-09 | 58 | 33 | 37 | 165 | 140 | 4 | 16 | 1291 | 1026 | 552.83 | 434.08 | 991.45 |
-| 2026-10-10 | 53 | 32 | 39 | 186 | 154 | 5 | 2 | 1402 | 891 | 569.83 | 351.50 | 894.33 |
-| 2026-10-12 | 59 | 34 | 34 | 211 | 179 | 2 | 66 | 1264 | 998 | 530.09 | 383.98 | 832.15 |
-| 2026-10-13 | 60 | 32 | 35 | 239 | 204 | 3 | 19 | 1446 | 1007 | 598.02 | 408.91 | 908.57 |
-| 2026-10-14 | 52 | 35 | 39 | 256 | 217 | 4 | 0 | 1298 | 872 | 549.27 | 351.46 | 888.73 |
-| 2026-10-15 | 56 | 36 | 37 | 276 | 236 | 3 | 9 | 1178 | 917 | 502.23 | 352.03 | 947.85 |
-| 2026-10-16 | 57 | 32 | 40 | 301 | 253 | 5 | 39 | 1334 | 880 | 560.31 | 358.13 | 891.68 |
-| 2026-10-17 | 57 | 34 | 39 | 324 | 271 | 7 | 32 | 1250 | 873 | 506.12 | 354.72 | 995.34 |
-| 2026-10-19 | 57 | 35 | 38 | 346 | 290 | 3 | 43 | 1310 | 982 | 560.43 | 412.10 | 980.70 |
-| 2026-10-20 | 57 | 35 | 38 | 368 | 309 | 3 | 17 | 1297 | 1020 | 548.42 | 397.24 | 938.47 |
-| 2026-10-21 | 59 | 37 | 38 | 390 | 330 | 6 | 17 | 1181 | 987 | 516.65 | 397.44 | 1019.96 |
-| 2026-10-22 | 60 | 33 | 37 | 417 | 353 | 2 | 4 | 1287 | 1113 | 509.11 | 417.38 | 826.52 |
-| 2026-10-23 | 60 | 33 | 33 | 444 | 380 | 2 | 98 | 1397 | 1014 | 595.58 | 410.85 | 850.84 |
-| TOTAL | 1123 | 679 | 743 | 4473 | 3774 | 70 | 393 | 26236 | 19209 | 11047.88 | 7725.03 | 18417.87 |
+| 2026-10-01 | 54 | 35 | 36 | 19 | 18 | 1 | 1 | 1289 | 934 | 522.40 | 354.66 | 798.31 |
+| 2026-10-02 | 51 | 33 | 36 | 37 | 33 | 3 | 5 | 1276 | 924 | 527.28 | 384.75 | 853.07 |
+| 2026-10-03 | 52 | 34 | 36 | 55 | 49 | 2 | 10 | 1333 | 883 | 554.98 | 370.73 | 840.33 |
+| 2026-10-05 | 56 | 33 | 38 | 78 | 67 | 5 | 3 | 1370 | 874 | 591.26 | 364.42 | 940.09 |
+| 2026-10-06 | 55 | 35 | 37 | 98 | 85 | 3 | 2 | 1303 | 1058 | 574.62 | 453.08 | 984.78 |
+| 2026-10-07 | 59 | 34 | 37 | 123 | 107 | 4 | 7 | 1403 | 992 | 627.52 | 397.62 | 1026.84 |
+| 2026-10-08 | 51 | 34 | 34 | 140 | 124 | 0 | 8 | 1327 | 1016 | 550.92 | 424.77 | 864.82 |
+| 2026-10-09 | 58 | 33 | 37 | 165 | 145 | 3 | 17 | 1291 | 881 | 552.83 | 334.59 | 926.29 |
+| 2026-10-10 | 53 | 32 | 35 | 186 | 163 | 0 | 12 | 1402 | 970 | 569.83 | 409.11 | 914.47 |
+| 2026-10-12 | 59 | 34 | 35 | 211 | 187 | 2 | 7 | 1264 | 1068 | 530.09 | 439.90 | 847.79 |
+| 2026-10-13 | 60 | 32 | 38 | 239 | 209 | 3 | 4 | 1446 | 1035 | 598.02 | 401.36 | 945.28 |
+| 2026-10-14 | 52 | 35 | 38 | 256 | 223 | 2 | 3 | 1298 | 1062 | 549.27 | 429.98 | 930.56 |
+| 2026-10-15 | 56 | 36 | 40 | 276 | 239 | 6 | 2 | 1178 | 985 | 502.23 | 392.01 | 917.80 |
+| 2026-10-16 | 57 | 32 | 37 | 301 | 259 | 5 | 15 | 1334 | 980 | 560.31 | 399.12 | 959.59 |
+| 2026-10-17 | 57 | 34 | 40 | 324 | 276 | 5 | 56 | 1250 | 857 | 506.12 | 341.90 | 903.89 |
+| 2026-10-19 | 57 | 35 | 38 | 346 | 295 | 3 | 20 | 1310 | 889 | 560.43 | 351.90 | 963.28 |
+| 2026-10-20 | 57 | 35 | 35 | 368 | 317 | 1 | 16 | 1297 | 977 | 548.42 | 396.90 | 849.73 |
+| 2026-10-21 | 59 | 37 | 37 | 390 | 339 | 5 | 22 | 1181 | 975 | 516.65 | 380.87 | 978.63 |
+| 2026-10-22 | 60 | 33 | 39 | 417 | 360 | 8 | 71 | 1287 | 845 | 509.11 | 331.01 | 894.90 |
+| 2026-10-23 | 60 | 33 | 35 | 444 | 385 | 2 | 31 | 1397 | 936 | 595.58 | 362.85 | 879.81 |
+| TOTAL | 1123 | 679 | 738 | 4473 | 3880 | 63 | 312 | 26236 | 19141 | 11047.88 | 7721.54 | 18220.26 |
 
-Conservación en las dos versiones: nuevas = atendidas + bloqueadas + pendientes únicas al cierre (444 con 1.1.0 y 380 con 1.2.0). Las pospuestas del total suman decisiones por día: una solicitud puede aparecer varios días. Cada versión arrastra sus propias pospuestas, así que desde el segundo día las entradas de las dos versiones pueden diferir.
+Conservación en las dos versiones: nuevas = atendidas + bloqueadas + pendientes únicas al cierre (444 con 1.1.0 y 385 con 1.2.0). Las pospuestas del total suman decisiones por día: una solicitud puede aparecer varios días. Cada versión arrastra sus propias pospuestas, así que desde el segundo día las entradas de las dos versiones pueden diferir.
 
 Reproducir dentro del contenedor del proyecto: `npx --no-install tsx scripts/simular.mts`. CSV: [resultados.csv](./resultados.csv).

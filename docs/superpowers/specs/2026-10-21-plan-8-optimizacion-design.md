@@ -100,7 +100,7 @@ Para el Documento Integrador, el motor pasa a ser "agrupamiento no supervisado (
 - **Aceptación:** un movimiento se acepta solo si **mejora estrictamente** ese par.
 - **Desempate:** entre candidatos con la misma mejora gana el primero en el orden canónico de enumeración (unidad, viaje, posición), y ese orden nunca cuenta como mejora.
 - **`movimientos`** cuenta solo mejoras estrictas.
-- **Límite de fin por unidad** (decisión del usuario, §11): en una fase de reacomodo ninguna unidad termina más de `tolerancia_readmision_min` después que al empezar la fase (S1 en la fase 2, S3 en la fase 4). Una unidad sin viajes "termina" en su inicio efectivo. La readmisión no tiene este límite: se rige por el Δ de tiempo muerto.
+- **Límite de fin por unidad** (decisión del usuario, §11): en una fase de reacomodo ninguna unidad termina más de `tolerancia_readmision_min` después que al empezar la fase (S1 en la fase 2, S3 en la fase 4). Una unidad sin viajes "termina" en su inicio efectivo. En la readmisión, el movimiento de "mover una y meter" también respeta el límite (contra el estado del turno); la parada que entra se rige por el Δ de tiempo muerto.
 
 ### 4.4 Reacomodo (búsqueda local)
 
@@ -128,7 +128,7 @@ Para cada pospuesta `sin_cupo` de la fase 1, en orden FIFO (registro, folio, id)
 
 1. **Inserción directa:** la misma búsqueda exhaustiva de la admisión. Entre las inserciones factibles cuyo Δ tiempo muerto total ≤ tolerancia, se elige la de menor Δ, con desempate canónico.
 2. **Mover una y meter**, si no hubo directa dentro de la tolerancia:
-   - se prueba mover **una** parada no protegida a otra posición factible, de cualquier unidad, y después insertar la pospuesta;
+   - se prueba mover **una** parada no protegida a otra posición factible, de cualquier unidad y sin que ninguna unidad termine más de la tolerancia después, y después insertar la pospuesta en **cualquier** unidad (en las que el movimiento no tocó, su mejor inserción directa);
    - el Δ que cuenta es el de las dos operaciones juntas, contra el estado de su turno;
    - se elige el de menor Δ dentro de la tolerancia, con presupuesto propio (`PRESUPUESTO_READMISION`, supuesto: 20 000 evaluaciones por pospuesta) y enumeración canónica.
 3. **Si no hubo lugar**, la pospuesta queda con su motivo:

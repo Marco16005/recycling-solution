@@ -5,7 +5,7 @@ import { admitir } from "./admision";
 import { casos } from "./casos.test-datos";
 import { entrada, patio, solicitud, unidad } from "./ejemplos.test-datos";
 import { generarPlan, recalcularRuta, tiempoMuerto, validarPlan } from "./index";
-import { reacomodar } from "./reacomodo";
+import { PRESUPUESTO_READMISION, reacomodar, readmitir, toleranciaDe } from "./reacomodo";
 import type { Coordenada, EntradaPlan, Plan, RutaPlan, SolicitudMotor } from "./tipos";
 
 // Plan 8, P8-2. Matrices explícitas: cada prueba dice sus minutos libres; km = minutos / 2.
@@ -330,7 +330,12 @@ describe("propiedades del reacomodo", () => {
       expect(atendidas(f1.rutas).every(id => finales.has(id))).toBe(true);
       expect(atendidas(r.rutasReacomodadas)).toEqual(atendidas(f1.rutas));
       expect(noEmpeora(objetivo(e, r.rutasReacomodadas), objetivo(e, f1.rutas))).toBe(true);
-      expect(noEmpeora(objetivo(e, plan.rutas), objetivo(e, r.rutasReacomodadas))).toBe(true);
+      // S3 (después de la readmisión) se reproduce desde S2; la fase 4 no lo empeora (revisión de Codex: no contra S2).
+      const porIdS = new Map(e.solicitudes.map(x => [x.id, x]));
+      const sinCupo = f1.pospuestas.filter(p => p.motivo === "sin_cupo").map(p => p.solicitudId);
+      const s3 = readmitir(e, r.rutasReacomodadas, porIdS, undefined, sinCupo, toleranciaDe(e), PRESUPUESTO_READMISION);
+      expect(s3.decisiones).toEqual(r.readmision);
+      expect(noEmpeora(objetivo(e, plan.rutas), objetivo(e, s3.rutas))).toBe(true);
       const unidades = new Map(e.unidades.map(u => [u.id, u]));
       const porId = new Map(e.solicitudes.map(x => [x.id, x]));
       for (const rutas of [plan.rutas, r.rutasReacomodadas]) for (const ruta of rutas) {

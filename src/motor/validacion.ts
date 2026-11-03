@@ -404,6 +404,7 @@ export function validarPlan(entrada: EntradaPlan, plan: Plan,
             if (admitidas.has(d.movida.solicitudId)) errores.push(`Readmisión: "mover una y meter" movió una protegida (${d.movida.solicitudId})`);
             const movido = moverEn(s3, d.movida);
             if (!movido) { errores.push(`Readmisión: el movimiento para ${s.id} no es factible`); continue; }
+            sinAlargar(s3, movido, "Readmisión");
             base = movido;
           }
           const k = base.findIndex(x => x.unidadId === d.posicion.unidadId);
