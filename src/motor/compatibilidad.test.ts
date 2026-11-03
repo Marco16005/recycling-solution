@@ -2,7 +2,8 @@ import { expect, it } from "vitest";
 import fc from "fast-check";
 import { generarPlan as generarAnterior } from "./fixtures/admision-1.0.0.test-datos";
 import historico from "./fixtures/plan-1.0.0.json";
-import { ajustarPlan, distanciaKm, generarPlan, validarPlan } from "./index";
+import historico11 from "./fixtures/plan-1.1.0.json";
+import { ajustarPlan, admitir, distanciaKm, generarPlan, tiempoMuerto, validarPlan } from "./index";
 import { entrada, patio, solicitud, unidad } from "./ejemplos.test-datos";
 import { casos } from "./casos.test-datos";
 import type { EntradaPlan, MatrizTraslados, Plan } from "./tipos";
@@ -17,7 +18,11 @@ function matrizDeFormula(e: EntradaPlan): MatrizTraslados {
 it("conserva la fixture anterior, calculada a mano, y su versión en ambos ajustes", () => {
   const e = historico.entrada as EntradaPlan, p = historico.plan as Plan;
   expect(validarPlan(e, p)).toEqual([]);
-  expect(generarPlan(e)).toEqual({ ...p, versionMotor: "1.1.0" });
+  // Plan 8: la fase 1 (admitir) es el motor 1.1.0; generarPlan (1.2.0) parte de ella con la misma traza.
+  expect(admitir(e)).toEqual({ ...p, versionMotor: "1.1.0" });
+  const nuevo = generarPlan(e);
+  expect(nuevo.traza).toEqual(p.traza);
+  expect(nuevo.reacomodo!.antes).toEqual({ ...p.resumen, tiempoMuertoMin: tiempoMuerto(e, p.rutas) });
   for (const ajuste of [{ tipo: "mover" as const, solicitudId: "s1", unidadId: "u1", viaje: 1, posicion: 1 },
     { tipo: "actualizarHora" as const, instanteMin: 490 }]) {
     const r = ajustarPlan(e, p, ajuste);
@@ -34,7 +39,12 @@ it("la matriz de fórmula reproduce cada campo del modelo anterior en los genera
   fc.assert(fc.property(casos, e => {
     const formula = generarAnterior(e);
     expect(validarPlan(e, { ...formula, versionMotor: "1.0.0" })).toEqual([]);
-    expect(generarPlan({ ...e, traslados: matrizDeFormula(e) })).toEqual({ ...formula, versionMotor: "1.1.0" });
+    const conMatriz = { ...e, traslados: matrizDeFormula(e) };
+    // Plan 8: la regresión campo por campo es contra la fase 1 (S1 y su traza).
+    expect(admitir(conMatriz)).toEqual({ ...formula, versionMotor: "1.1.0" });
+    const nuevo = generarPlan(conMatriz);
+    expect(nuevo.traza).toEqual(formula.traza);
+    expect(nuevo.reacomodo!.antes).toEqual({ ...formula.resumen, tiempoMuertoMin: tiempoMuerto(conMatriz, formula.rutas) });
   }), { seed: 20261016, numRuns: 100 });
 });
 it("respeta dirección, minutos libres del resumen y detecta otra matriz", () => {
@@ -93,7 +103,7 @@ it("una inserción no triangular puede adelantar una admitida", () => {
   const ajuste = ajustarPlan(e, p, { tipo: "actualizarHora", instanteMin: 490 }, r);
   expect(ajuste.ok).toBe(true);
   if (ajuste.ok) {
-    expect(ajuste.plan.versionMotor).toBe("1.1.0");
+    expect(ajuste.plan.versionMotor).toBe("1.2.0");
     expect(ajuste.plan.rutas[0].viajes[0].paradas[0].llegadaMin).toBe(495);
   }
 });
@@ -120,4 +130,28 @@ it("FIFO con matriz y pico reserva el cupo a las antiguas", () => {
     expect(p.resumen.ruteadas).toBe(4);
     expect(validarPlan(e, p)).toEqual([]);
   }));
+});
+it("Plan 8: la fixture 1.1.0, capturada antes del cambio, se lee, se ajusta y se valida con su versión", () => {
+  const e = historico11.entrada as EntradaPlan, p = historico11.plan as Plan;
+  expect(p.versionMotor).toBe("1.1.0");
+  expect(p.reacomodo).toBeUndefined();
+  expect(validarPlan(e, p)).toEqual([]);
+  // La fase 1 del motor actual reproduce el 1.1.0 campo por campo.
+  expect(admitir(e)).toEqual(p);
+  for (const ajuste of [{ tipo: "mover" as const, solicitudId: "s1", unidadId: "u1", viaje: 1, posicion: 1 },
+    { tipo: "actualizarHora" as const, instanteMin: 500 }]) {
+    const r = ajustarPlan(e, p, ajuste);
+    expect(r).toMatchObject({ ok: true });
+    if (r.ok) {
+      expect(r.plan.versionMotor).toBe("1.1.0");
+      expect(r.plan.resumen.tiempoMuertoMin).toBeUndefined();
+      expect(validarPlan(r.entrada, r.plan, { ajustadoAMano: true })).toEqual([]);
+    }
+  }
+  const nuevo = generarPlan(e);
+  expect(nuevo.versionMotor).toBe("1.2.0");
+  expect(nuevo.traza).toEqual(p.traza);
+  expect(validarPlan(e, nuevo)).toEqual([]);
+  // Un 1.1.0 no puede traer los campos del 1.2.0.
+  expect(validarPlan(e, { ...p, reacomodo: nuevo.reacomodo })).toContain("Reacomodo y tiempo muerto solo existen en la versión 1.2.0");
 });

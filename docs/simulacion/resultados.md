@@ -1,33 +1,68 @@
-# Simulación del motor 1.0.0
+# Simulación del motor: 1.1.0 (admisión) contra 1.2.0 (con reacomodo)
 
-Datos exclusivamente sintéticos. Semilla: 20261014. Escenario del Documento Integrador: veinte días de operación, de lunes a sábado, del 2026-10-01 al 2026-10-23; los domingos no se opera ni se generan solicitudes. Cien clientes dentro de un radio de 15 km de un patio hipotético en El Marqués, ventanas de 2 a 6 horas, servicio de 66 min, cargas de 300 a 3000 kg y quince unidades doble rodada de 8000 kg. Cada día de operación se agregan 50 a 60 solicitudes registradas ese mismo día antes del turno; las pospuestas se vuelven a intentar conservando su registro y ventanas. Turno 08:00–16:00, velocidad 30 km/h, circuidad 1.3 y descarga de 15 min.
+Datos exclusivamente sintéticos. Semilla: 20261014. Veinte días de operación, de lunes a sábado, del 2026-10-01 al 2026-10-23; los domingos no se opera ni se generan solicitudes. Cien clientes dentro de un radio de 15 km de un patio hipotético en El Marqués, ventanas de 2 a 6 horas, servicio de 66 min, cargas de 300 a 3000 kg y unidades doble rodada de 8000 kg. Cada día se agregan 50 a 60 solicitudes registradas antes del turno; las mismas en las dos versiones. Turno 08:00–16:00, velocidad 30 km/h, circuidad 1.3, descarga de 15 min y tolerancia de 15 min por parada extra.
 
-Es un ahorro **simulado**, con tiempos estimados; no constituye ahorro observado ni evidencia de cumplimiento de K4. Se comparan las mismas solicitudes atendidas: un viaje redondo patio–cliente–patio por cada una en el método actual. La comparación no demuestra que el método actual pudiera atenderlas todas dentro del turno. Los minutos de traslado excluyen servicio, espera y descarga, y se redondean hacia arriba por tramo.
+**1.1.0** es la admisión del Plan 3 sola (FIFO con agrupación k-means). **1.2.0** agrega el reacomodo (búsqueda local por vecindarios), la readmisión de las pospuestas en orden de llegada con la tolerancia y un reacomodo final, sin que ninguna unidad termine más de la tolerancia después en un reacomodo. El tiempo muerto suma, por unidad, traslado, espera y descargas (sin el servicio). Son resultados **simulados** con tiempos estimados, no ahorro observado.
 
-| Fecha | Nuevas | Arrastradas | Ruteadas | Pospuestas | Bloqueadas | km motor | km actual | Ahorro km % | min motor | min actual | Ahorro min % | Viajes unidad-1 | Viajes unidad-2 | Viajes unidad-3 | Viajes unidad-4 | Viajes unidad-5 | Viajes unidad-6 | Viajes unidad-7 | Viajes unidad-8 | Viajes unidad-9 | Viajes unidad-10 | Viajes unidad-11 | Viajes unidad-12 | Viajes unidad-13 | Viajes unidad-14 | Viajes unidad-15 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-10-01 | 54 | 0 | 54 | 0 | 0 | 852.63 | 1230.42 | 30.70 | 1740 | 2514 | 30.79 | 1 | 1 | 1 | 1 | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-02 | 51 | 0 | 51 | 0 | 0 | 844.08 | 1208.28 | 30.14 | 1726 | 2476 | 30.29 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-03 | 52 | 0 | 52 | 0 | 0 | 902.60 | 1328.79 | 32.07 | 1841 | 2706 | 31.97 | 1 | 1 | 1 | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-05 | 56 | 0 | 56 | 0 | 0 | 1036.43 | 1580.13 | 34.41 | 2106 | 3212 | 34.43 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-06 | 55 | 0 | 55 | 0 | 0 | 957.43 | 1350.19 | 29.09 | 1950 | 2750 | 29.09 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-07 | 59 | 0 | 59 | 0 | 0 | 979.76 | 1497.53 | 34.58 | 1991 | 3042 | 34.55 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-08 | 51 | 0 | 51 | 0 | 0 | 878.17 | 1308.25 | 32.87 | 1788 | 2662 | 32.83 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-09 | 58 | 0 | 58 | 0 | 0 | 909.56 | 1362.48 | 33.24 | 1853 | 2778 | 33.30 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-10 | 53 | 0 | 53 | 0 | 0 | 805.07 | 1262.81 | 36.25 | 1644 | 2574 | 36.13 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-12 | 59 | 0 | 59 | 0 | 0 | 905.53 | 1452.67 | 37.66 | 1845 | 2952 | 37.50 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-13 | 60 | 0 | 60 | 0 | 0 | 918.50 | 1482.29 | 38.04 | 1877 | 3026 | 37.97 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-14 | 52 | 0 | 52 | 0 | 0 | 868.21 | 1360.73 | 36.20 | 1772 | 2780 | 36.26 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-15 | 56 | 0 | 56 | 0 | 0 | 952.48 | 1389.44 | 31.45 | 1937 | 2828 | 31.51 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-16 | 57 | 0 | 57 | 0 | 0 | 888.74 | 1403.98 | 36.70 | 1813 | 2866 | 36.74 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-17 | 57 | 0 | 57 | 0 | 0 | 934.45 | 1442.56 | 35.22 | 1902 | 2930 | 35.09 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-19 | 57 | 0 | 57 | 0 | 0 | 946.63 | 1440.31 | 34.28 | 1928 | 2934 | 34.29 | 1 | 1 | 2 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-20 | 57 | 0 | 57 | 0 | 0 | 1001.44 | 1568.97 | 36.17 | 2035 | 3188 | 36.17 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-21 | 59 | 0 | 58 | 1 | 0 | 1096.53 | 1624.43 | 32.50 | 2226 | 3296 | 32.46 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-22 | 60 | 1 | 59 | 2 | 0 | 957.16 | 1599.47 | 40.16 | 1948 | 3256 | 40.17 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| 2026-10-23 | 60 | 2 | 58 | 4 | 0 | 889.80 | 1420.69 | 37.37 | 1815 | 2896 | 37.33 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| TOTAL | 1123 | 3 | 1119 | 7 | 0 | 18525.18 | 28314.41 | 34.57 | 37737 | 57666 | 34.56 | 20 | 20 | 21 | 20 | 20 | 19 | 19 | 19 | 16 | 20 | 20 | 20 | 20 | 20 | 20 |
+## Resumen
 
-Las pospuestas del total (7) cuentan decisiones por jornada: una solicitud puede aparecer varios días. Quedan **4 solicitudes únicas pendientes** al terminar la jornada de operación 20. Conservación: 1123 nuevas = 1119 atendidas + 0 bloqueadas + 4 pendientes. Los porcentajes totales se calculan sobre las sumas, no promediando porcentajes diarios. Se informa el saldo de pendientes sin eliminar solicitudes difíciles ni suponer de antemano que la flota cubrirá toda la demanda.
+- **Escenario del Documento Integrador (15 unidades):** atendidas 1119 → 1122 (+3); pendientes únicas al cierre 4 → 1; tiempo muerto 44582 → 27714 min (37.84 % menos); km 18525.18 → 10706.01 (42.21 % menos); 2 readmitidas y 1 decisiones de "alarga la jornada".
+- **Flota reducida (8 unidades):** atendidas 679 → 738 (+59); pendientes únicas al cierre 444 → 385; tiempo muerto 26236 → 19141 min (27.04 % menos); km 11047.88 → 7721.54 (30.11 % menos); 63 readmitidas y 312 decisiones de "alarga la jornada".
+
+## Escenario del Documento Integrador (15 unidades)
+
+| Fecha | Nuevas | Atendidas 1.1.0 | Atendidas 1.2.0 | Pospuestas 1.1.0 | Pospuestas 1.2.0 | Readmitidas | Alarga la jornada | Tiempo muerto 1.1.0 (min) | Tiempo muerto 1.2.0 (min) | km 1.1.0 | km 1.2.0 | km método actual |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-10-01 | 54 | 54 | 54 | 0 | 0 | 0 | 0 | 2098 | 1306 | 852.63 | 490.77 | 1230.42 |
+| 2026-10-02 | 51 | 51 | 51 | 0 | 0 | 0 | 0 | 2065 | 1128 | 844.08 | 436.05 | 1208.28 |
+| 2026-10-03 | 52 | 52 | 52 | 0 | 0 | 0 | 0 | 2157 | 1254 | 902.60 | 490.95 | 1328.79 |
+| 2026-10-05 | 56 | 56 | 56 | 0 | 0 | 0 | 0 | 2446 | 1405 | 1036.43 | 561.00 | 1580.13 |
+| 2026-10-06 | 55 | 55 | 55 | 0 | 0 | 0 | 0 | 2306 | 1366 | 957.43 | 527.59 | 1350.19 |
+| 2026-10-07 | 59 | 59 | 59 | 0 | 0 | 0 | 0 | 2278 | 1354 | 979.76 | 528.17 | 1497.53 |
+| 2026-10-08 | 51 | 51 | 51 | 0 | 0 | 0 | 0 | 2094 | 1476 | 878.17 | 586.06 | 1308.25 |
+| 2026-10-09 | 58 | 58 | 58 | 0 | 0 | 0 | 0 | 2164 | 1346 | 909.56 | 527.14 | 1362.48 |
+| 2026-10-10 | 53 | 53 | 53 | 0 | 0 | 0 | 0 | 1991 | 1396 | 805.07 | 519.38 | 1262.81 |
+| 2026-10-12 | 59 | 59 | 59 | 0 | 0 | 0 | 0 | 2097 | 1296 | 905.53 | 495.85 | 1452.67 |
+| 2026-10-13 | 60 | 60 | 60 | 0 | 0 | 0 | 0 | 2148 | 1314 | 918.50 | 524.71 | 1482.29 |
+| 2026-10-14 | 52 | 52 | 52 | 0 | 0 | 0 | 0 | 2152 | 1452 | 868.21 | 557.07 | 1360.73 |
+| 2026-10-15 | 56 | 56 | 56 | 0 | 0 | 0 | 0 | 2320 | 1368 | 952.48 | 499.39 | 1389.44 |
+| 2026-10-16 | 57 | 57 | 57 | 0 | 0 | 0 | 0 | 2199 | 1438 | 888.74 | 543.66 | 1403.98 |
+| 2026-10-17 | 57 | 57 | 57 | 0 | 0 | 0 | 0 | 2205 | 1402 | 934.45 | 551.99 | 1442.56 |
+| 2026-10-19 | 57 | 57 | 57 | 0 | 0 | 0 | 0 | 2314 | 1465 | 946.63 | 570.31 | 1440.31 |
+| 2026-10-20 | 57 | 57 | 57 | 0 | 0 | 0 | 0 | 2450 | 1448 | 1001.44 | 555.65 | 1568.97 |
+| 2026-10-21 | 59 | 58 | 59 | 1 | 0 | 1 | 0 | 2622 | 1496 | 1096.53 | 573.76 | 1652.52 |
+| 2026-10-22 | 60 | 59 | 60 | 2 | 0 | 0 | 0 | 2375 | 1621 | 957.16 | 623.71 | 1613.61 |
+| 2026-10-23 | 60 | 58 | 59 | 4 | 1 | 1 | 1 | 2101 | 1383 | 889.80 | 542.82 | 1471.21 |
+| TOTAL | 1123 | 1119 | 1122 | 7 | 1 | 2 | 1 | 44582 | 27714 | 18525.18 | 10706.01 | 28407.15 |
+
+Conservación en las dos versiones: nuevas = atendidas + bloqueadas + pendientes únicas al cierre (4 con 1.1.0 y 1 con 1.2.0). Las pospuestas del total suman decisiones por día: una solicitud puede aparecer varios días. Cada versión arrastra sus propias pospuestas, así que desde el segundo día las entradas de las dos versiones pueden diferir.
+
+## Flota reducida (8 unidades)
+
+| Fecha | Nuevas | Atendidas 1.1.0 | Atendidas 1.2.0 | Pospuestas 1.1.0 | Pospuestas 1.2.0 | Readmitidas | Alarga la jornada | Tiempo muerto 1.1.0 (min) | Tiempo muerto 1.2.0 (min) | km 1.1.0 | km 1.2.0 | km método actual |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-10-01 | 54 | 35 | 36 | 19 | 18 | 1 | 1 | 1289 | 934 | 522.40 | 354.66 | 798.31 |
+| 2026-10-02 | 51 | 33 | 36 | 37 | 33 | 3 | 5 | 1276 | 924 | 527.28 | 384.75 | 853.07 |
+| 2026-10-03 | 52 | 34 | 36 | 55 | 49 | 2 | 10 | 1333 | 883 | 554.98 | 370.73 | 840.33 |
+| 2026-10-05 | 56 | 33 | 38 | 78 | 67 | 5 | 3 | 1370 | 874 | 591.26 | 364.42 | 940.09 |
+| 2026-10-06 | 55 | 35 | 37 | 98 | 85 | 3 | 2 | 1303 | 1058 | 574.62 | 453.08 | 984.78 |
+| 2026-10-07 | 59 | 34 | 37 | 123 | 107 | 4 | 7 | 1403 | 992 | 627.52 | 397.62 | 1026.84 |
+| 2026-10-08 | 51 | 34 | 34 | 140 | 124 | 0 | 8 | 1327 | 1016 | 550.92 | 424.77 | 864.82 |
+| 2026-10-09 | 58 | 33 | 37 | 165 | 145 | 3 | 17 | 1291 | 881 | 552.83 | 334.59 | 926.29 |
+| 2026-10-10 | 53 | 32 | 35 | 186 | 163 | 0 | 12 | 1402 | 970 | 569.83 | 409.11 | 914.47 |
+| 2026-10-12 | 59 | 34 | 35 | 211 | 187 | 2 | 7 | 1264 | 1068 | 530.09 | 439.90 | 847.79 |
+| 2026-10-13 | 60 | 32 | 38 | 239 | 209 | 3 | 4 | 1446 | 1035 | 598.02 | 401.36 | 945.28 |
+| 2026-10-14 | 52 | 35 | 38 | 256 | 223 | 2 | 3 | 1298 | 1062 | 549.27 | 429.98 | 930.56 |
+| 2026-10-15 | 56 | 36 | 40 | 276 | 239 | 6 | 2 | 1178 | 985 | 502.23 | 392.01 | 917.80 |
+| 2026-10-16 | 57 | 32 | 37 | 301 | 259 | 5 | 15 | 1334 | 980 | 560.31 | 399.12 | 959.59 |
+| 2026-10-17 | 57 | 34 | 40 | 324 | 276 | 5 | 56 | 1250 | 857 | 506.12 | 341.90 | 903.89 |
+| 2026-10-19 | 57 | 35 | 38 | 346 | 295 | 3 | 20 | 1310 | 889 | 560.43 | 351.90 | 963.28 |
+| 2026-10-20 | 57 | 35 | 35 | 368 | 317 | 1 | 16 | 1297 | 977 | 548.42 | 396.90 | 849.73 |
+| 2026-10-21 | 59 | 37 | 37 | 390 | 339 | 5 | 22 | 1181 | 975 | 516.65 | 380.87 | 978.63 |
+| 2026-10-22 | 60 | 33 | 39 | 417 | 360 | 8 | 71 | 1287 | 845 | 509.11 | 331.01 | 894.90 |
+| 2026-10-23 | 60 | 33 | 35 | 444 | 385 | 2 | 31 | 1397 | 936 | 595.58 | 362.85 | 879.81 |
+| TOTAL | 1123 | 679 | 738 | 4473 | 3880 | 63 | 312 | 26236 | 19141 | 11047.88 | 7721.54 | 18220.26 |
+
+Conservación en las dos versiones: nuevas = atendidas + bloqueadas + pendientes únicas al cierre (444 con 1.1.0 y 385 con 1.2.0). Las pospuestas del total suman decisiones por día: una solicitud puede aparecer varios días. Cada versión arrastra sus propias pospuestas, así que desde el segundo día las entradas de las dos versiones pueden diferir.
 
 Reproducir dentro del contenedor del proyecto: `npx --no-install tsx scripts/simular.mts`. CSV: [resultados.csv](./resultados.csv).

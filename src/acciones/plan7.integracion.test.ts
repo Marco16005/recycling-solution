@@ -89,7 +89,7 @@ describe("acciones del Plan 7 con calles reales", () => {
   it("generar consulta OSRM: la entrada guarda la matriz, versiones dice osrm con su mapa y K7 guarda consulta_mapa_ms", async () => {
     const { planId } = valor(await generarPlanDelDia(ctx(despachador), FECHA_PLAN));
     const p = await plan(planId);
-    expect(p.versionMotor).toBe("1.1.0");
+    expect(p.versionMotor).toBe("1.2.0");
     expect(p.versiones.traslados).toEqual({ fuente: "osrm", motivo: null, mapa: "prueba-cuadricula", paresAproximados: 0 });
     // Patio y cuatro clientes; las unidades salen del patio.
     expect(p.entrada.traslados!.puntos).toHaveLength(5);
@@ -125,7 +125,7 @@ describe("acciones del Plan 7 con calles reales", () => {
     const { planId } = valor(await generarPlanDelDia(ctx(despachador), FECHA_PLAN));
     await base.bd.execute(sql`
       UPDATE planes SET version_motor = '1.0.0',
-        resultado = jsonb_set(resultado, '{versionMotor}', '"1.0.0"'),
+        resultado = jsonb_set(jsonb_set(resultado - 'reacomodo', '{versionMotor}', '"1.0.0"'), '{resumen}', (resultado->'resumen') - 'tiempoMuertoMin'),
         entrada = entrada #- '{parametros,horasPico}',
         versiones = versiones - 'traslados'
       WHERE id = ${planId}`);

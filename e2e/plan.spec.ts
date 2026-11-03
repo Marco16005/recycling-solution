@@ -18,6 +18,13 @@ test("despachador genera, ajusta y valida el plan; gerencia lo consulta en solo 
 
   await expect(plan.getByText(/^Tiempos por calle/)).toBeVisible();
 
+  // Plan 8, P8-5 (reasignado a Claude): la franja del reacomodo, con mejoras o "Sin mejoras", y su detalle.
+  const reacomodo = plan.getByRole("region", { name: "Reacomodo", exact: true });
+  await expect(reacomodo.getByRole("heading", { name: "Reacomodo automático", exact: true })).toBeVisible();
+  await expect(reacomodo.getByText(/^(Reacomodo: [+−]\d+ paradas atendidas · tiempo muerto [+−][\d,]+ min · [+−][\d.,]+ km|Sin mejoras)$/)).toBeVisible();
+  await expect(reacomodo.getByRole("table", { name: "Antes y después del reacomodo automático", exact: true })).toBeVisible();
+  await expect(reacomodo.getByRole("rowheader", { name: /^Tiempo muerto \(min\)/ })).toContainText("con horas pico, incluye espera y descargas");
+
   const segundoFolio = folios[1];
   const parada = unidad.getByRole("article", { name: `Parada ${segundoFolio}`, exact: true });
   await parada.getByRole("button", { name: "Posponer", exact: true }).click();
@@ -36,6 +43,8 @@ test("despachador genera, ajusta y valida el plan; gerencia lo consulta en solo 
   for (const folio of folios) {
     await expect(unidad.getByRole("article", { name: `Parada ${folio}`, exact: true })).toBeVisible();
   }
+  // Dos ajustes a mano (posponer y mover): el reacomodo se rotula como el del motor, antes de esos ajustes.
+  await expect(reacomodo.getByRole("heading", { name: "Reacomodo automático (antes de 2 ajustes manuales)", exact: true })).toBeVisible();
 
   const requisitos = plan.getByRole("region", { name: "Requisitos de acceso", exact: true });
   await expect(requisitos).toContainText(clienteConInduccion);

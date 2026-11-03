@@ -12,6 +12,8 @@ export interface ConfiguracionVista {
   lineaBase: LineaBase;
   /** Plan 7: tiempos de auto × factor, franjas de hora pico (HH:MM) y umbral de alerta de atraso. */
   factorCamion: number; horasPico: FranjaHoraPico[]; umbralAtrasoMin: number;
+  /** Plan 8: minutos de tiempo muerto que puede agregar una parada readmitida. */
+  toleranciaReadmisionMin: number;
   estiloMapaUrl: string;
 }
 

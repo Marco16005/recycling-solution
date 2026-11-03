@@ -249,13 +249,23 @@ Modelo de traslado (Plan 7):
 - Sin mapa, se usa la fórmula anterior (`km = haversine × factor_circuidad`; `min = km ÷ velocidad_kmh × 60`) y el plan lo avisa.
 - Diseño en `docs/superpowers/specs/2026-10-15-plan-7-calles-reales-y-alertas-design.md`.
 
+### Reacomodo y readmisión (Plan 8, motor 1.2.0)
+
+`generarPlan` corre cuatro fases; la primera es exactamente el motor anterior (1.1.0):
+1. **Admisión** FIFO de los pasos 1 a 4 de arriba.
+2. **Reacomodo:** búsqueda local por vecindarios (mover una parada, intercambiar dos, mover una cadena de 2 o 3, invertir un tramo) que acepta solo mejoras estrictas de tiempo muerto y luego km, con presupuesto en rutas recalculadas.
+3. **Readmisión** de las pospuestas sin cupo, en orden de llegada: entra la inserción directa de menor tiempo muerto agregado si no pasa de `tolerancia_readmision_min` (15 min, configurable); si no, se intenta "mover una y meter". Si cabría pero pasa la tolerancia, queda pospuesta con el motivo "alarga la jornada" y su Δ.
+4. **Reacomodo final.**
+
+En los reacomodos ninguna unidad termina más de la tolerancia después (decisión del dueño del 2026-10-29, §14). Ninguna solicitud de la admisión sale del plan, el plan guarda lo que ganó cada fase y la validación independiente la comprueba por fases. La pantalla del plan muestra el antes y el después. Diseño: `docs/superpowers/specs/2026-10-21-plan-8-optimizacion-design.md`. Resultados simulados: `docs/simulacion/resultados.md`.
+
 ### Re-ruteo
 
 Es `generarPlan` con restricciones (Plan 5, §4). No toca lo completado, lo no atendido ni la parada en sitio, y el viaje en curso de cada unidad disponible se congela completo (incluye el tramo comprometido): la unidad vuelve a entrar al motor en el patio, sin carga, al terminar ese viaje. Los viajes futuros de las unidades disponibles se conservan en su unidad y en su orden como `admitidas` (pueden recibir inserciones). Se reubican en orden FIFO las pendientes de las jornadas que dejan de estar disponibles y las solicitudes listas nuevas del día.
 
 ### Por qué se le llama inteligencia artificial
 
-El paso 3 es agrupamiento no supervisado: las zonas se forman cada día con las solicitudes reales. La optimización completa (VRPTW) queda para la Fase 2 detrás del mismo contrato.
+El paso 3 es agrupamiento no supervisado: las zonas se forman cada día con las solicitudes reales. Desde el Plan 8 el motor es "agrupamiento no supervisado (k-means) + admisión heurística + búsqueda local con readmisión": una metaheurística de mejora determinista que busca entre miles de reacomodos el plan con menos tiempo muerto, sin romper ninguna regla. La optimización exacta (VRPTW) queda fuera del piloto detrás del mismo contrato.
 
 ## 9. Pantallas
 
@@ -364,6 +374,7 @@ Actualizado el 2026-10-14 con lo que respondió el dueño. "Dueño" indica que l
 | 9 | Operación sin señal | La ruta del día queda guardada en el teléfono. Los eventos se guardan en cola y se envían al recuperar la señal, hasta 24 h después. Si mientras tanto la ruta cambió, el servidor no aplica los eventos de paradas que ya no le tocan, pero los **guarda como rechazados** para que el despachador los concilie; el teléfono pide llamar al despachador | Claude y Codex | Resuelta |
 | 10 | Retención | Matriz propuesta por finalidad en `docs/legal/README.md` (inicio del cómputo, bloqueo, supresión y respaldos). Necesita asesoría legal antes de publicarse | Claude y Codex | Propuesta para confirmar |
 | 11 | HTTPS en red local | Ya no aplica: el sistema corre en un VPS público (decisión 1). `tls internal` queda solo como alternativa | Claude y Codex | Resuelta |
+| 12 | Paradas extra del reacomodo (Plan 8) | Una pospuesta se readmite el mismo día si cabe en el turno y agrega a lo sumo 15 min de tiempo muerto (`tolerancia_readmision_min`, configurable de 0 a 60); si agrega más, queda para otro día con el motivo "alarga la jornada" (2026-10-21). Un reacomodo no puede hacer que un camión termine más de esa tolerancia después que antes de reacomodar (2026-10-29) | Dueño | Resuelta |
 
 ## 15. Colaboración Claude–Codex
 
@@ -394,3 +405,4 @@ Actualizado el 2026-10-14 con lo que respondió el dueño. "Dueño" indica que l
 | Cartas X̄-R y panel (Tabla 1) | Plan 6: `/gerencia/panel`, `src/indicadores`, CSV en `/api/indicadores/csv` |
 | Tiempos de traslado reales y reacción ante retrasos (tiempos muertos, §1; K1 y K4) | Plan 7: OSRM (`src/traslados`, `infra/mapa`), `tramo` y horas pico en `src/motor`, `proyectarJornada` y alertas en el seguimiento |
 | CRM de clientes (Tabla 9) y tiempo administrativo de captura (K2, objetivo de 30 %) | Plan CRM: importación completa, propuestas de recolección (K2 de canal propuesta aparte), ficha con historial y números, `src/consultas/cartera.nucleo.ts` |
+| Motor de ruteo con IA (§6 del DI) y reducción de tiempos muertos y kilómetros (K1 y K4 simulados) | Plan 8: `src/motor/reacomodo.ts` (reacomodo y readmisión), franja del reacomodo en el plan del día y `docs/simulacion/resultados.md` (1.1.0 contra 1.2.0) |

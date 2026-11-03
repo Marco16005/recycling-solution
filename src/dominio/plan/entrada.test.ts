@@ -172,3 +172,11 @@ it("convierte horas pico y rechaza franjas inválidas al construir", () => {
   d.configuracion.horasPico.push({ inicio: "08:00", fin: "10:00", factor: 1 });
   expect(() => construirEntrada(d)).toThrow("franjas_invalidas");
 });
+
+it("Plan 8: copia la tolerancia de readmisión de la configuración; sin ella, 15", () => {
+  const d = datos();
+  d.configuracion.toleranciaReadmisionMin = 7;
+  expect(construirEntrada(d).parametros.toleranciaReadmisionMin).toBe(7);
+  delete d.configuracion.toleranciaReadmisionMin;
+  expect(construirEntrada(d).parametros.toleranciaReadmisionMin).toBe(15);
+});

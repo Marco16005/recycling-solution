@@ -71,6 +71,13 @@
       "when": 1792632261555,
       "tag": "0009_cartera",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792692343575,
+      "tag": "0010_reacomodo",
+      "breakpoints": true
     }
   ]
 }

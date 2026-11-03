@@ -1,0 +1,1181 @@
+{
+  "nota": "Capturada con el motor 1.1.0 de main (f89983c) antes del Plan 8; solo para compatibilidad.",
+  "entrada": {
+    "fecha": "2026-10-14",
+    "instanteMin": 480,
+    "solicitudes": [
+      {
+        "id": "s1",
+        "folio": "S-s1",
+        "registradaEn": "2026-10-14T07:01:00-06:00",
+        "clienteId": "cliente-s1",
+        "ubicacion": {
+          "lat": 20.650000000000002,
+          "lng": -100.27
+        },
+        "ventanas": [
+          {
+            "inicioMin": 480,
+            "finMin": 900
+          }
+        ],
+        "tiempoServicioMin": 25,
+        "cargaKg": 900,
+        "tiposUnidadAdmitidos": [
+          "doble_rodada",
+          "rabon"
+        ]
+      },
+      {
+        "id": "s2",
+        "folio": "S-s2",
+        "registradaEn": "2026-10-14T07:02:00-06:00",
+        "clienteId": "cliente-s2",
+        "ubicacion": {
+          "lat": 20.59,
+          "lng": -100.27
+        },
+        "ventanas": [
+          {
+            "inicioMin": 480,
+            "finMin": 900
+          }
+        ],
+        "tiempoServicioMin": 25,
+        "cargaKg": 900,
+        "tiposUnidadAdmitidos": [
+          "doble_rodada",
+          "rabon"
+        ]
+      },
+      {
+        "id": "s3",
+        "folio": "S-s3",
+        "registradaEn": "2026-10-14T07:03:00-06:00",
+        "clienteId": "cliente-s3",
+        "ubicacion": {
+          "lat": 20.652,
+          "lng": -100.265
+        },
+        "ventanas": [
+          {
+            "inicioMin": 540,
+            "finMin": 600
+          },
+          {
+            "inicioMin": 780,
+            "finMin": 840
+          }
+        ],
+        "tiempoServicioMin": 25,
+        "cargaKg": 900,
+        "tiposUnidadAdmitidos": [
+          "doble_rodada",
+          "rabon"
+        ]
+      },
+      {
+        "id": "s4",
+        "folio": "S-s4",
+        "registradaEn": "2026-10-14T07:04:00-06:00",
+        "clienteId": "cliente-s4",
+        "ubicacion": {
+          "lat": 20.589000000000002,
+          "lng": -100.26599999999999
+        },
+        "ventanas": [
+          {
+            "inicioMin": 480,
+            "finMin": 900
+          }
+        ],
+        "tiempoServicioMin": 25,
+        "cargaKg": 1500,
+        "tiposUnidadAdmitidos": [
+          "doble_rodada",
+          "rabon"
+        ]
+      },
+      {
+        "id": "s5",
+        "folio": "S-s5",
+        "registradaEn": "2026-10-14T07:05:00-06:00",
+        "clienteId": "cliente-s5",
+        "ubicacion": {
+          "lat": 20.625,
+          "lng": -100.22999999999999
+        },
+        "ventanas": [
+          {
+            "inicioMin": 480,
+            "finMin": 900
+          }
+        ],
+        "tiempoServicioMin": 25,
+        "cargaKg": 900,
+        "tiposUnidadAdmitidos": [
+          "rabon"
+        ]
+      },
+      {
+        "id": "s6",
+        "folio": "S-s6",
+        "registradaEn": "2026-10-14T07:06:00-06:00",
+        "clienteId": "cliente-s6",
+        "ubicacion": {
+          "lat": 20.62,
+          "lng": -100.31
+        },
+        "ventanas": [
+          {
+            "inicioMin": 480,
+            "finMin": 900
+          }
+        ],
+        "tiempoServicioMin": 25,
+        "cargaKg": 20000,
+        "tiposUnidadAdmitidos": [
+          "camioneta"
+        ]
+      },
+      {
+        "id": "s7",
+        "folio": "S-s7",
+        "registradaEn": "2026-10-14T07:07:00-06:00",
+        "clienteId": "cliente-s7",
+        "ubicacion": {
+          "lat": 20.64,
+          "lng": -100.25
+        },
+        "ventanas": [
+          {
+            "inicioMin": 880,
+            "finMin": 890
+          }
+        ],
+        "tiempoServicioMin": 25,
+        "cargaKg": 900,
+        "tiposUnidadAdmitidos": [
+          "doble_rodada",
+          "rabon"
+        ]
+      },
+      {
+        "id": "s8",
+        "folio": "S-s8",
+        "registradaEn": "2026-10-14T07:08:00-06:00",
+        "clienteId": "cliente-s8",
+        "ubicacion": {
+          "lat": 20.6,
+          "lng": -100.28999999999999
+        },
+        "ventanas": [
+          {
+            "inicioMin": 480,
+            "finMin": 900
+          }
+        ],
+        "tiempoServicioMin": 40,
+        "cargaKg": 900,
+        "tiposUnidadAdmitidos": [
+          "doble_rodada",
+          "rabon"
+        ]
+      }
+    ],
+    "unidades": [
+      {
+        "id": "u1",
+        "tipo": "doble_rodada",
+        "capacidadKg": 2000,
+        "ubicacionInicial": {
+          "lat": 20.62,
+          "lng": -100.27
+        },
+        "libreDesdeMin": 480,
+        "cargaActualKg": 0
+      },
+      {
+        "id": "u2",
+        "tipo": "rabon",
+        "capacidadKg": 3000,
+        "ubicacionInicial": {
+          "lat": 20.62,
+          "lng": -100.27
+        },
+        "libreDesdeMin": 510,
+        "cargaActualKg": 0
+      }
+    ],
+    "parametros": {
+      "patio": {
+        "lat": 20.62,
+        "lng": -100.27
+      },
+      "turnoInicioMin": 480,
+      "turnoFinMin": 960,
+      "velocidadKmh": 30,
+      "factorCircuidad": 1.3,
+      "descargaMin": 15,
+      "capacidadMaximaPorTipoKg": {
+        "doble_rodada": 2000,
+        "rabon": 3000,
+        "camioneta": 1500
+      },
+      "semilla": 37,
+      "horasPico": [
+        {
+          "inicioMin": 480,
+          "finMin": 570,
+          "factor": 1.3
+        },
+        {
+          "inicioMin": 810,
+          "finMin": 900,
+          "factor": 1.15
+        }
+      ]
+    },
+    "traslados": {
+      "puntos": [
+        {
+          "lat": 20.62,
+          "lng": -100.27
+        },
+        {
+          "lat": 20.650000000000002,
+          "lng": -100.27
+        },
+        {
+          "lat": 20.59,
+          "lng": -100.27
+        },
+        {
+          "lat": 20.652,
+          "lng": -100.265
+        },
+        {
+          "lat": 20.589000000000002,
+          "lng": -100.26599999999999
+        },
+        {
+          "lat": 20.625,
+          "lng": -100.22999999999999
+        },
+        {
+          "lat": 20.62,
+          "lng": -100.31
+        },
+        {
+          "lat": 20.64,
+          "lng": -100.25
+        },
+        {
+          "lat": 20.6,
+          "lng": -100.28999999999999
+        }
+      ],
+      "km": [
+        [
+          0,
+          4.737,
+          4.737,
+          5.075,
+          4.914000000000001,
+          5.86,
+          5.812,
+          4.36,
+          4.36
+        ],
+        [
+          4.337,
+          0,
+          9.073,
+          1.1360000000000001,
+          9.234,
+          6.907,
+          7.3340000000000005,
+          3.467,
+          8.118
+        ],
+        [
+          4.337,
+          8.673,
+          0,
+          9.388,
+          0.9600000000000001,
+          7.809,
+          7.335,
+          8.118,
+          3.468
+        ],
+        [
+          4.675,
+          0.736,
+          8.988,
+          0,
+          9.508000000000001,
+          6.5360000000000005,
+          8.046,
+          3.069,
+          8.643
+        ],
+        [
+          4.514,
+          8.834,
+          0.56,
+          9.108,
+          0,
+          7.5280000000000005,
+          7.852,
+          8.083,
+          4.016
+        ],
+        [
+          5.46,
+          6.507,
+          7.409,
+          6.136,
+          7.128,
+          0,
+          11.247,
+          3.867,
+          9.286
+        ],
+        [
+          5.412,
+          6.934,
+          6.935,
+          7.646,
+          7.452,
+          10.847,
+          0,
+          9.017000000000001,
+          4.36
+        ],
+        [
+          3.96,
+          3.067,
+          7.718,
+          2.669,
+          7.683,
+          3.467,
+          8.617,
+          0,
+          8.32
+        ],
+        [
+          3.96,
+          7.718,
+          3.068,
+          8.243,
+          3.616,
+          8.886,
+          3.96,
+          7.92,
+          0
+        ]
+      ],
+      "minLibres": [
+        [
+          0,
+          11.37,
+          11.37,
+          12.18,
+          11.79,
+          14.06,
+          13.95,
+          10.46,
+          10.46
+        ],
+        [
+          10.41,
+          0,
+          21.78,
+          2.73,
+          22.16,
+          16.58,
+          17.6,
+          8.32,
+          19.48
+        ],
+        [
+          10.41,
+          20.82,
+          0,
+          22.53,
+          2.3,
+          18.74,
+          17.6,
+          19.48,
+          8.32
+        ],
+        [
+          11.22,
+          1.77,
+          21.57,
+          0,
+          22.82,
+          15.69,
+          19.31,
+          7.37,
+          20.74
+        ],
+        [
+          10.83,
+          21.2,
+          1.34,
+          21.86,
+          0,
+          18.07,
+          18.84,
+          19.4,
+          9.64
+        ],
+        [
+          13.1,
+          15.62,
+          17.78,
+          14.73,
+          17.11,
+          0,
+          26.99,
+          9.28,
+          22.29
+        ],
+        [
+          12.99,
+          16.64,
+          16.64,
+          18.35,
+          17.88,
+          26.03,
+          0,
+          21.64,
+          10.46
+        ],
+        [
+          9.5,
+          7.36,
+          18.52,
+          6.41,
+          18.44,
+          8.32,
+          20.68,
+          0,
+          19.97
+        ],
+        [
+          9.5,
+          18.52,
+          7.36,
+          19.78,
+          8.68,
+          21.33,
+          9.5,
+          19.01,
+          0
+        ]
+      ],
+      "ajusteM": [
+        0,
+        7,
+        14,
+        21,
+        28,
+        35,
+        42,
+        49,
+        56
+      ],
+      "aproximados": [
+        [
+          0,
+          3
+        ]
+      ],
+      "mapa": "fixture sintética 1.1.0"
+    }
+  },
+  "plan": {
+    "versionMotor": "1.1.0",
+    "rutas": [
+      {
+        "unidadId": "u1",
+        "viajes": [
+          {
+            "numero": 1,
+            "salidaMin": 480,
+            "paradas": [
+              {
+                "solicitudId": "s2",
+                "secuencia": 1,
+                "kmDesdeAnterior": 4.737,
+                "llegadaMin": 495,
+                "esperaMin": 0,
+                "inicioServicioMin": 495,
+                "finServicioMin": 520,
+                "ventana": {
+                  "inicioMin": 480,
+                  "finMin": 900
+                }
+              },
+              {
+                "solicitudId": "s1",
+                "secuencia": 2,
+                "kmDesdeAnterior": 8.673,
+                "llegadaMin": 548,
+                "esperaMin": 0,
+                "inicioServicioMin": 548,
+                "finServicioMin": 573,
+                "ventana": {
+                  "inicioMin": 480,
+                  "finMin": 900
+                }
+              }
+            ],
+            "regresoPatioMin": 584,
+            "finDescargaMin": 599,
+            "cargaKg": 1800,
+            "km": 17.747
+          }
+        ]
+      },
+      {
+        "unidadId": "u2",
+        "viajes": [
+          {
+            "numero": 1,
+            "salidaMin": 510,
+            "paradas": [
+              {
+                "solicitudId": "s4",
+                "secuencia": 1,
+                "kmDesdeAnterior": 4.914000000000001,
+                "llegadaMin": 526,
+                "esperaMin": 0,
+                "inicioServicioMin": 526,
+                "finServicioMin": 551,
+                "ventana": {
+                  "inicioMin": 480,
+                  "finMin": 900
+                }
+              },
+              {
+                "solicitudId": "s3",
+                "secuencia": 2,
+                "kmDesdeAnterior": 9.108,
+                "llegadaMin": 578,
+                "esperaMin": 0,
+                "inicioServicioMin": 578,
+                "finServicioMin": 603,
+                "ventana": {
+                  "inicioMin": 540,
+                  "finMin": 600
+                }
+              }
+            ],
+            "regresoPatioMin": 615,
+            "finDescargaMin": 630,
+            "cargaKg": 2400,
+            "km": 18.697000000000003
+          },
+          {
+            "numero": 2,
+            "salidaMin": 630,
+            "paradas": [
+              {
+                "solicitudId": "s8",
+                "secuencia": 1,
+                "kmDesdeAnterior": 4.36,
+                "llegadaMin": 641,
+                "esperaMin": 0,
+                "inicioServicioMin": 641,
+                "finServicioMin": 681,
+                "ventana": {
+                  "inicioMin": 480,
+                  "finMin": 900
+                }
+              },
+              {
+                "solicitudId": "s5",
+                "secuencia": 2,
+                "kmDesdeAnterior": 8.886,
+                "llegadaMin": 703,
+                "esperaMin": 0,
+                "inicioServicioMin": 703,
+                "finServicioMin": 728,
+                "ventana": {
+                  "inicioMin": 480,
+                  "finMin": 900
+                }
+              },
+              {
+                "solicitudId": "s7",
+                "secuencia": 3,
+                "kmDesdeAnterior": 3.867,
+                "llegadaMin": 738,
+                "esperaMin": 142,
+                "inicioServicioMin": 880,
+                "finServicioMin": 905,
+                "ventana": {
+                  "inicioMin": 880,
+                  "finMin": 890
+                }
+              }
+            ],
+            "regresoPatioMin": 915,
+            "finDescargaMin": 930,
+            "cargaKg": 2700,
+            "km": 21.073
+          }
+        ]
+      }
+    ],
+    "pospuestas": [],
+    "bloqueadas": [
+      {
+        "solicitudId": "s6",
+        "motivo": "carga_mayor_a_capacidad_compatible"
+      }
+    ],
+    "traza": [
+      {
+        "solicitudId": "s1",
+        "resultado": "admitida",
+        "unidadId": "u1",
+        "viaje": 1,
+        "secuencia": 1,
+        "rutasAntes": [
+          {
+            "unidadId": "u1",
+            "viajes": []
+          },
+          {
+            "unidadId": "u2",
+            "viajes": []
+          }
+        ]
+      },
+      {
+        "solicitudId": "s2",
+        "resultado": "admitida",
+        "unidadId": "u1",
+        "viaje": 1,
+        "secuencia": 1,
+        "rutasAntes": [
+          {
+            "unidadId": "u1",
+            "viajes": [
+              {
+                "numero": 1,
+                "salidaMin": 480,
+                "paradas": [
+                  {
+                    "solicitudId": "s1",
+                    "secuencia": 1,
+                    "kmDesdeAnterior": 4.737,
+                    "llegadaMin": 495,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 495,
+                    "finServicioMin": 520,
+                    "ventana": {
+                      "inicioMin": 480,
+                      "finMin": 900
+                    }
+                  }
+                ],
+                "regresoPatioMin": 534,
+                "finDescargaMin": 549,
+                "cargaKg": 900,
+                "km": 9.074
+              }
+            ]
+          },
+          {
+            "unidadId": "u2",
+            "viajes": []
+          }
+        ]
+      },
+      {
+        "solicitudId": "s3",
+        "resultado": "admitida",
+        "unidadId": "u2",
+        "viaje": 1,
+        "secuencia": 1,
+        "rutasAntes": [
+          {
+            "unidadId": "u1",
+            "viajes": [
+              {
+                "numero": 1,
+                "salidaMin": 480,
+                "paradas": [
+                  {
+                    "solicitudId": "s2",
+                    "secuencia": 1,
+                    "kmDesdeAnterior": 4.737,
+                    "llegadaMin": 495,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 495,
+                    "finServicioMin": 520,
+                    "ventana": {
+                      "inicioMin": 480,
+                      "finMin": 900
+                    }
+                  },
+                  {
+                    "solicitudId": "s1",
+                    "secuencia": 2,
+                    "kmDesdeAnterior": 8.673,
+                    "llegadaMin": 548,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 548,
+                    "finServicioMin": 573,
+                    "ventana": {
+                      "inicioMin": 480,
+                      "finMin": 900
+                    }
+                  }
+                ],
+                "regresoPatioMin": 584,
+                "finDescargaMin": 599,
+                "cargaKg": 1800,
+                "km": 17.747
+              }
+            ]
+          },
+          {
+            "unidadId": "u2",
+            "viajes": []
+          }
+        ]
+      },
+      {
+        "solicitudId": "s4",
+        "resultado": "admitida",
+        "unidadId": "u2",
+        "viaje": 1,
+        "secuencia": 1,
+        "rutasAntes": [
+          {
+            "unidadId": "u1",
+            "viajes": [
+              {
+                "numero": 1,
+                "salidaMin": 480,
+                "paradas": [
+                  {
+                    "solicitudId": "s2",
+                    "secuencia": 1,
+                    "kmDesdeAnterior": 4.737,
+                    "llegadaMin": 495,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 495,
+                    "finServicioMin": 520,
+                    "ventana": {
+                      "inicioMin": 480,
+                      "finMin": 900
+                    }
+                  },
+                  {
+                    "solicitudId": "s1",
+                    "secuencia": 2,
+                    "kmDesdeAnterior": 8.673,
+                    "llegadaMin": 548,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 548,
+                    "finServicioMin": 573,
+                    "ventana": {
+                      "inicioMin": 480,
+                      "finMin": 900
+                    }
+                  }
+                ],
+                "regresoPatioMin": 584,
+                "finDescargaMin": 599,
+                "cargaKg": 1800,
+                "km": 17.747
+              }
+            ]
+          },
+          {
+            "unidadId": "u2",
+            "viajes": [
+              {
+                "numero": 1,
+                "salidaMin": 510,
+                "paradas": [
+                  {
+                    "solicitudId": "s3",
+                    "secuencia": 1,
+                    "kmDesdeAnterior": 5.075,
+                    "llegadaMin": 526,
+                    "esperaMin": 14,
+                    "inicioServicioMin": 540,
+                    "finServicioMin": 565,
+                    "ventana": {
+                      "inicioMin": 540,
+                      "finMin": 600
+                    }
+                  }
+                ],
+                "regresoPatioMin": 578,
+                "finDescargaMin": 593,
+                "cargaKg": 900,
+                "km": 9.75
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "solicitudId": "s5",
+        "resultado": "admitida",
+        "unidadId": "u2",
+        "viaje": 2,
+        "secuencia": 1,
+        "rutasAntes": [
+          {
+            "unidadId": "u1",
+            "viajes": [
+              {
+                "numero": 1,
+                "salidaMin": 480,
+                "paradas": [
+                  {
+                    "solicitudId": "s2",
+                    "secuencia": 1,
+                    "kmDesdeAnterior": 4.737,
+                    "llegadaMin": 495,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 495,
+                    "finServicioMin": 520,
+                    "ventana": {
+                      "inicioMin": 480,
+                      "finMin": 900
+                    }
+                  },
+                  {
+                    "solicitudId": "s1",
+                    "secuencia": 2,
+                    "kmDesdeAnterior": 8.673,
+                    "llegadaMin": 548,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 548,
+                    "finServicioMin": 573,
+                    "ventana": {
+                      "inicioMin": 480,
+                      "finMin": 900
+                    }
+                  }
+                ],
+                "regresoPatioMin": 584,
+                "finDescargaMin": 599,
+                "cargaKg": 1800,
+                "km": 17.747
+              }
+            ]
+          },
+          {
+            "unidadId": "u2",
+            "viajes": [
+              {
+                "numero": 1,
+                "salidaMin": 510,
+                "paradas": [
+                  {
+                    "solicitudId": "s4",
+                    "secuencia": 1,
+                    "kmDesdeAnterior": 4.914000000000001,
+                    "llegadaMin": 526,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 526,
+                    "finServicioMin": 551,
+                    "ventana": {
+                      "inicioMin": 480,
+                      "finMin": 900
+                    }
+                  },
+                  {
+                    "solicitudId": "s3",
+                    "secuencia": 2,
+                    "kmDesdeAnterior": 9.108,
+                    "llegadaMin": 578,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 578,
+                    "finServicioMin": 603,
+                    "ventana": {
+                      "inicioMin": 540,
+                      "finMin": 600
+                    }
+                  }
+                ],
+                "regresoPatioMin": 615,
+                "finDescargaMin": 630,
+                "cargaKg": 2400,
+                "km": 18.697000000000003
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "solicitudId": "s6",
+        "resultado": "bloqueada",
+        "motivo": "carga_mayor_a_capacidad_compatible"
+      },
+      {
+        "solicitudId": "s7",
+        "resultado": "admitida",
+        "unidadId": "u2",
+        "viaje": 2,
+        "secuencia": 2,
+        "rutasAntes": [
+          {
+            "unidadId": "u1",
+            "viajes": [
+              {
+                "numero": 1,
+                "salidaMin": 480,
+                "paradas": [
+                  {
+                    "solicitudId": "s2",
+                    "secuencia": 1,
+                    "kmDesdeAnterior": 4.737,
+                    "llegadaMin": 495,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 495,
+                    "finServicioMin": 520,
+                    "ventana": {
+                      "inicioMin": 480,
+                      "finMin": 900
+                    }
+                  },
+                  {
+                    "solicitudId": "s1",
+                    "secuencia": 2,
+                    "kmDesdeAnterior": 8.673,
+                    "llegadaMin": 548,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 548,
+                    "finServicioMin": 573,
+                    "ventana": {
+                      "inicioMin": 480,
+                      "finMin": 900
+                    }
+                  }
+                ],
+                "regresoPatioMin": 584,
+                "finDescargaMin": 599,
+                "cargaKg": 1800,
+                "km": 17.747
+              }
+            ]
+          },
+          {
+            "unidadId": "u2",
+            "viajes": [
+              {
+                "numero": 1,
+                "salidaMin": 510,
+                "paradas": [
+                  {
+                    "solicitudId": "s4",
+                    "secuencia": 1,
+                    "kmDesdeAnterior": 4.914000000000001,
+                    "llegadaMin": 526,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 526,
+                    "finServicioMin": 551,
+                    "ventana": {
+                      "inicioMin": 480,
+                      "finMin": 900
+                    }
+                  },
+                  {
+                    "solicitudId": "s3",
+                    "secuencia": 2,
+                    "kmDesdeAnterior": 9.108,
+                    "llegadaMin": 578,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 578,
+                    "finServicioMin": 603,
+                    "ventana": {
+                      "inicioMin": 540,
+                      "finMin": 600
+                    }
+                  }
+                ],
+                "regresoPatioMin": 615,
+                "finDescargaMin": 630,
+                "cargaKg": 2400,
+                "km": 18.697000000000003
+              },
+              {
+                "numero": 2,
+                "salidaMin": 630,
+                "paradas": [
+                  {
+                    "solicitudId": "s5",
+                    "secuencia": 1,
+                    "kmDesdeAnterior": 5.86,
+                    "llegadaMin": 645,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 645,
+                    "finServicioMin": 670,
+                    "ventana": {
+                      "inicioMin": 480,
+                      "finMin": 900
+                    }
+                  }
+                ],
+                "regresoPatioMin": 684,
+                "finDescargaMin": 699,
+                "cargaKg": 900,
+                "km": 11.32
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "solicitudId": "s8",
+        "resultado": "admitida",
+        "unidadId": "u2",
+        "viaje": 2,
+        "secuencia": 1,
+        "rutasAntes": [
+          {
+            "unidadId": "u1",
+            "viajes": [
+              {
+                "numero": 1,
+                "salidaMin": 480,
+                "paradas": [
+                  {
+                    "solicitudId": "s2",
+                    "secuencia": 1,
+                    "kmDesdeAnterior": 4.737,
+                    "llegadaMin": 495,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 495,
+                    "finServicioMin": 520,
+                    "ventana": {
+                      "inicioMin": 480,
+                      "finMin": 900
+                    }
+                  },
+                  {
+                    "solicitudId": "s1",
+                    "secuencia": 2,
+                    "kmDesdeAnterior": 8.673,
+                    "llegadaMin": 548,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 548,
+                    "finServicioMin": 573,
+                    "ventana": {
+                      "inicioMin": 480,
+                      "finMin": 900
+                    }
+                  }
+                ],
+                "regresoPatioMin": 584,
+                "finDescargaMin": 599,
+                "cargaKg": 1800,
+                "km": 17.747
+              }
+            ]
+          },
+          {
+            "unidadId": "u2",
+            "viajes": [
+              {
+                "numero": 1,
+                "salidaMin": 510,
+                "paradas": [
+                  {
+                    "solicitudId": "s4",
+                    "secuencia": 1,
+                    "kmDesdeAnterior": 4.914000000000001,
+                    "llegadaMin": 526,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 526,
+                    "finServicioMin": 551,
+                    "ventana": {
+                      "inicioMin": 480,
+                      "finMin": 900
+                    }
+                  },
+                  {
+                    "solicitudId": "s3",
+                    "secuencia": 2,
+                    "kmDesdeAnterior": 9.108,
+                    "llegadaMin": 578,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 578,
+                    "finServicioMin": 603,
+                    "ventana": {
+                      "inicioMin": 540,
+                      "finMin": 600
+                    }
+                  }
+                ],
+                "regresoPatioMin": 615,
+                "finDescargaMin": 630,
+                "cargaKg": 2400,
+                "km": 18.697000000000003
+              },
+              {
+                "numero": 2,
+                "salidaMin": 630,
+                "paradas": [
+                  {
+                    "solicitudId": "s5",
+                    "secuencia": 1,
+                    "kmDesdeAnterior": 5.86,
+                    "llegadaMin": 645,
+                    "esperaMin": 0,
+                    "inicioServicioMin": 645,
+                    "finServicioMin": 670,
+                    "ventana": {
+                      "inicioMin": 480,
+                      "finMin": 900
+                    }
+                  },
+                  {
+                    "solicitudId": "s7",
+                    "secuencia": 2,
+                    "kmDesdeAnterior": 3.867,
+                    "llegadaMin": 680,
+                    "esperaMin": 200,
+                    "inicioServicioMin": 880,
+                    "finServicioMin": 905,
+                    "ventana": {
+                      "inicioMin": 880,
+                      "finMin": 890
+                    }
+                  }
+                ],
+                "regresoPatioMin": 915,
+                "finDescargaMin": 930,
+                "cargaKg": 1800,
+                "km": 13.687000000000001
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "resumen": {
+      "ruteadas": 7,
+      "pospuestas": 0,
+      "bloqueadas": 1,
+      "km": 57.517,
+      "minutosTraslado": 143,
+      "kmMetodoActual": 65.286,
+      "minutosTrasladoMetodoActual": 165
+    }
+  }
+}

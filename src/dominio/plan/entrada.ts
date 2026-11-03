@@ -1,3 +1,4 @@
+import { TOLERANCIA_POR_OMISION_MIN } from "@/motor/admision";
 import { validarFranjas } from "@/motor/traslados";
 import { ErrorTraslados } from "@/motor/tipos";
 import type { EntradaPlan, Plan, VentanaMin } from "@/motor/tipos";
@@ -109,6 +110,8 @@ export function construirEntrada(datos: {
       ubicacionInicial: { ...patio }, libreDesdeMin: Math.max(minutosDeHora(j.disponibleDesde), instanteMin), cargaActualKg: 0 })),
     parametros: { patio, turnoInicioMin, turnoFinMin: minutosDeHora(c.turnoFin), velocidadKmh: c.velocidadKmh,
       factorCircuidad: c.factorCircuidad, descargaMin: c.descargaMin, horasPico,
+      // Plan 8: la tolerancia de la configuración (0 a 60); la del motor por omisión si la configuración no la trae.
+      toleranciaReadmisionMin: c.toleranciaReadmisionMin ?? TOLERANCIA_POR_OMISION_MIN,
       capacidadMaximaPorTipoKg: capacidadMaximaPorTipo(datos.unidadesActivas), semilla: semillaDeFecha(datos.fecha) },
   };
 }
