@@ -67,6 +67,10 @@ Cada regla lleva una prueba con un caso que debe marcar y otro que no.
 
 - Checkov `CKV_SECRET_4` y `CKV_SECRET_6` en `compose.test.yaml`: son contraseñas fijas de la base de pruebas, que se destruye con `down -v`. No se usan fuera de las pruebas.
 - Semgrep `missing-user` en la etapa `dev` del Dockerfile: esa etapa solo corre en desarrollo y en pruebas. La de producción usa `USER node`.
+- Avisos de ZAP que quedan después de S5 (2026-11-04: 0 fallas, 4 avisos, 64 aprobados):
+  - `CSP: script-src unsafe-inline` (10055): Next escribe en línea los datos de React Server Components. Los nonces obligarían a renderizar cada página en cada petición y rompen Cache Components. La política sigue prohibiendo scripts de otros dominios, marcos y formularios hacia fuera (`src/seguridad/encabezados.ts`).
+  - `Cross-Origin-Embedder-Policy` (90004): exigirlo bloquearía las teselas de OpenFreeMap, que no mandan `Cross-Origin-Resource-Policy`. La aplicación no usa `SharedArrayBuffer` ni necesita aislamiento entre orígenes.
+  - `Non-Storable Content` (10049) y `Modern Web Application` (10109): son informativos. Que las páginas con datos personales no se guarden en caché es lo deseado.
 - Avisos de dependencias de desarrollo sin uso en el servidor: el `esbuild` de `drizzle-kit` (su servidor de desarrollo no se usa) y `minimatch` en eslint. Se revisan cuando haya versión mayor compatible.
 
 ## 6. Auditoría manual (Codex)
@@ -92,7 +96,13 @@ Antes se revisa la política de uso aceptable de Hostinger. El escaneo se limita
 - **SonarQube Community 26.10** se corre una sola vez en local, con Docker y `sonar-scanner-cli` 12.3, como segunda opinión de calidad y de "security hotspots". Pide unos 4 GB de RAM, así que se levanta, se lee el reporte y se borra. No entra a `verificar-todo` porque Semgrep y las reglas propias cubren lo mismo de forma reproducible.
 - **Burp Suite** no se usa: ZAP cubre el escaneo dinámico automatizado, y Burp Community es manual y gráfico. Si el usuario quiere practicar pruebas manuales para el Documento Integrador, se hace con ZAP o Burp sobre la pila local, nunca sobre el VPS.
 
-## 9. Orden de trabajo
+## 9. Avance
+
+- **P-S1 (4447420):** Next 16.4.5, Node 24.22.2 sobre Debian 13 (trixie), npm fuera de la imagen de producción y shadcn como herramienta de desarrollo. `verificar-todo` en verde (798 de unidad, 132 de integración, 39 de punta a punta, respaldo y gitleaks). Grype sobre la imagen nueva: 0 críticos, 0 altos con corrección y ninguna KEV (quedan 59 altos de Debian sin corrección publicada). `npm audit` de producción: solo 4 moderados de drizzle-kit.
+- **P-S2:** encabezados (S5) en `next.config.ts` y `src/proxy.ts`, con 7 pruebas de unidad y 4 de punta a punta (`e2e/seguridad.spec.ts`), una de ellas con control positivo: una petición prohibida debe quedar registrada como violación. ZAP baseline: de 8 avisos a 4, todos aceptados en §5.
+- **Caddy (S4), hallazgo del 2026-11-04:** quitar curl de la imagen 2.11.7 elimina brotli (KEV) y curl. Quedan Go 1.26.8, `golang.org/x/net` y go-jose dentro del binario de Caddy; se corrigen con una versión de Caddy compilada con Go 1.26.9. La 2.11.8 salió el 2026-11-04 solo para amd64; se adopta cuando exista para arm64 (desarrollo) o se compila con xcaddy.
+
+## 10. Orden de trabajo
 
 1. P-S1: S1, S2, S3 y S6 (dependencias e imagen base). `verificar-todo` en verde.
 2. P-S2: S5 (encabezados). Prueba e2e que los comprueba; ZAP baseline sin avisos salvo los aceptados.
@@ -101,7 +111,7 @@ Antes se revisa la política de uso aceptable de Hostinger. El escaneo se limita
 5. P-S5: SonarQube una vez; documentar los resultados en `docs/seguridad.md`.
 6. Después del despliegue: §7.
 
-## 10. Criterio de terminado
+## 11. Criterio de terminado
 
 - Sin críticos ni altos con corrección publicada en las dependencias de producción ni en las imágenes `web`, `proxy` y `db`.
 - ZAP baseline sin fallas, y solo con avisos aceptados por escrito.
