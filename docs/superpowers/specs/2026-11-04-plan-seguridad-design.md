@@ -110,6 +110,8 @@ Antes se revisa la política de uso aceptable de Hostinger. El escaneo se limita
 - **Hallazgo 1 (Codex, b7e1196 y 783135c):** un aviso por fila y tipo, con prueba de 2000 filas iguales y una propiedad. El ordenamiento radix que propuso Codex se cambió por `sort`; la reasignación fue por cuota, y Codex la revisa.
 - **P-S3 (Claude):** S10 a S14, más S4 (Caddy 2.11.8 sin curl), S7 (OSRM sirve como `nobody`) y S8 (`healthcheck` de `web`). Caddy 2.11.8 sin curl: 0 críticos. Queda go-jose v4.1.5 (GHSA-mgcc-cww5-fp2q) dentro del binario, que solo se usa para el certificado ACME; es una excepción con fecha de revisión hasta que Caddy lo actualice.
 
+- **P-S4 (368338a y siguiente):** `scripts/seguridad.sh` con excepciones documentadas en `infra/seguridad/`, y `verificar-todo.sh` con un paso 6 (`--rapido`). Primera corrida completa, el 2026-11-04: 11 de 12 pasos en verde, ZAP incluido. Trivy marcó que Caddy corría como root (DS-0002, alto): ahora corre como `caddy` (uid 10001), con `skip_install_trust`, y responde por HTTPS sin encabezado `Server`. Los respaldos de `/data` de Caddy en `operacion.md` corren con `--user root` y devuelven los archivos con `chown`. La imagen del mapa aplica los parches de Debian (`apt-get upgrade`) y Grype ya no encuentra críticos ni altos corregibles.
+
 ## 10. Orden de trabajo
 
 1. P-S1: S1, S2, S3 y S6 (dependencias e imagen base). `verificar-todo` en verde.

@@ -85,14 +85,17 @@ docker compose cp proxy:/data/caddy/pki/authorities/local/root.crt respaldos/cad
 
      ```bash
      docker compose stop proxy
-     docker compose run --rm --no-deps --entrypoint tar -v "$PWD/respaldos:/salida" proxy czf /salida/caddy-datos.tgz -C /data .
+     docker compose run --rm --no-deps --user root --entrypoint tar -v "$PWD/respaldos:/salida" proxy czf /salida/caddy-datos.tgz -C /data .
      ```
 
      En la máquina nueva, antes del primer arranque de `proxy`:
 
      ```bash
-     docker compose run --rm --no-deps --entrypoint tar -v "$PWD/respaldos:/entrada" proxy xzf /entrada/caddy-datos.tgz -C /data
+     docker compose run --rm --no-deps --user root --entrypoint sh -v "$PWD/respaldos:/entrada" proxy \
+       -c 'tar xzf /entrada/caddy-datos.tgz -C /data && chown -R caddy:caddy /data'
      ```
+
+     Caddy corre sin privilegios (Plan de seguridad): `--user root` solo es para leer y escribir el respaldo, y el `chown` le devuelve sus archivos.
 
    - **Crear una nueva**: no copiar nada; en la máquina nueva Caddy genera otra autoridad y hay que instalar su certificado (§5) en cada teléfono y computadora antes del cambio.
 3. Copiar el último `respaldos/*.dump`, el archivo `.env` y, si aplica, `caddy-datos.tgz`, por un medio seguro (contienen secretos).
