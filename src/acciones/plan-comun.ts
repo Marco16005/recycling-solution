@@ -26,6 +26,24 @@ import { idSchema, invalido, versionSchema, type Fallo } from "./validacion";
 /** Una corrida más larga cuenta como tiempo agotado y su plan no se guarda (el motor es síncrono: no se interrumpe). */
 export const LIMITE_MOTOR_MS = 30_000;
 
+/**
+ * Plan de seguridad (hallazgo 2): como el motor es síncrono, ocupa el proceso mientras calcula y LIMITE_MOTOR_MS no lo
+ * interrumpe. Por eso se acota la entrada antes de correrlo. Medido el 2026-11-04 en contenedor: 60 solicitudes con 15
+ * unidades, 0.4 s; 300 con 40, 5.7 s; 1000 con 15, 58 s; 1000 con 60, 13 min. Un día del piloto trae 50 a 60
+ * solicitudes y 15 unidades. limite-motor.integracion.test.ts vigila que el tope siga muy por debajo de LIMITE_MOTOR_MS.
+ */
+export const MAXIMO_SOLICITUDES_MOTOR = 300;
+export const MAXIMO_UNIDADES_MOTOR = 40;
+
+/** Mensaje para la pantalla si la entrada pasa del tope del motor; null si cabe. */
+export function excesoDeEntrada(entrada: Pick<EntradaPlan, "solicitudes" | "unidades">): string | null {
+  const solicitudes = entrada.solicitudes.length;
+  const unidades = entrada.unidades.length;
+  if (solicitudes <= MAXIMO_SOLICITUDES_MOTOR && unidades <= MAXIMO_UNIDADES_MOTOR) return null;
+  return `El día tiene ${solicitudes} solicitudes y ${unidades} unidades; el motor acepta hasta ${MAXIMO_SOLICITUDES_MOTOR} `
+    + `solicitudes y ${MAXIMO_UNIDADES_MOTOR} unidades. Reprograma o cancela solicitudes antes de generar.`;
+}
+
 export const conflicto = (codigo: CodigoConflicto, texto: string): Fallo => ({ ok: false, error: "conflicto", motivo: { codigo, texto } });
 
 /** Nombre y código del error, sin mensaje: nunca datos personales en la bitácora ni en ejecuciones_motor. */
@@ -293,6 +311,8 @@ export interface Generacion {
  * fecha. La ejecución queda registrada aunque el motor falle, se agote el tiempo o no se pueda guardar (Plan 4, §4).
  */
 export async function ejecutarYGuardar(ctx: Contexto, g: Generacion): Promise<Resultado<{ planId: string }>> {
+  const exceso = excesoDeEntrada(g.entrada);
+  if (exceso !== null) return invalido({ _: [exceso] });
   const inicio = performance.now();
   let plan: Plan | null = null;
   let errorMotor: string | null = null;

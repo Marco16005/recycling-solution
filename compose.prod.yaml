@@ -23,6 +23,13 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
       bootstrap: { condition: service_completed_successfully }
+    # Plan de seguridad (S8): Docker sabe si la aplicación responde; Caddy espera a que esté sana.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/entrar').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
     mem_limit: ${LIMITE_MEMORIA_WEB:-512m}
 
@@ -31,7 +38,9 @@ services:
     mem_limit: ${LIMITE_MEMORIA_OSRM:-256m}
 
   proxy:
-    image: caddy:2.11.6-alpine
+    # Plan de seguridad (S4): imagen propia sobre caddy:2.11.8-alpine, sin curl (infra/caddy/Dockerfile).
+    build: { context: ./infra/caddy }
+    image: rs-caddy:2.11.8
     profiles: ["caddy"]
     mem_limit: 128m
     ports:
@@ -44,7 +53,7 @@ services:
       - caddy_datos:/data
       - caddy_config:/config
     depends_on:
-      - web
+      web: { condition: service_healthy }
     restart: unless-stopped
 
 volumes:

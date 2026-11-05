@@ -83,6 +83,9 @@ services:
     image: rs-mapa:v26.9.0
     profiles: ["mapa"]
     command: ["osrm-routed", "--algorithm", "mld", "--max-table-size", "400", "--port", "5000", "/mapa/mapa.osrm"]
+    # Plan de seguridad (S7): sirve sin privilegios (nobody); solo lee el mapa. Prepararlo (preparar-mapa) sí escribe el
+    # volumen y corre como root, sin puertos y solo al actualizar el mapa.
+    user: "65534:65534"
     volumes:
       - mapa_datos:/mapa:ro
     healthcheck:

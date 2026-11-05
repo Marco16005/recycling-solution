@@ -130,13 +130,18 @@ async function decidir(ctx: Contexto, fecha: unknown, clienteId: unknown, decisi
 
 /** dias: 1 a 30. El cliente no se vuelve a proponer antes de fecha + dias. */
 export async function posponerPropuesta(ctx: Contexto, fecha: unknown, clienteId: unknown, dias: unknown): Promise<Resultado<null>> {
+  const permiso = permitir(ctx, "solicitudes.registrar");
+  if (!permiso.ok) return permiso;
   const n = z.number().int().min(1).max(30).safeParse(dias);
-  if (!n.success) return permitir(ctx, "solicitudes.registrar").ok ? invalido({ dias: ["De 1 a 30 días"] }) : { ok: false, error: "no_autorizado" };
+  if (!n.success) return invalido({ dias: ["De 1 a 30 días"] });
   return decidir(ctx, fecha, clienteId, { estado: "pospuesta", dias: n.data, nota: null });
 }
 
 /** Vale solo para esa fecha. nota: hasta 300 caracteres, opcional. */
 export async function descartarPropuesta(ctx: Contexto, fecha: unknown, clienteId: unknown, nota: unknown): Promise<Resultado<null>> {
+  // Plan de seguridad: autoriza antes de validar la entrada (regla rs-nucleo-sin-permiso), como posponerPropuesta.
+  const permiso = permitir(ctx, "solicitudes.registrar");
+  if (!permiso.ok) return permiso;
   const n = z.string().trim().max(300).nullable().safeParse(nota ?? null);
   if (!n.success) return invalido({ nota: ["Máximo 300 caracteres"] });
   return decidir(ctx, fecha, clienteId, { estado: "descartada", nota: n.data || null });

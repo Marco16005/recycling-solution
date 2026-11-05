@@ -107,6 +107,8 @@ git pull
 docker compose up -d --build
 ```
 
+**Al pasar a la versión del Plan de seguridad (2026-11):** OSRM sirve ahora sin privilegios (usuario `nobody`) y necesita que el mapa sea legible para todos. Si el mapa ya estaba preparado, correr una vez `scripts/preparar-mapa.sh`: con la misma fecha no descarga nada, solo corrige los permisos. Caddy ahora es una imagen propia (`infra/caddy/Dockerfile`), que `--build` construye.
+
 ## 8. Verificación completa
 
 ```bash
@@ -186,7 +188,7 @@ Compilar la aplicación consume más memoria de la que conviene usar en un servi
 ```bash
 # En la computadora de desarrollo, con el mismo .env de producción (COMPOSE_FILE=compose.yaml:compose.prod.yaml):
 DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose build
-docker save recycling-solution-web recycling-solution-migrate recycling-solution-bootstrap | gzip | ssh usuario@vps 'gunzip | docker load'
+docker save recycling-solution-web recycling-solution-migrate recycling-solution-bootstrap rs-caddy:2.11.8 | gzip | ssh usuario@vps 'gunzip | docker load'
 
 # En el VPS:
 docker compose up -d --no-build

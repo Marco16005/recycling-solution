@@ -7,12 +7,16 @@ set -eu
 modo=${1:?Uso: preparar-mapa real|prueba}
 cd /mapa
 
+# Plan de seguridad (S7): osrm-routed corre como nobody y solo lee; osrm-extract deja mapa.osrm.fileIndex en 0700.
+legible() { chmod -R a+rX /mapa; }
+
 case "$modo" in
   real)
     : "${MAPA_FECHA:?Falta MAPA_FECHA: AAMMDD de un extracto listado en https://download.geofabrik.de/north-america/mexico.html}"
     : "${MAPA_CAJA:?Falta MAPA_CAJA: oeste,sur,este,norte}"
     id="geofabrik-mexico-${MAPA_FECHA} recorte ${MAPA_CAJA}"
     if [ -f mapa.osrm.mldgr ] && [ "$(cat mapa.id 2>/dev/null)" = "$id" ]; then
+      legible
       echo "El mapa ya está preparado: $id"
       exit 0
     fi
@@ -55,4 +59,5 @@ rm -f "$entrada"
 # Sin restos de extractos (también de descargas cortadas de otras fechas): el volumen solo guarda el mapa procesado.
 [ "$modo" = real ] && rm -f mexico-*.osm.pbf mexico-*.osm.pbf.parcial mexico-*.osm.pbf.md5
 printf '%s' "$id" > mapa.id
+legible
 echo "Mapa listo: $id"

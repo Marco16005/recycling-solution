@@ -1,6 +1,6 @@
 # Plan de seguridad — diseño
 
-- **Fecha:** 2026-11-04, revisión 1 (borrador de Claude para revisión de Codex).
+- **Fecha:** 2026-11-04, revisión 2: incorpora la auditoría manual de Codex (§6) y su aprobación de P-S1 y P-S2.
 - **Base:** `main` en b806c49 (Planes 1 a 8 y CRM validados).
 - **Pedido del usuario (2026-11-04):** escanear el sistema con herramientas de seguridad (gitleaks, Semgrep, OSV, OWASP, Checkov, ZAP, nmap, Trivy, Grype, Burp, SonarQube…) para dejarlo más seguro antes del piloto, en colaboración con Codex.
 
@@ -44,7 +44,12 @@ Gravedad con la escala de `docs/guia-de-auditoria.md`.
 | S6 | Dependencias transitivas: undici 7.30.0, qs, fast-uri, body-parser, systeminformation y la zod de shadcn. Casi todas llegan por `shadcn`, que es una herramienta de desarrollo pero está en `dependencies` | Corrige antes del piloto | `shadcn` a 4.23.0 y a `devDependencies` (solo se usa su CSS al compilar); `npm audit fix` sin cambios mayores | Claude |
 | S7 | OSRM corre como root y su imagen tiene 11 críticos corregibles. Solo escucha en la red interna | Mejora | `apt-get upgrade` en `infra/mapa/Dockerfile` y un usuario sin privilegios si `osrm-routed` lo permite con el volumen | Claude |
 | S8 | Sin `HEALTHCHECK` en la imagen de la aplicación | Mejora | `healthcheck` del servicio `web` en Compose | Claude |
-| S9 | Pistas de la auditoría de Codex, interrumpida por cuota: (a) la importación CSV puede construir cerca de dos millones de pares de posibles duplicados con un archivo permitido; (b) el límite de tiempo del motor se revisa hasta que termina el cálculo síncrono; (c) una función exportada de validación del re-ruteo depende de que quien la llama ya haya autorizado | Por clasificar | Codex confirma, clasifica y propone corrección en su auditoría completa (§6) | Codex (`src/dominio`, `src/motor`); Claude (`src/acciones`) |
+| S9 | (Codex, hallazgo 1) La importación CSV construye un par por cada combinación de filas con el mismo nombre: 1.999.000 con 2000 filas iguales, que caben en 1 MB. Alcanzable por despachador o admin | Bloquea el piloto | Un aviso por fila y tipo: la primera fila anterior y el cliente de menor id (máximo 2 × n); la respuesta lista hasta 50 mensajes | Codex (`src/dominio/clientes/csv.ts`); Claude (`src/acciones/importacion.nucleo.ts`) |
+| S10 | (Codex, hallazgo 2) El límite de 30 s no interrumpe el motor, que es síncrono y bloquea el proceso. Medido: 1000 solicitudes con 15 unidades tardan 58 s, y con 60 unidades, 13 min | Corrige antes del piloto | Tope de entrada antes de correrlo: 300 solicitudes y 40 unidades (~6 s, cinco veces un día del piloto), con prueba de tiempo en el tope | Claude (`src/acciones/plan-comun.ts`) |
+| S11 | (Codex, hallazgo 3) `validarReruteo` es exportada y no autoriza; recibe `usuarioId` del llamador. Hoy no se explota: solo la llama `validarPlanDelDia`, que autoriza | Corrige antes del piloto | Autoriza `planes.validar` y toma el usuario de la sesión | Claude (`src/acciones/reruteo.nucleo.ts`) |
+| S12 | (Codex, hallazgo 4) Si «Salir» falla por la red, se borran los datos del teléfono pero la pantalla se queda con la ruta y la sesión sigue abierta en el servidor | Corrige antes del piloto | Siempre lleva a `/entrar`; si el servidor no recibió el cierre, se anota y `/entrar` lo completa al cargar con red, con «Entrar» desactivado mientras tanto | Claude (`src/components/sesion`, `src/app/entrar`) |
+| S13 | (Codex, hallazgo 5) Sin límite de frecuencia para acciones costosas autenticadas (generar plan o re-ruteo, importar, seguir enlaces) | Corrige antes del piloto | Límite en memoria por usuario: motor 4 por minuto, importar 20 y enlaces 30 (`src/seguridad/limites.ts`). Las pruebas lo apagan con `LIMITAR_ACCIONES=no` y lo prueban encendido | Claude |
+| S14 | (Codex, hallazgo 6) Al seguir un enlace corto no se descarta el cuerpo de la respuesta | Mejora | Se cancela el cuerpo: solo importan el estado y `Location`. No se fija la IP resuelta: los hosts son nombres exactos de Google y un rebinding exigiría controlar su DNS | Claude (`src/acciones/enlaces.ts`) |
 
 ## 4. Escaneo automático: `scripts/seguridad.sh`
 
@@ -101,6 +106,9 @@ Antes se revisa la política de uso aceptable de Hostinger. El escaneo se limita
 - **P-S1 (4447420):** Next 16.4.5, Node 24.22.2 sobre Debian 13 (trixie), npm fuera de la imagen de producción y shadcn como herramienta de desarrollo. `verificar-todo` en verde (798 de unidad, 132 de integración, 39 de punta a punta, respaldo y gitleaks). Grype sobre la imagen nueva: 0 críticos, 0 altos con corrección y ninguna KEV (quedan 59 altos de Debian sin corrección publicada). `npm audit` de producción: solo 4 moderados de drizzle-kit.
 - **P-S2:** encabezados (S5) en `next.config.ts` y `src/proxy.ts`, con 7 pruebas de unidad y 4 de punta a punta (`e2e/seguridad.spec.ts`), una de ellas con control positivo: una petición prohibida debe quedar registrada como violación. ZAP baseline: de 8 avisos a 4, todos aceptados en §5.
 - **Caddy (S4), hallazgo del 2026-11-04:** quitar curl de la imagen 2.11.7 elimina brotli (KEV) y curl. Quedan Go 1.26.8, `golang.org/x/net` y go-jose dentro del binario de Caddy; se corrigen con una versión de Caddy compilada con Go 1.26.9. La 2.11.8 salió el 2026-11-04 solo para amd64; se adopta cuando exista para arm64 (desarrollo) o se compila con xcaddy.
+
+- **Hallazgo 1 (Codex, b7e1196 y 783135c):** un aviso por fila y tipo, con prueba de 2000 filas iguales y una propiedad. El ordenamiento radix que propuso Codex se cambió por `sort`; la reasignación fue por cuota, y Codex la revisa.
+- **P-S3 (Claude):** S10 a S14, más S4 (Caddy 2.11.8 sin curl), S7 (OSRM sirve como `nobody`) y S8 (`healthcheck` de `web`). Caddy 2.11.8 sin curl: 0 críticos. Queda go-jose v4.1.5 (GHSA-mgcc-cww5-fp2q) dentro del binario, que solo se usa para el certificado ACME; es una excepción con fecha de revisión hasta que Caddy lo actualice.
 
 ## 10. Orden de trabajo
 

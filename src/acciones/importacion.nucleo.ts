@@ -7,8 +7,10 @@ import {
   analizarClientesCsv, posiblesDuplicados, type ErrorDeImportacion, type PosibleDuplicado,
 } from "@/dominio/clientes/csv";
 import { permitir } from "./autorizacion";
+import { dentroDelLimite, MENSAJE_LIMITE } from "@/seguridad/limites";
 import { camposCambiados } from "./cambios";
 import type { Contexto, Resultado } from "./tipos";
+import { invalido } from "./validacion";
 
 /** muestra: las primeras 20 filas válidas. huella: del contenido y de los duplicados; se devuelve al confirmar. */
 export interface ResumenImportacion {
@@ -50,11 +52,20 @@ const describirDuplicado = (d: PosibleDuplicado) =>
     ? `Fila ${d.fila}: "${d.nombre}" se repite en la fila ${d.otraFila}`
     : `Fila ${d.fila}: "${d.nombre}" se parece a "${d.nombreExistente}", que ya está en la cartera`;
 
+/** Plan de seguridad (hallazgo 1): la respuesta lista hasta 50 avisos y resume el resto. */
+const MAXIMO_MENSAJES_DUPLICADOS = 50;
+function mensajesDeDuplicados(duplicados: PosibleDuplicado[]): string[] {
+  const mensajes = duplicados.slice(0, MAXIMO_MENSAJES_DUPLICADOS).map(describirDuplicado);
+  const resto = duplicados.length - mensajes.length;
+  return resto > 0 ? [...mensajes, `Y ${resto} avisos más del mismo tipo`] : mensajes;
+}
+
 /** Analiza el CSV sin escribir nada. Permiso clientes.importar. */
 export async function analizarImportacion(ctx: Contexto, csv: unknown): Promise<Resultado<ResumenImportacion>> {
   const permiso = permitir(ctx, "clientes.importar");
   if (!permiso.ok) return permiso;
   if (typeof csv !== "string") return noEsTexto();
+  if (!dentroDelLimite("importar", permiso.usuario.id, ctx.ahora)) return invalido({ _: [MENSAJE_LIMITE] });
 
   const analisis = analizarClientesCsv(csv);
   const duplicados = posiblesDuplicados(analisis.validas, await nombresDeCartera(ctx.bd));
@@ -93,6 +104,7 @@ export async function confirmarImportacion(
   if (!validadas.success) return { ok: false, error: "invalido", campos: { _: ["Faltan los datos de la confirmación"] } };
   const { operacionId, huella, aceptarDuplicados } = validadas.data;
   const usuarioId = permiso.usuario.id;
+  if (!dentroDelLimite("importar", usuarioId, ctx.ahora)) return invalido({ _: [MENSAJE_LIMITE] });
 
   return ctx.bd.transaction(async (tx): Promise<Resultado<{ importados: number }>> => {
     await tomarCandadoDeNombres(tx);
@@ -111,7 +123,7 @@ export async function confirmarImportacion(
       return { ok: false, error: "invalido", campos: { archivo: ["El archivo no tiene clientes"] } };
     }
     if (duplicados.length > 0 && !aceptarDuplicados) {
-      return { ok: false, error: "invalido", campos: { duplicados: duplicados.map(describirDuplicado) } };
+      return { ok: false, error: "invalido", campos: { duplicados: mensajesDeDuplicados(duplicados) } };
     }
 
     for (const { entrada } of analisis.validas) {

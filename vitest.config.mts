@@ -3,6 +3,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: { tsconfigPaths: true },
   test: {
+    // Plan de seguridad: las pruebas generan muchos planes seguidos con el mismo usuario; el límite de frecuencia se
+    // prueba encendido en src/seguridad/limites.test.ts y src/acciones/limite-motor.integracion.test.ts.
+    env: { LIMITAR_ACCIONES: "no" },
     projects: [
       {
         extends: true,

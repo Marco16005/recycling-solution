@@ -50,3 +50,19 @@ test("al desactivar a un usuario con sesión abierta, la siguiente petición lo 
   await page.reload();
   await expect(page).toHaveURL(/\/entrar$/);
 });
+
+test("salir sin señal deja la pantalla sin datos y cierra la sesión en el servidor al volver la red", async ({ page, context }) => {
+  // Plan de seguridad, hallazgo 4.
+  await entrarComo(page, "despachador");
+  await expect(page.getByRole("heading", { name: "Clientes" })).toBeVisible();
+  await context.setOffline(true);
+  await page.getByRole("button", { name: "Salir" }).click();
+  await expect(page.getByRole("heading", { name: "Clientes" })).toHaveCount(0);
+  await context.setOffline(false);
+  // Al cargar /entrar con red, se completa el cierre pendiente; mientras tanto, «Entrar» espera.
+  await page.goto("/entrar");
+  await expect(page.getByRole("button", { name: "Entrar" })).toBeEnabled();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await page.goto("/despacho/clientes");
+  await expect(page).toHaveURL(/\/entrar$/);
+});

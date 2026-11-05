@@ -17,6 +17,7 @@ import { colaDelDia, siguienteDiaOperacion } from "@/dominio/solicitudes/cola";
 import { fechaEnMexico } from "@/dominio/tiempo";
 import { generarPlan, type EntradaPlan } from "@/motor";
 import { permitir } from "./autorizacion";
+import { dentroDelLimite, MENSAJE_LIMITE } from "@/seguridad/limites";
 import {
   asignada, cambio, comprobarValidacion, conflicto, conMapa, disponibleOperador, disponibleUnidad, ejecutarYGuardar, esFallo, porVersion,
   propuestoEnVersion, rutasParaGuardar, solicitudesRuteadas, validarIdYVersionDePlan, type ReglasSolicitudes,
@@ -44,6 +45,7 @@ export async function generarReruteo(ctx: Contexto, planBaseId: unknown, version
   const pedidas = new Set(validado.data.liberadas ?? []);
   const usuarioId = permiso.usuario.id;
   const hoy = fechaEnMexico(ctx.ahora);
+  if (!dentroDelLimite("motor", usuarioId, ctx.ahora)) return invalido({ _: [MENSAJE_LIMITE] });
 
   const leida = await ctx.bd.transaction(
     async (tx) => {
@@ -175,13 +177,17 @@ export async function generarReruteo(ctx: Contexto, planBaseId: unknown, version
 /**
  * Validación de un re-ruteo: la del Plan 4 sobre el plan operativo de la fecha, más la frescura de la operación. Las ya
  * asignadas solo se aceptan si su parada vigente está en una ruta operativa y no está congelada.
+ * Permiso planes.validar. Autoriza aquí aunque hoy solo la llame validarPlanDelDia, que ya autorizó: toda función
+ * exportada de un núcleo autoriza antes de leer o escribir, y el usuario sale de la sesión (Plan de seguridad, hallazgo 3).
  */
 export async function validarReruteo(
   ctx: Contexto,
-  usuarioId: string,
   leido: PlanGuardado,
   version: number,
 ): Promise<Resultado<{ programadas: number; pospuestas: number }>> {
+  const permiso = permitir(ctx, "planes.validar");
+  if (!permiso.ok) return permiso;
+  const usuarioId = permiso.usuario.id;
   return ctx.bd.transaction(async (tx): Promise<Resultado<{ programadas: number; pospuestas: number }>> => {
     const fecha = leido.fecha;
     await tomarCandadoDeFecha(tx, fecha);

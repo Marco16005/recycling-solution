@@ -3,5 +3,8 @@
 # debe confiar en ella (docs/operacion.md y especificación §14, decisión 11).
 {$DOMINIO} {
 	encode zstd gzip
+	# Plan de seguridad: no anunciar el servidor. Los demás encabezados los pone la aplicación (src/proxy.ts y
+	# next.config.ts) para que valgan también detrás del proxy del punto de venta (modo B).
+	header -Server
 	reverse_proxy web:3000
 }
