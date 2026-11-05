@@ -11,6 +11,8 @@ RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 FROM deps AS dev
 ENV NEXT_TELEMETRY_DISABLED=1 NPM_CONFIG_UPDATE_NOTIFIER=false
 COPY . .
+# Desarrollo y pruebas corren como root para escribir en los volúmenes de node_modules y .next; producción (runner) usa node.
+# nosemgrep: dockerfile.security.missing-user.missing-user
 CMD ["npm", "run", "dev"]
 
 FROM dev AS build

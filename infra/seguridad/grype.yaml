@@ -1,0 +1,8 @@
+# Plan de seguridad (§4): excepciones de Grype. Cada una con motivo y fecha de revisión; se borra en cuanto la imagen
+# trae la corrección. scripts/seguridad.sh falla con cualquier crítico o alto que tenga corrección y no esté aquí.
+ignore:
+  # Caddy 2.11.8 (2026-11-04) trae go-jose v4.1.5 dentro de su binario. Caddy lo usa para firmar las peticiones ACME
+  # del certificado, no para leer datos de los visitantes. Revisar el 2026-12-01 o al salir Caddy 2.11.9.
+  - vulnerability: GHSA-mgcc-cww5-fp2q
+    package:
+      name: github.com/go-jose/go-jose/v4

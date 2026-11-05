@@ -62,7 +62,8 @@ test("salir sin señal deja la pantalla sin datos y cierra la sesión en el serv
   // Al cargar /entrar con red, se completa el cierre pendiente; mientras tanto, «Entrar» espera.
   await page.goto("/entrar");
   await expect(page.getByRole("button", { name: "Entrar" })).toBeEnabled();
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  // El aviso solo aparece si el cierre sigue pendiente (Next tiene además su propio anunciador de rutas con role=alert).
+  await expect(page.getByText("La sesión anterior no se pudo cerrar")).toHaveCount(0);
   await page.goto("/despacho/clientes");
   await expect(page).toHaveURL(/\/entrar$/);
 });

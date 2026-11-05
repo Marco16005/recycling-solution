@@ -1,0 +1,12 @@
+# Plan de seguridad (§5): revisiones de Checkov que no aplican, con motivo.
+framework: [dockerfile, secrets]
+compact: true
+quiet: true
+skip-check:
+  # HEALTHCHECK: la salud de cada servicio se revisa en Compose (web, db y osrm), que es quien reinicia y ordena el arranque.
+  - CKV_DOCKER_2
+  # Usuario en infra/mapa: preparar-mapa escribe el volumen como root; el servicio osrm corre como nobody (compose.yaml).
+  - CKV_DOCKER_3
+skip-path:
+  # Contraseñas fijas de la base desechable de pruebas (tmpfs, se destruye con down -v); no protegen nada.
+  - compose.test.yaml
