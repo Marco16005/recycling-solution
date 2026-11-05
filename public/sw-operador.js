@@ -20,6 +20,10 @@ self.addEventListener("activate", (evento) => {
 // La primera visita ya ocurrió cuando el worker se activa: la pantalla le manda su dirección y los recursos que cargó
 // (solo del mismo origen) para dejarlos guardados y poder recargar sin señal desde el primer día.
 self.addEventListener("message", (evento) => {
+  // Plan de seguridad (SonarQube S2819): solo la pantalla del mismo origen puede pedir que se guarden recursos. Hoy el
+  // navegador ya lo impide; esto lo deja explícito. Un origen vacío (algunos navegadores) no se rechaza: las URLs se
+  // filtran al mismo origen más abajo.
+  if (evento.origin && evento.origin !== self.location.origin) return;
   const datos = evento.data;
   if (!datos || datos.tipo !== "precargar" || !Array.isArray(datos.urls)) return;
   evento.waitUntil(

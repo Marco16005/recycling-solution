@@ -121,6 +121,19 @@ Antes se revisa la política de uso aceptable de Hostinger. El escaneo se limita
 - **Caddy compilado con xcaddy:** la noche del 2026-11-04 se publicó GO-2026-6860 (`golang.org/x/net` 0.60). Caddy se compila con x/net 0.62.0 y go-jose 4.1.6, y Grype ya no encuentra nada corregible; la excepción de go-jose se quitó.
 - **Pruebas de unidad:** PGlite se colgaba al crear bases con la máquina cargada (2 de 4 corridas). Ahora cada archivo migra una vez y las pruebas cargan esa plantilla: la suite pasó de 132 s a unos 27 s, estable en tres corridas.
 
+- **Segunda revisión de Codex (2026-11-05):** aprobó cuatro de los cinco cambios y encontró dos cosas:
+  - La vista previa del CSV seguía devolviendo todos los avisos. Ahora devuelve hasta 50 más `totalPosiblesDuplicados`; la pantalla la ajustó Codex en 3b7838f.
+  - ZAP «con sesión» no entraba, porque `ZAP_AUTH_HEADER_SITE` llevaba el puerto. Con `web` sí entra: `/despacho/clientes` y `/operador` responden 200, con 73 y 25 URLs. El script falla si la corrida con sesión no llega con 200.
+- **SonarQube Community 26.10 (una vez, 2026-11-05):** 16 768 líneas; 2 vulnerabilidades, 5 bugs, 11 de mantenibilidad y 0 hotspots. Atendido:
+  - `S2819`: el service worker rechaza mensajes de otro origen.
+  - `S8786`: `sinBarrasFinales` reemplaza `/\/+$/` en `src/traslados`, con prueba en tiempo lineal.
+  - Aceptado o falso positivo:
+    - `S6471`: OSRM como root al preparar el mapa (§5).
+    - `S2871`: los `sort()` ordenan textos (ids, fechas ISO, JSON); el orden por código es el correcto y `localeCompare` lo haría depender del idioma.
+    - `S6853`: `Label` genérico, que recibe `htmlFor` de quien lo usa.
+    - `S7773` y `S7767`: estilo (`Number.NaN`, `| 0` del generador con semilla).
+  - Mientras SonarQube estuvo encendido (2.4 GB), siete pruebas de unidad agotaron su tiempo al crear la base. Se apagó, y la suite volvió a 815 de 815 en 26 s: por eso SonarQube no entra a `verificar-todo`.
+
 ## 10. Orden de trabajo
 
 1. P-S1: S1, S2, S3 y S6 (dependencias e imagen base). `verificar-todo` en verde.

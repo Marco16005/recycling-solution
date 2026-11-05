@@ -1,5 +1,5 @@
 import type { Coordenada } from "@/motor";
-import { coordenadasDeRuta, leerRuta, pedir } from "./osrm";
+import { coordenadasDeRuta, leerRuta, pedir, sinBarrasFinales } from "./osrm";
 
 /**
  * Recorrido por calle de cada viaje para dibujarlo en el mapa (Plan 7, §3 y plan §4, hallazgo 4). Solo visual: nunca
@@ -62,7 +62,7 @@ async function versionVigente(base: string, f: typeof fetch, punto: Coordenada, 
 
 export async function trazosDeViajes(viajes: Coordenada[][], opciones: OpcionesTrazos): Promise<Trazo[]> {
   if (!opciones.url || viajes.length === 0) return viajes.map(recto);
-  const base = opciones.url.replace(/\/+$/, "");
+  const base = sinBarrasFinales(opciones.url);
   const f = opciones.fetch ?? fetch;
   const reloj = opciones.reloj ?? Date.now;
   const plazoMs = opciones.plazoMs ?? 2000;

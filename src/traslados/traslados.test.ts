@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { distanciaKm, type Coordenada, type EntradaPlan } from "@/motor";
 import { conTraslados, LIMITE_PUNTOS, matrizDeTraslados, puntosDeEntrada, type OpcionesOsrm } from "./index";
+import { sinBarrasFinales } from "./osrm";
 import { reiniciarCacheDeTrazos, trazosDeViajes } from "./trazos";
 
 // Plan 7, P7-5. Las respuestas imitan las de OSRM 26 (/table y /route); la integración prueba contra OSRM real.
@@ -191,5 +192,17 @@ describe("trazosDeViajes", () => {
     }) as typeof fetch;
     const r = await trazosDeViajes([[A, B, A], [A, C, A]], { url: "http://osrm:5000", fetch: f, reloj: () => 0 });
     expect(r.map((t) => t.recto)).toEqual([false, true]);
+  });
+});
+
+describe("sinBarrasFinales (Plan de seguridad, SonarQube S8786)", () => {
+  it("quita solo las barras finales, en tiempo lineal", () => {
+    expect(sinBarrasFinales("http://osrm:5000///")).toBe("http://osrm:5000");
+    expect(sinBarrasFinales("http://osrm:5000")).toBe("http://osrm:5000");
+    expect(sinBarrasFinales("////")).toBe("");
+    const larga = `http://${"/".repeat(100_000)}x`;
+    const inicio = performance.now();
+    expect(sinBarrasFinales(larga)).toBe(larga);
+    expect(performance.now() - inicio).toBeLessThan(100);
   });
 });

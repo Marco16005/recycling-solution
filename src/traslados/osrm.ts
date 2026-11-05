@@ -65,3 +65,10 @@ export function leerRuta(c: Record<string, unknown>): { coordenadas: [number, nu
   if (!coordenadas.every((p) => Array.isArray(p) && p.length >= 2 && p.slice(0, 2).every((x) => typeof x === "number" && Number.isFinite(x)))) return null;
   return { coordenadas: coordenadas.map((p) => [p[0], p[1]] as [number, number]), version: typeof c.data_version === "string" ? c.data_version : null };
 }
+
+/** La URL base sin barras finales. Sin expresión regular: «/+$» retrocede de forma cuadrática con muchas barras (SonarQube S8786). */
+export function sinBarrasFinales(url: string): string {
+  let fin = url.length;
+  while (fin > 0 && url[fin - 1] === "/") fin--;
+  return url.slice(0, fin);
+}
