@@ -138,24 +138,60 @@ export function nombreNormalizado(nombre: string): string {
     .replace(/[^\p{L}\p{N}\s]/gu, "").trim().replace(/\s+/g, " ");
 }
 
-/** Filas válidas cuyo nombre normalizado coincide con otra fila del archivo o con un cliente de la cartera. */
+/** Avisa con qué primera fila anterior o cliente de menor id se repite un nombre normalizado; no lista todos los pares. */
 export function posiblesDuplicados(validas: FilaValida[], cartera: { id: string; nombre: string }[]): PosibleDuplicado[] {
   const duplicados: PosibleDuplicado[] = [];
-  const anteriores = new Map<string, number[]>();
-  const carteraOrdenada = [...cartera].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-  for (const { fila, entrada } of [...validas].sort((a, b) => a.fila - b.fila)) {
+  const primerasFilas = new Map<string, number>();
+  const primerosClientes = new Map<string, { id: string; nombre: string }>();
+  for (const cliente of cartera) {
+    const normalizado = nombreNormalizado(cliente.nombre);
+    const anterior = primerosClientes.get(normalizado);
+    if (anterior === undefined || cliente.id < anterior.id) primerosClientes.set(normalizado, cliente);
+  }
+  for (const { fila, entrada } of ordenarFilas(validas)) {
     const nombre = entrada.nombre;
     const normalizado = nombreNormalizado(nombre);
-    const filas = anteriores.get(normalizado) ?? [];
-    for (const otraFila of filas) duplicados.push({ fila, nombre, con: "archivo", otraFila });
-    for (const cliente of carteraOrdenada) {
-      if (nombreNormalizado(cliente.nombre) === normalizado) {
-        duplicados.push({ fila, nombre, con: "cartera", clienteId: cliente.id, nombreExistente: cliente.nombre });
-      }
-    }
-    anteriores.set(normalizado, [...filas, fila]);
+    const otraFila = primerasFilas.get(normalizado);
+    if (otraFila === undefined) primerasFilas.set(normalizado, fila);
+    else duplicados.push({ fila, nombre, con: "archivo", otraFila });
+    const cliente = primerosClientes.get(normalizado);
+    if (cliente !== undefined) duplicados.push({ fila, nombre, con: "cartera", clienteId: cliente.id, nombreExistente: cliente.nombre });
   }
   return duplicados;
+}
+
+/** Ordena números de fila de Excel en tiempo lineal y conserva intacta la entrada. */
+function ordenarFilas(validas: FilaValida[]): FilaValida[] {
+  const copia = [...validas];
+  let yaOrdenadas = true;
+  for (let i = 1; i < copia.length; i++) {
+    if (copia[i].fila < copia[i - 1].fila) {
+      yaOrdenadas = false;
+      break;
+    }
+  }
+  if (yaOrdenadas) return copia;
+
+  // Una fila de Excel es un entero positivo seguro: 16 dígitos cubren todo su rango.
+  let ordenadas = copia.map((valida) => ({ valida, clave: String(valida.fila).padStart(16, "0") }));
+  let auxiliares = new Array<(typeof ordenadas)[number]>(ordenadas.length);
+  const conteos = new Uint32Array(10);
+  for (let posicion = 15; posicion >= 0; posicion--) {
+    conteos.fill(0);
+    for (const { clave } of ordenadas) conteos[clave.charCodeAt(posicion) - 48]++;
+    let inicio = 0;
+    for (let i = 0; i < conteos.length; i++) {
+      const cantidad = conteos[i];
+      conteos[i] = inicio;
+      inicio += cantidad;
+    }
+    for (const fila of ordenadas) {
+      const indice = fila.clave.charCodeAt(posicion) - 48;
+      auxiliares[conteos[indice]++] = fila;
+    }
+    [ordenadas, auxiliares] = [auxiliares, ordenadas];
+  }
+  return ordenadas.map(({ valida }) => valida);
 }
 
 /** UTF-8 si es válido; si no, Windows-1252, la codificación de "CSV (delimitado por comas)" de Excel en español. */

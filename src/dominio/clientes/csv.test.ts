@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import fc from "fast-check";
 import { analizarClientesCsv, COLUMNAS_CSV, filaCsvDeCliente, LIMITES_CSV, nombreNormalizado, posiblesDuplicados } from "./csv";
 
 describe("analizarClientesCsv", () => {
@@ -100,12 +101,59 @@ describe("posiblesDuplicados", () => {
     const cartera = [{ id: "b", nombre: "Cartonera Núñez SA" }, { id: "a", nombre: "cartonera nunez sa" }];
     const r = posiblesDuplicados(validas, cartera);
     expect(r.map((d) => [d.fila, d.con, d.con === "archivo" ? d.otraFila : d.clienteId])).toEqual([
-      [2, "cartera", "a"], [2, "cartera", "b"], [3, "archivo", 2], [3, "cartera", "a"], [3, "cartera", "b"],
-      [5, "archivo", 2], [5, "archivo", 3], [5, "cartera", "a"], [5, "cartera", "b"],
+      [2, "cartera", "a"], [3, "archivo", 2], [3, "cartera", "a"], [5, "archivo", 2], [5, "cartera", "a"],
     ]);
     expect(r[0]).toMatchObject({ nombre: "Cartonera  Núñez S.A.", nombreExistente: "cartonera nunez sa" });
     expect(validas.map((v) => v.fila)).toEqual([5, 4, 3, 2]);
     expect(cartera.map((c) => c.id)).toEqual(["b", "a"]);
+  });
+
+  it("acota a 3999 avisos una importación con 2000 filas y 2000 clientes iguales en menos de 500 ms", () => {
+    const entrada = analizarClientesCsv("nombre\nCliente").validas[0].entrada;
+    const validas = Array.from({ length: 2000 }, (_, i) => ({ fila: i + 2, entrada })).reverse();
+    const cartera = Array.from({ length: 2000 }, (_, i) => ({ id: `c-${String(1999 - i).padStart(4, "0")}`, nombre: "Cliente" }));
+
+    const inicio = performance.now();
+    const avisos = posiblesDuplicados(validas, cartera);
+    const duracionMs = performance.now() - inicio;
+
+    expect(duracionMs).toBeLessThan(500);
+    expect(avisos).toHaveLength(3999);
+    const archivo = avisos.filter((aviso) => aviso.con === "archivo");
+    const carteraAvisos = avisos.filter((aviso) => aviso.con === "cartera");
+    expect(archivo).toHaveLength(1999);
+    expect(carteraAvisos).toHaveLength(2000);
+    expect(archivo.every((aviso) => aviso.otraFila === 2)).toBe(true);
+    expect(carteraAvisos.every((aviso) => aviso.clienteId === "c-0000")).toBe(true);
+  });
+
+  it("da como máximo un aviso de cada tipo por fila y señala la primera fila repetida", () => {
+    const entrada = analizarClientesCsv("nombre\nBase").validas[0].entrada;
+    const nombre = fc.constantFrom("Cartonera Núñez S.A.", "cartonera nunez sa", "Otra", "otra!", "Única", " unica ");
+    fc.assert(fc.property(
+      fc.array(nombre, { maxLength: 60 }), fc.array(nombre, { maxLength: 30 }), fc.boolean(),
+      (nombres, nombresCartera, invertir) => {
+        const validas = nombres.map((nombre, i) => ({ fila: i * 3 + 2, entrada: { ...entrada, nombre } }));
+        if (invertir) validas.reverse();
+        const cartera = nombresCartera.map((nombre, i) => ({ id: String(100 - i), nombre }));
+        const avisos = posiblesDuplicados(validas, cartera);
+        expect(avisos.length).toBeLessThanOrEqual(2 * validas.length);
+
+        const porFila = new Map<number, typeof avisos>();
+        for (const aviso of avisos) porFila.set(aviso.fila, [...(porFila.get(aviso.fila) ?? []), aviso]);
+        const primeras = new Map<string, number>();
+        for (const { fila, entrada } of [...validas].sort((a, b) => a.fila - b.fila)) {
+          const normalizado = nombreNormalizado(entrada.nombre);
+          const deFila = porFila.get(fila) ?? [];
+          const archivo = deFila.filter((aviso) => aviso.con === "archivo");
+          const deCartera = deFila.filter((aviso) => aviso.con === "cartera");
+          const primera = primeras.get(normalizado);
+          expect(archivo).toEqual(primera === undefined ? [] : [{ fila, nombre: entrada.nombre, con: "archivo", otraFila: primera }]);
+          if (primera === undefined) primeras.set(normalizado, fila);
+          expect(deCartera.length).toBeLessThanOrEqual(1);
+        }
+      },
+    ), { seed: 20261104, numRuns: 200 });
   });
 });
 
