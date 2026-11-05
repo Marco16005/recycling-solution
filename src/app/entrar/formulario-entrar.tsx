@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,15 +15,25 @@ export function FormularioEntrar() {
   const [pendiente, iniciar] = useTransition();
   const [salidaPendiente, setSalidaPendiente] = useState(false);
   const [listo, setListo] = useState(false);
+  const [reintentando, setReintentando] = useState(false);
 
-  // Si el último «Salir» no llegó al servidor, se cierra ahora que hay red (Plan de seguridad, hallazgo 4). Entrar espera
-  // a que termine: un cierre tardío revocaría la sesión nueva.
-  useEffect(() => {
-    void completarSalidaPendiente().then((sigue) => {
-      setSalidaPendiente(sigue);
-      setListo(true);
-    });
+  // Si el último «Salir» no llegó al servidor, se cierra ahora (Plan de seguridad, hallazgo 4). «Entrar» queda desactivado
+  // hasta que el cierre se complete: un cierre tardío revocaría la sesión nueva. Se reintenta al volver la red.
+  const aplicar = useCallback((sigue: boolean) => {
+    setSalidaPendiente(sigue);
+    setListo(!sigue);
+    setReintentando(false);
   }, []);
+  useEffect(() => {
+    const intentar = () => void completarSalidaPendiente().then(aplicar);
+    intentar();
+    window.addEventListener("online", intentar);
+    return () => window.removeEventListener("online", intentar);
+  }, [aplicar]);
+  function reintentar() {
+    setReintentando(true);
+    void completarSalidaPendiente().then(aplicar);
+  }
 
   function entrar(datos: FormData) {
     iniciar(async () => {
@@ -54,10 +64,15 @@ export function FormularioEntrar() {
         <Input id="clave" name="clave" type="password" autoComplete="current-password" required />
       </div>
       {salidaPendiente && (
-        <p role="alert" className="text-sm text-destructive">
-          La sesión anterior no se pudo cerrar en el servidor. Los datos ya se borraron de este teléfono; cuando tengas
-          señal, recarga esta página para terminar de cerrarla.
-        </p>
+        <div role="alert" className="flex flex-col gap-2 text-sm text-destructive">
+          <p>
+            La sesión anterior no se pudo cerrar en el servidor. Los datos ya se borraron de este teléfono; cuando tengas
+            señal, termina de cerrarla para poder entrar.
+          </p>
+          <Button type="button" variant="outline" size="sm" disabled={reintentando} onClick={reintentar}>
+            {reintentando ? "Cerrando…" : "Terminar de cerrar la sesión"}
+          </Button>
+        </div>
       )}
       {error && (
         <p role="alert" className="text-sm text-destructive">

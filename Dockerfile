@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1.7
+# checkov:skip=CKV_DOCKER_2: la salud de la aplicación la revisa Compose (healthcheck de web en compose.prod.yaml y compose.test.yaml).
 # Etapas: deps (dependencias exactas del lockfile), dev (herramientas y pruebas), build (next build), runner (producción)
 # y e2e (Playwright con navegadores, para las pruebas de punta a punta).
 

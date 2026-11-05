@@ -37,8 +37,22 @@ services:
     restart: unless-stopped
     mem_limit: ${LIMITE_MEMORIA_OSRM:-256m}
 
+  # Plan de seguridad (S4): Caddy corre sin privilegios. Este paso, como root y sin red, deja /data y /config a su nombre
+  # antes de cada arranque; así sirven también los volúmenes que creó una versión anterior que corría como root.
+  proxy-permisos:
+    build: { context: ./infra/caddy }
+    image: rs-caddy:2.11.8
+    profiles: ["caddy"]
+    user: root
+    network_mode: none
+    entrypoint: ["chown", "-R", "caddy:caddy", "/data", "/config"]
+    volumes:
+      - caddy_datos:/data
+      - caddy_config:/config
+    restart: "no"
+
   proxy:
-    # Plan de seguridad (S4): imagen propia sobre caddy:2.11.8-alpine, sin curl (infra/caddy/Dockerfile).
+    # Plan de seguridad (S4): imagen propia, compilada con dependencias corregidas y sin curl (infra/caddy/Dockerfile).
     build: { context: ./infra/caddy }
     image: rs-caddy:2.11.8
     profiles: ["caddy"]
@@ -54,6 +68,7 @@ services:
       - caddy_config:/config
     depends_on:
       web: { condition: service_healthy }
+      proxy-permisos: { condition: service_completed_successfully }
     restart: unless-stopped
 
 volumes:

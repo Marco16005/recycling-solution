@@ -112,6 +112,15 @@ Antes se revisa la política de uso aceptable de Hostinger. El escaneo se limita
 
 - **P-S4 (368338a y siguiente):** `scripts/seguridad.sh` con excepciones documentadas en `infra/seguridad/`, y `verificar-todo.sh` con un paso 6 (`--rapido`). Primera corrida completa, el 2026-11-04: 11 de 12 pasos en verde, ZAP incluido. Trivy marcó que Caddy corría como root (DS-0002, alto): ahora corre como `caddy` (uid 10001), con `skip_install_trust`, y responde por HTTPS sin encabezado `Server`. Los respaldos de `/data` de Caddy en `operacion.md` corren con `--user root` y devuelven los archivos con `chown`. La imagen del mapa aplica los parches de Debian (`apt-get upgrade`) y Grype ya no encuentra críticos ni altos corregibles.
 
+- **Revisión de Codex de P-S3 y P-S4 (2026-11-05):** aprobó el cambio a `sort` y pidió cinco cambios, ya aplicados:
+  1. «Entrar» queda desactivado mientras el cierre siga pendiente, con un botón para reintentar y reintento automático al volver la red.
+  2. `seguridad.sh` construye y levanta todo desde la misma copia del commit.
+  3. ZAP también corre con sesión de despachador y de operador, y un OSV que no corre ya cuenta como falla.
+  4. Las excepciones de Checkov viven dentro de cada Dockerfile.
+  5. `proxy-permisos` deja `/data` y `/config` a nombre de Caddy en cada arranque; se probó con un volumen creado como root por Caddy 2.11.6.
+- **Caddy compilado con xcaddy:** la noche del 2026-11-04 se publicó GO-2026-6860 (`golang.org/x/net` 0.60). Caddy se compila con x/net 0.62.0 y go-jose 4.1.6, y Grype ya no encuentra nada corregible; la excepción de go-jose se quitó.
+- **Pruebas de unidad:** PGlite se colgaba al crear bases con la máquina cargada (2 de 4 corridas). Ahora cada archivo migra una vez y las pruebas cargan esa plantilla: la suite pasó de 132 s a unos 27 s, estable en tres corridas.
+
 ## 10. Orden de trabajo
 
 1. P-S1: S1, S2, S3 y S6 (dependencias e imagen base). `verificar-todo` en verde.

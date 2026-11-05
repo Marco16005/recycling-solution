@@ -4,7 +4,8 @@
 #   scripts/seguridad.sh            todo: secretos, dependencias, código, Dockerfiles, imágenes y ZAP (~15 min la 1.ª vez)
 #   scripts/seguridad.sh --rapido   dependencias de producción e imagen de la aplicación (lo que corre verificar-todo.sh)
 #
-# Se escanea el último commit (git archive HEAD), no lo que esté sin guardar. Falla con cualquier crítico o alto que
+# Todo sale de una misma copia limpia del último commit (git archive HEAD): código, imágenes y la pila que revisa ZAP;
+# lo que esté sin commit no entra. Falla con cualquier crítico o alto que
 # tenga corrección publicada, con hallazgos de Semgrep (paquetes públicos y reglas propias), con avisos de Hadolint,
 # Checkov o Trivy, y con fallas o avisos de ZAP que no estén aceptados. Las excepciones y su motivo están en
 # infra/seguridad/. Reportes en reportes-seguridad/AAAAMMDD-HHMMSS/ (ignorada por git).
@@ -38,7 +39,7 @@ COPIA=$(mktemp -d)
 FALLAS=""
 
 compose() {
-  docker compose -p "$PROYECTO" -f compose.yaml -f compose.test.yaml "$@"
+  docker compose -p "$PROYECTO" --project-directory "$COPIA" -f "$COPIA/compose.yaml" -f "$COPIA/compose.test.yaml" "$@"
 }
 limpiar() {
   compose down -v --remove-orphans >/dev/null 2>&1 || true
@@ -81,14 +82,20 @@ dependencias() {
 }
 
 dependencias_osv() {
-  # Informativo: incluye las de desarrollo, que no llegan a la imagen de producción.
+  # Informativo: incluye las de desarrollo, que no llegan a la imagen de producción. Código 0: sin hallazgos; 1: con
+  # hallazgos (quedan en osv.json); otro: el escaneo no corrió, y eso sí es falla.
+  codigo=0
   docker run --rm -v "$COPIA:/src:ro" -v "$REPORTES:/out" "$OSV" scan source --lockfile /src/package-lock.json \
-    --format json --output-file /out/osv.json >/dev/null 2>&1 || true
+    --format json --output-file /out/osv.json >/dev/null 2>&1 || codigo=$?
+  if [ "$codigo" -gt 1 ]; then
+    echo "   OSV-Scanner no pudo correr (código $codigo)"
+    return 1
+  fi
   echo "   reporte en osv.json (informativo)"
 }
 
 reglas_propias() {
-  docker run --rm -v "$PWD/infra/seguridad/semgrep:/reglas:ro" -w /reglas "$SEMGREP" \
+  docker run --rm -v "$COPIA/infra/seguridad/semgrep:/reglas:ro" -w /reglas "$SEMGREP" \
     semgrep --metrics=off --quiet --test --config reglas.yaml reglas.ts
 }
 
@@ -116,24 +123,58 @@ construir() {
     return
   fi
   compose build web mapa-prueba >/dev/null
-  docker build -q -t "$IMAGEN_PROXY" infra/caddy >/dev/null
+  docker build -q -t "$IMAGEN_PROXY" "$COPIA/infra/caddy" >/dev/null
   docker pull -q "$IMAGEN_DB" >/dev/null
 }
 
 # Falla con críticos o altos que tengan corrección y no estén en infra/seguridad/grype.yaml.
 imagen() {
   docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v grype-db-seguridad:/cache -e GRYPE_DB_CACHE_DIR=/cache \
-    -v "$PWD/infra/seguridad:/cfg:ro" "$GRYPE" "$1" -q -c /cfg/grype.yaml --only-fixed --fail-on high
+    -v "$COPIA/infra/seguridad:/cfg:ro" "$GRYPE" "$1" -q -c /cfg/grype.yaml --only-fixed --fail-on high
+}
+
+# Usuarios sintéticos de la semilla de pruebas (compose.test.yaml); nunca existen fuera de la base de pruebas.
+CLAVE_PRUEBAS=clave-e2e-sintetica
+
+# Cookie de sesión de un usuario de la semilla, para que ZAP recorra lo que ve ese rol.
+cookie_de() {
+  docker run --rm --network "${PROYECTO}_default" "$NODE" node -e '
+    fetch("http://web:3000/api/auth/sign-in/email", { method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "http://web:3000" },
+      body: JSON.stringify({ email: process.argv[1], password: process.argv[2] }) })
+      .then((r) => { if (!r.ok) process.exit(1); console.log(r.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ")); })
+      .catch(() => process.exit(1));' "$1" "$CLAVE_PRUEBAS"
+}
+
+# Una corrida de ZAP baseline (solo pasiva: no envía ataques ni cambia datos). 0: sin fallas ni avisos fuera de los
+# aceptados. 1: fallas. 2: avisos.
+zap_corrida() {
+  carpeta="$REPORTES/zap-$1"
+  mkdir -p "$carpeta"
+  cp "$COPIA/infra/seguridad/zap-reglas.tsv" "$carpeta/reglas.tsv"
+  chmod 777 "$carpeta"
+  if [ -z "${3:-}" ]; then
+    docker run --rm --network "${PROYECTO}_default" -v "$carpeta:/zap/wrk:rw" "$ZAP" \
+      zap-baseline.py -t "$2" -c reglas.tsv -r zap.html -J zap.json -l WARN
+  else
+    docker run --rm --network "${PROYECTO}_default" -v "$carpeta:/zap/wrk:rw" -e ZAP_AUTH_HEADER=Cookie \
+      -e "ZAP_AUTH_HEADER_VALUE=$3" -e ZAP_AUTH_HEADER_SITE=web:3000 "$ZAP" \
+      zap-baseline.py -t "$2" -c reglas.tsv -r zap.html -J zap.json -l WARN
+  fi
 }
 
 zap() {
   compose up -d --wait web >/dev/null
-  mkdir -p "$REPORTES/zap"
-  cp infra/seguridad/zap-reglas.tsv "$REPORTES/zap/reglas.tsv"
-  chmod 777 "$REPORTES/zap"
-  # 0: sin fallas ni avisos fuera de los aceptados. 1: fallas. 2: avisos.
-  docker run --rm --network "${PROYECTO}_default" -v "$REPORTES/zap:/zap/wrk:rw" "$ZAP" \
-    zap-baseline.py -t http://web:3000 -c reglas.tsv -r zap.html -J zap.json -l WARN
+  ok=0
+  echo "   -- sin sesión"
+  zap_corrida anonimo http://web:3000 || ok=1
+  for rol in despachador operador; do
+    cookie=$(cookie_de "$rol@e2e.local") || { echo "   no se pudo entrar como $rol"; ok=1; continue; }
+    if [ "$rol" = despachador ]; then inicio=/despacho/clientes; else inicio=/operador; fi
+    echo "   -- con sesión de $rol"
+    zap_corrida "$rol" "http://web:3000$inicio" "$cookie" || ok=1
+  done
+  return $ok
 }
 
 # ---------- Orden
@@ -154,7 +195,7 @@ if [ "$RAPIDO" = no ]; then
   paso "9. Imagen de Caddy (Grype)" imagen "$IMAGEN_PROXY"
   paso "10. Imagen de Postgres (Grype)" imagen "$IMAGEN_DB"
   paso "11. Imagen del mapa (Grype)" imagen "$IMAGEN_MAPA"
-  paso "12. Aplicación en marcha (ZAP baseline)" zap
+  paso "12. Aplicación en marcha (ZAP baseline sin sesión, como despachador y como operador)" zap
 fi
 
 echo
