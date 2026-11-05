@@ -170,12 +170,13 @@ zap_corrida() {
     -e "ZAP_AUTH_HEADER_VALUE=$3" -e ZAP_AUTH_HEADER_SITE=web "$ZAP" \
     zap-baseline.py -t "$2" -c reglas.tsv -r zap.html -J zap.json -l WARN -d > "$carpeta/zap.log" 2>&1 || resultado=$?
   grep -E "^(WARN|FAIL)" "$carpeta/zap.log" || true
-  visitadas=$(grep -cF "$2" "$carpeta/zap.log" | tr -d ' ')
-  if ! grep -qF "$2 (200 OK)" "$carpeta/zap.log" && ! grep -qE "${2}[?/][^ ]* \(200 OK\)" "$carpeta/zap.log"; then
+  # Con -d, zap-baseline registra su propia petición a la página de inicio a través de ZAP: 200 prueba que ZAP mandó la
+  # cookie (sin ella, la página protegida responde 307 hacia /entrar).
+  if ! grep -qF "\"GET $2 HTTP/1.1\" 200" "$carpeta/zap.log"; then
     echo "   ZAP no llegó con sesión a $2 (revisa $carpeta/zap.log)"
     return 1
   fi
-  echo "   $visitadas líneas con $2 en el recorrido; la página respondió 200 con sesión"
+  echo "   $2 respondió 200 a ZAP con sesión; $(grep -oE 'Total of [0-9]+ URLs' "$carpeta/zap.log" || echo 'sin total')"
   return $resultado
 }
 
