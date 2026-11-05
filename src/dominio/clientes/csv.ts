@@ -148,7 +148,7 @@ export function posiblesDuplicados(validas: FilaValida[], cartera: { id: string;
     const anterior = primerosClientes.get(normalizado);
     if (anterior === undefined || cliente.id < anterior.id) primerosClientes.set(normalizado, cliente);
   }
-  for (const { fila, entrada } of ordenarFilas(validas)) {
+  for (const { fila, entrada } of [...validas].sort((a, b) => a.fila - b.fila)) {
     const nombre = entrada.nombre;
     const normalizado = nombreNormalizado(nombre);
     const otraFila = primerasFilas.get(normalizado);
@@ -158,40 +158,6 @@ export function posiblesDuplicados(validas: FilaValida[], cartera: { id: string;
     if (cliente !== undefined) duplicados.push({ fila, nombre, con: "cartera", clienteId: cliente.id, nombreExistente: cliente.nombre });
   }
   return duplicados;
-}
-
-/** Ordena números de fila de Excel en tiempo lineal y conserva intacta la entrada. */
-function ordenarFilas(validas: FilaValida[]): FilaValida[] {
-  const copia = [...validas];
-  let yaOrdenadas = true;
-  for (let i = 1; i < copia.length; i++) {
-    if (copia[i].fila < copia[i - 1].fila) {
-      yaOrdenadas = false;
-      break;
-    }
-  }
-  if (yaOrdenadas) return copia;
-
-  // Una fila de Excel es un entero positivo seguro: 16 dígitos cubren todo su rango.
-  let ordenadas = copia.map((valida) => ({ valida, clave: String(valida.fila).padStart(16, "0") }));
-  let auxiliares = new Array<(typeof ordenadas)[number]>(ordenadas.length);
-  const conteos = new Uint32Array(10);
-  for (let posicion = 15; posicion >= 0; posicion--) {
-    conteos.fill(0);
-    for (const { clave } of ordenadas) conteos[clave.charCodeAt(posicion) - 48]++;
-    let inicio = 0;
-    for (let i = 0; i < conteos.length; i++) {
-      const cantidad = conteos[i];
-      conteos[i] = inicio;
-      inicio += cantidad;
-    }
-    for (const fila of ordenadas) {
-      const indice = fila.clave.charCodeAt(posicion) - 48;
-      auxiliares[conteos[indice]++] = fila;
-    }
-    [ordenadas, auxiliares] = [auxiliares, ordenadas];
-  }
-  return ordenadas.map(({ valida }) => valida);
 }
 
 /** UTF-8 si es válido; si no, Windows-1252, la codificación de "CSV (delimitado por comas)" de Excel en español. */
