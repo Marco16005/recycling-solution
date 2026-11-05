@@ -2,12 +2,19 @@
 
 - **Fecha:** 2026-10-07; revisión 2 del 2026-10-13 (Docker, Better Auth y correcciones de la revisión cruzada con Codex).
 - **Especificación:** `docs/superpowers/specs/2026-10-07-recycling-solution-piloto-design.md`
-- **Estado (2026-11-03):**
+- **Estado (2026-11-05):**
   - Planes 1 a 6 terminados y validados por Claude y Codex en `main` (etiquetas `plan-1-validado`, `plan-2-3-validado`, `plan-4-validado`, `plan-5-validado` y `plan-6-validado`).
   - Plan 7 (calles reales con OSRM y alertas en vivo, sin gasto en tráfico de terceros) validado por Claude y Codex en `main` (etiqueta `plan-7-validado`).
   - Plan CRM (cartera lista para operar: los 10 puntos) validado por Claude y Codex en `main` (etiqueta `plan-crm-validado`).
   - Plan 8 (reacomodo de rutas: más paradas atendidas y menos tiempo muerto) validado por Claude y Codex en `main` (etiqueta `plan-8-validado`): motor 1.2.0, tolerancia configurable, ningún camión termina más de la tolerancia después, y franja en el plan; en la simulación, −38 % de tiempo muerto y −42 % de km con 15 unidades, y +59 atendidas con 8.
-  - Sigue la preparación del piloto (abajo): VPS, línea base de K2, cargar la cartera real y revisión del aviso de privacidad por un abogado.
+  - Plan de seguridad validado por Claude y Codex en `main` (etiqueta `plan-seguridad-validado`):
+    - escaneos en contenedores con `scripts/seguridad.sh`, que se corre antes de cada despliegue; `verificar-todo.sh` hace la parte rápida;
+    - Next 16.4.5 y Node 24.22.2, que cierran fallas críticas;
+    - encabezados de seguridad y política de contenido;
+    - Caddy y OSRM sin privilegios;
+    - tope de entrada del motor y límites de frecuencia;
+    - los hallazgos de la auditoría manual de Codex y de SonarQube.
+  - Sigue la preparación del piloto (abajo): VPS, línea base de K2, cargar la cartera real y revisión del aviso de privacidad por un abogado. Después del despliegue, las pruebas contra el VPS del Plan de seguridad (§7), con autorización del dueño.
   - Decisiones del dueño en la especificación §14.
 
 El piloto se construye en seis planes. Cada uno deja software funcionando y probado por sí mismo. Solo el Plan 1 está escrito al detalle; el plan detallado de cada hito siguiente se escribe al iniciarlo, con el mismo formato y la misma verificación previa del código, porque depende de lo que se aprenda en el anterior.
@@ -94,6 +101,11 @@ Este plan no usa base de datos ni pantallas, así que puede empezar en cuanto es
 ### Plan 8 — Optimización entre rutas
 
 - Reacomodar paradas entre rutas para recortar km sin romper ventanas, capacidad, turno ni FIFO (la "A" de la conversación con el usuario del 2026-10-15). El aprendizaje de tiempos con datos reales (la "B") va después del piloto.
+
+### Plan de seguridad — antes del piloto
+
+- Diseño, línea base, hallazgos y avance en `docs/superpowers/specs/2026-11-04-plan-seguridad-design.md`.
+- Aceptación: sin críticos ni altos con corrección en dependencias de producción ni en las imágenes; ZAP sin fallas, con y sin sesión, y solo avisos aceptados; hallazgos de Codex cerrados; `verificar-todo.sh` y `scripts/seguridad.sh` en verde.
 
 ### Piloto
 
