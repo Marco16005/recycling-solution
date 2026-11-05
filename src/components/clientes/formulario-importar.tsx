@@ -97,7 +97,7 @@ export function FormularioImportar() {
       !analisis.resumen.validas
     )
       return;
-    if (analisis.resumen.posiblesDuplicados.length && !aceptarDuplicados) {
+    if (analisis.resumen.totalPosiblesDuplicados > 0 && !aceptarDuplicados) {
       setErrores({ duplicados: ["Revisa y acepta los posibles duplicados para continuar."] });
       return;
     }
@@ -279,10 +279,10 @@ export function FormularioImportar() {
               </Table>
             </div>
           )}
-          {analisis.resumen.posiblesDuplicados.length > 0 && (
+          {analisis.resumen.totalPosiblesDuplicados > 0 && (
             <div className="space-y-3">
               <h3 className="font-medium">
-                Posibles duplicados ({analisis.resumen.posiblesDuplicados.length})
+                Posibles duplicados ({analisis.resumen.totalPosiblesDuplicados})
               </h3>
               <ul className="max-h-72 space-y-2 overflow-auto rounded-lg border p-4 text-sm">
                 {analisis.resumen.posiblesDuplicados.map((d, i) => (
@@ -294,6 +294,11 @@ export function FormularioImportar() {
                     .
                   </li>
                 ))}
+                {analisis.resumen.totalPosiblesDuplicados > analisis.resumen.posiblesDuplicados.length && (
+                  <li>
+                    Y {analisis.resumen.totalPosiblesDuplicados - analisis.resumen.posiblesDuplicados.length} avisos más; al confirmar se revisan todos.
+                  </li>
+                )}
               </ul>
               <Campo
                 nombre="duplicados"
@@ -328,7 +333,7 @@ export function FormularioImportar() {
               requiereAnalisis ||
               analisis.resumen.errores.length > 0 ||
               analisis.resumen.validas === 0 ||
-              (analisis.resumen.posiblesDuplicados.length > 0 && !aceptarDuplicados)
+              (analisis.resumen.totalPosiblesDuplicados > 0 && !aceptarDuplicados)
             }
           >
             {pendiente && paso === "confirmacion"

@@ -1,0 +1,4 @@
+# Plan de seguridad (§4): excepciones de Grype. Cada una con motivo y fecha de revisión; se borra en cuanto la imagen
+# trae la corrección. scripts/seguridad.sh falla con cualquier crítico o alto que tenga corrección y no esté aquí.
+# Historial: go-jose en Caddy (GHSA-mgcc-cww5-fp2q) se quitó el 2026-11-05 al compilar Caddy con go-jose 4.1.6.
+ignore: []

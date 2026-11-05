@@ -18,6 +18,9 @@ const eslintConfig = defineConfig([
     ".worktrees/**",
     "playwright-report/**",
     "test-results/**",
+    // Plan de seguridad: casos de prueba de las reglas Semgrep (no son código de la aplicación) y reportes de escaneo.
+    "infra/seguridad/semgrep/**",
+    "reportes-seguridad/**",
   ]),
 ]);
 

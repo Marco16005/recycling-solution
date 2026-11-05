@@ -1,7 +1,16 @@
 # DOMINIO en .env. Con un dominio público, Caddy obtiene el certificado solo.
 # Con localhost, una IP o un nombre de la red local, Caddy usa su propia autoridad; cada teléfono
 # debe confiar en ella (docs/operacion.md y especificación §14, decisión 11).
+{
+	# Caddy corre sin privilegios (infra/caddy/Dockerfile): no intenta instalar su autoridad local en el sistema del
+	# contenedor, que no le sirve a ningún teléfono. Con DOMINIO público el certificado es de Let's Encrypt.
+	skip_install_trust
+}
+
 {$DOMINIO} {
 	encode zstd gzip
+	# Plan de seguridad: no anunciar el servidor. Los demás encabezados los pone la aplicación (src/proxy.ts y
+	# next.config.ts) para que valgan también detrás del proxy del punto de venta (modo B).
+	header -Server
 	reverse_proxy web:3000
 }

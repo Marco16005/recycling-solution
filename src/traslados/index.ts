@@ -1,6 +1,6 @@
 import type { InfoTraslados, MotivoAproximado } from "@/dominio/plan/tipos";
 import { distanciaKm, type Coordenada, type EntradaPlan, type MatrizTraslados } from "@/motor";
-import { coordenadasDeRuta, leerCercano, leerTabla, pedir } from "./osrm";
+import { coordenadasDeRuta, leerCercano, leerTabla, pedir, sinBarrasFinales } from "./osrm";
 
 /**
  * Traslados por calle con OSRM (Plan 7, §2.4). Fuera del motor: aquí sí hay red. Lo implementa Claude en P7-5.
@@ -46,7 +46,7 @@ export async function matrizDeTraslados(puntos: Coordenada[], opciones: Opciones
   if (!opciones.url) return aproximado("sin_configurar", null);
   if (puntos.length > LIMITE_PUNTOS) return aproximado("demasiados_puntos", null);
   const inicio = performance.now();
-  const base = opciones.url.replace(/\/+$/, "");
+  const base = sinBarrasFinales(opciones.url);
   // /table exige al menos dos coordenadas; con un solo punto (el patio de un plan vacío) basta saber su ajuste y el mapa.
   const url = puntos.length === 1
     ? `${base}/nearest/v1/driving/${coordenadasDeRuta(puntos)}`
@@ -94,7 +94,7 @@ export { reiniciarCacheDeTrazos, trazosDeViajes, type Trazo } from "./trazos";
 /** Plan CRM, §4.2: metros del punto a la calle más cercana según OSRM (/nearest); null sin OSRM o si falla. */
 export async function distanciaACalle(punto: Coordenada, opciones: { url: string | undefined; fetch?: typeof fetch; plazoMs?: number }): Promise<number | null> {
   if (!opciones.url) return null;
-  const r = await pedir(opciones.fetch ?? fetch, `${opciones.url.replace(/\/+$/, "")}/nearest/v1/driving/${coordenadasDeRuta([punto])}`, opciones.plazoMs ?? 2000);
+  const r = await pedir(opciones.fetch ?? fetch, `${sinBarrasFinales(opciones.url)}/nearest/v1/driving/${coordenadasDeRuta([punto])}`, opciones.plazoMs ?? 2000);
   if (!r.ok) return null;
   return leerCercano(r.cuerpo)?.ajusteM[0] ?? null;
 }

@@ -138,22 +138,24 @@ export function nombreNormalizado(nombre: string): string {
     .replace(/[^\p{L}\p{N}\s]/gu, "").trim().replace(/\s+/g, " ");
 }
 
-/** Filas válidas cuyo nombre normalizado coincide con otra fila del archivo o con un cliente de la cartera. */
+/** Avisa con qué primera fila anterior o cliente de menor id se repite un nombre normalizado; no lista todos los pares. */
 export function posiblesDuplicados(validas: FilaValida[], cartera: { id: string; nombre: string }[]): PosibleDuplicado[] {
   const duplicados: PosibleDuplicado[] = [];
-  const anteriores = new Map<string, number[]>();
-  const carteraOrdenada = [...cartera].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const primerasFilas = new Map<string, number>();
+  const primerosClientes = new Map<string, { id: string; nombre: string }>();
+  for (const cliente of cartera) {
+    const normalizado = nombreNormalizado(cliente.nombre);
+    const anterior = primerosClientes.get(normalizado);
+    if (anterior === undefined || cliente.id < anterior.id) primerosClientes.set(normalizado, cliente);
+  }
   for (const { fila, entrada } of [...validas].sort((a, b) => a.fila - b.fila)) {
     const nombre = entrada.nombre;
     const normalizado = nombreNormalizado(nombre);
-    const filas = anteriores.get(normalizado) ?? [];
-    for (const otraFila of filas) duplicados.push({ fila, nombre, con: "archivo", otraFila });
-    for (const cliente of carteraOrdenada) {
-      if (nombreNormalizado(cliente.nombre) === normalizado) {
-        duplicados.push({ fila, nombre, con: "cartera", clienteId: cliente.id, nombreExistente: cliente.nombre });
-      }
-    }
-    anteriores.set(normalizado, [...filas, fila]);
+    const otraFila = primerasFilas.get(normalizado);
+    if (otraFila === undefined) primerasFilas.set(normalizado, fila);
+    else duplicados.push({ fila, nombre, con: "archivo", otraFila });
+    const cliente = primerosClientes.get(normalizado);
+    if (cliente !== undefined) duplicados.push({ fila, nombre, con: "cartera", clienteId: cliente.id, nombreExistente: cliente.nombre });
   }
   return duplicados;
 }

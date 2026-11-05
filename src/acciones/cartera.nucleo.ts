@@ -8,6 +8,7 @@ import { distanciaACalle } from "@/traslados";
 import { and, eq } from "drizzle-orm";
 import { permitir } from "./autorizacion";
 import { resolverEnlaceCorto } from "./enlaces";
+import { dentroDelLimite, MENSAJE_LIMITE } from "@/seguridad/limites";
 import type { Contexto, Resultado } from "./tipos";
 import { idSchema, invalido } from "./validacion";
 
@@ -21,6 +22,8 @@ export async function ubicacionDesdeTexto(ctx: Contexto, texto: unknown):
   if (typeof texto !== "string" || texto.trim() === "" || texto.length > 2000) return invalido({ ubicacion: ["Pega la ubicación o el enlace"] });
   let lectura = leerUbicacion(texto);
   if (!lectura.ok && lectura.motivo === "enlace_corto") {
+    // Plan de seguridad (hallazgo 5): seguir un enlace es una petición a internet desde el servidor.
+    if (!dentroDelLimite("enlace", permiso.usuario.id, ctx.ahora)) return invalido({ ubicacion: [MENSAJE_LIMITE] });
     const largo = await resolverEnlaceCorto(texto);
     if (!largo.ok) return invalido({ ubicacion: [largo.motivo] });
     lectura = leerUbicacion(largo.url);

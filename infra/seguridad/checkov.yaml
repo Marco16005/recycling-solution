@@ -1,0 +1,8 @@
+# Plan de seguridad (§5): configuración de Checkov. Las excepciones de cada Dockerfile van dentro de él, con su motivo
+# (# checkov:skip=...), para que no tapen el mismo problema en otro archivo.
+framework: [dockerfile, secrets]
+compact: true
+quiet: true
+skip-path:
+  # Contraseñas fijas de la base desechable de pruebas (tmpfs, se destruye con down -v); no protegen nada.
+  - compose.test.yaml

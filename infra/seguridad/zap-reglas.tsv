@@ -1,0 +1,5 @@
+# Plan de seguridad (§5): avisos de ZAP aceptados, con su motivo. Formato de zap-baseline.py -c: id<TAB>IGNORE<TAB>(motivo).
+10055	IGNORE	(script-src unsafe-inline: Next escribe en línea los datos de React Server Components; los nonces romperían Cache Components)
+90004	IGNORE	(Cross-Origin-Embedder-Policy: bloquearía las teselas de OpenFreeMap; la aplicación no necesita aislamiento entre orígenes)
+10049	IGNORE	(Non-Storable Content: informativo; que las páginas con datos personales no se guarden en caché es lo deseado)
+10109	IGNORE	(Modern Web Application: informativo)

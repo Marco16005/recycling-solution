@@ -1,0 +1,50 @@
+# Plan de seguridad (§4): reglas propias que hacen cumplir invariantes de AGENTS.md. Las propuso Codex en su auditoría
+# del 2026-11-04. Sus casos de prueba están en reglas.ts (semgrep --test); por eso cada regla incluye también ese
+# archivo en sus rutas (en src/ no hay ningún reglas.ts).
+rules:
+  - id: rs-nucleo-sin-permiso
+    languages: [typescript]
+    severity: ERROR
+    paths:
+      include: ["/src/acciones/*.nucleo.ts", "/src/consultas/*.nucleo.ts", "reglas.ts"]
+    message: >-
+      Toda acción o consulta exportada de un núcleo autoriza con permitir(ctx, permiso) de src/acciones/autorizacion.ts
+      (o src/consultas/autorizacion.ts) antes de leer o escribir (AGENTS.md, reglas de código).
+    patterns:
+      - pattern: |
+          export async function $F($CTX: Contexto, ...) { ... }
+      - pattern-not: |
+          export async function $F($CTX: Contexto, ...) {
+            ...
+            <... permitir($CTX, ...) ...>;
+            ...
+          }
+
+  - id: rs-dominio-impuro
+    languages: [typescript]
+    severity: ERROR
+    paths:
+      include: ["/src/dominio/**", "reglas.ts"]
+      exclude: ["*.test.ts"]
+    message: "src/dominio es puro: recibe el instante y la semilla; sin Date.now(), new Date() sin argumentos ni Math.random()."
+    pattern-either:
+      - pattern: Date.now()
+      - pattern: new Date()
+      - pattern: Math.random()
+
+  - id: rs-pantalla-importa-datos
+    languages: [typescript]
+    severity: ERROR
+    paths:
+      include: ["/src/app/**", "/src/components/**", "reglas.ts"]
+    message: "Las pantallas solo llaman a src/consultas y src/acciones; nunca a src/datos (AGENTS.md)."
+    patterns:
+      - pattern-either:
+          - pattern: import $X from "$M"
+          - pattern: import { ... } from "$M"
+          - pattern: import type { ... } from "$M"
+          - pattern: import * as $X from "$M"
+          - pattern: import "$M"
+      - metavariable-regex:
+          metavariable: $M
+          regex: ^@/datos(/|$)

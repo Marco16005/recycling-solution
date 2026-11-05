@@ -33,6 +33,8 @@ export async function resolverEnlaceCorto(texto: string, opciones: { fetch?: typ
       clearTimeout(temporizador);
     }
     const destino = respuesta.status >= 300 && respuesta.status < 400 ? respuesta.headers.get("location") : null;
+    // Plan de seguridad (hallazgo 6): solo importan el estado y Location; el cuerpo no se descarga.
+    await respuesta.body?.cancel().catch(() => undefined);
     if (!destino) return { ok: true, url: actual.toString() };
     const siguiente = new URL(destino, actual);
     if (!permitido(siguiente)) return { ok: false, motivo: "El enlace lleva fuera de Google Maps" };
