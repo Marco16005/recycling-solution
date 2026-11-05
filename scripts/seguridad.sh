@@ -136,31 +136,47 @@ imagen() {
 # Usuarios sintéticos de la semilla de pruebas (compose.test.yaml); nunca existen fuera de la base de pruebas.
 CLAVE_PRUEBAS=clave-e2e-sintetica
 
-# Cookie de sesión de un usuario de la semilla, para que ZAP recorra lo que ve ese rol.
+# Cookie de sesión de un usuario de la semilla, para que ZAP recorra lo que ve ese rol. Falla si no hay cookie o si con
+# ella la página de inicio del rol ($2) no responde 200: así una corrida «con sesión» nunca es en realidad anónima.
 cookie_de() {
   docker run --rm --network "${PROYECTO}_default" "$NODE" node -e '
-    fetch("http://web:3000/api/auth/sign-in/email", { method: "POST",
-      headers: { "Content-Type": "application/json", Origin: "http://web:3000" },
-      body: JSON.stringify({ email: process.argv[1], password: process.argv[2] }) })
-      .then((r) => { if (!r.ok) process.exit(1); console.log(r.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ")); })
-      .catch(() => process.exit(1));' "$1" "$CLAVE_PRUEBAS"
+    const [correo, clave, inicio] = process.argv.slice(1);
+    (async () => {
+      const r = await fetch("http://web:3000/api/auth/sign-in/email", { method: "POST",
+        headers: { "Content-Type": "application/json", Origin: "http://web:3000" }, body: JSON.stringify({ email: correo, password: clave }) });
+      const cookie = r.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ");
+      if (!r.ok || !cookie) throw new Error("sin sesión");
+      const p = await fetch("http://web:3000" + inicio, { headers: { Cookie: cookie }, redirect: "manual" });
+      if (p.status !== 200) throw new Error(inicio + " respondió " + p.status);
+      console.log(cookie);
+    })().catch((e) => { console.error(String(e.message)); process.exit(1); });' "$1" "$CLAVE_PRUEBAS" "$2"
 }
 
 # Una corrida de ZAP baseline (solo pasiva: no envía ataques ni cambia datos). 0: sin fallas ni avisos fuera de los
-# aceptados. 1: fallas. 2: avisos.
+# aceptados. 1: fallas. 2: avisos. Con sesión ($3), además exige que ZAP haya visitado la página de inicio con 200.
 zap_corrida() {
   carpeta="$REPORTES/zap-$1"
   mkdir -p "$carpeta"
   cp "$COPIA/infra/seguridad/zap-reglas.tsv" "$carpeta/reglas.tsv"
   chmod 777 "$carpeta"
+  resultado=0
   if [ -z "${3:-}" ]; then
     docker run --rm --network "${PROYECTO}_default" -v "$carpeta:/zap/wrk:rw" "$ZAP" \
-      zap-baseline.py -t "$2" -c reglas.tsv -r zap.html -J zap.json -l WARN
-  else
-    docker run --rm --network "${PROYECTO}_default" -v "$carpeta:/zap/wrk:rw" -e ZAP_AUTH_HEADER=Cookie \
-      -e "ZAP_AUTH_HEADER_VALUE=$3" -e ZAP_AUTH_HEADER_SITE=web:3000 "$ZAP" \
-      zap-baseline.py -t "$2" -c reglas.tsv -r zap.html -J zap.json -l WARN
+      zap-baseline.py -t "$2" -c reglas.tsv -r zap.html -J zap.json -l WARN || resultado=$?
+    return $resultado
   fi
+  # ZAP_AUTH_HEADER_SITE es el nombre del servidor sin puerto: con «web:3000» ZAP no manda la cookie.
+  docker run --rm --network "${PROYECTO}_default" -v "$carpeta:/zap/wrk:rw" -e ZAP_AUTH_HEADER=Cookie \
+    -e "ZAP_AUTH_HEADER_VALUE=$3" -e ZAP_AUTH_HEADER_SITE=web "$ZAP" \
+    zap-baseline.py -t "$2" -c reglas.tsv -r zap.html -J zap.json -l WARN -d > "$carpeta/zap.log" 2>&1 || resultado=$?
+  grep -E "^(WARN|FAIL)" "$carpeta/zap.log" || true
+  visitadas=$(grep -cF "$2" "$carpeta/zap.log" | tr -d ' ')
+  if ! grep -qF "$2 (200 OK)" "$carpeta/zap.log" && ! grep -qE "${2}[?/][^ ]* \(200 OK\)" "$carpeta/zap.log"; then
+    echo "   ZAP no llegó con sesión a $2 (revisa $carpeta/zap.log)"
+    return 1
+  fi
+  echo "   $visitadas líneas con $2 en el recorrido; la página respondió 200 con sesión"
+  return $resultado
 }
 
 zap() {
@@ -169,8 +185,8 @@ zap() {
   echo "   -- sin sesión"
   zap_corrida anonimo http://web:3000 || ok=1
   for rol in despachador operador; do
-    cookie=$(cookie_de "$rol@e2e.local") || { echo "   no se pudo entrar como $rol"; ok=1; continue; }
     if [ "$rol" = despachador ]; then inicio=/despacho/clientes; else inicio=/operador; fi
+    cookie=$(cookie_de "$rol@e2e.local" "$inicio") || { echo "   no se pudo entrar como $rol"; ok=1; continue; }
     echo "   -- con sesión de $rol"
     zap_corrida "$rol" "http://web:3000$inicio" "$cookie" || ok=1
   done

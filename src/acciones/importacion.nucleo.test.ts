@@ -91,6 +91,19 @@ describe("importación de clientes en dos pasos", () => {
     expect(aceptando).toEqual({ ok: true, valor: { importados: 2 } });
   });
 
+  it("con muchos duplicados, la vista previa y el error de confirmar listan 50 y dan el total (Plan de seguridad)", async () => {
+    const filas = Array.from({ length: 120 }, () => "Papelera Repetida,,,,,,RSU,,,");
+    const csv = [ENCABEZADO, ...filas].join("\n");
+    const resumen = await analizar(csv);
+    expect(resumen.totalPosiblesDuplicados).toBe(119);
+    expect(resumen.posiblesDuplicados).toHaveLength(50);
+    expect(resumen.posiblesDuplicados[0]).toMatchObject({ fila: 3, con: "archivo", otraFila: 2 });
+    const r = await confirmarImportacion(ctx(), csv, { operacionId: operacion(), huella: resumen.huella, aceptarDuplicados: false });
+    if (r.ok || r.error !== "invalido") throw new Error(JSON.stringify(r));
+    expect(r.campos.duplicados).toHaveLength(51);
+    expect(r.campos.duplicados.at(-1)).toBe("Y 69 avisos más del mismo tipo");
+  });
+
   it("si la cartera cambió entre analizar y confirmar, responde conflicto", async () => {
     const { huella } = await analizar(CSV_VALIDO);
     await guardarCliente(ctx(), null, null, clienteDePrueba({ nombre: "Cajas Dos" }));

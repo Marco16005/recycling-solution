@@ -17,7 +17,9 @@ export interface ResumenImportacion {
   registros: number;
   validas: number;
   errores: ErrorDeImportacion[];
+  /** Plan de seguridad: hasta MAXIMO_MENSAJES_DUPLICADOS avisos, los primeros por fila; al confirmar se revisan todos. */
   posiblesDuplicados: PosibleDuplicado[];
+  totalPosiblesDuplicados: number;
   muestra: { fila: number; nombre: string; direccion: string | null }[];
   huella: string;
   /** Plan CRM: avisos que no impiden importar. */
@@ -52,7 +54,7 @@ const describirDuplicado = (d: PosibleDuplicado) =>
     ? `Fila ${d.fila}: "${d.nombre}" se repite en la fila ${d.otraFila}`
     : `Fila ${d.fila}: "${d.nombre}" se parece a "${d.nombreExistente}", que ya está en la cartera`;
 
-/** Plan de seguridad (hallazgo 1): la respuesta lista hasta 50 avisos y resume el resto. */
+/** Plan de seguridad (hallazgo 1): la vista previa y el error de confirmar listan hasta 50 avisos y resumen el resto. */
 const MAXIMO_MENSAJES_DUPLICADOS = 50;
 function mensajesDeDuplicados(duplicados: PosibleDuplicado[]): string[] {
   const mensajes = duplicados.slice(0, MAXIMO_MENSAJES_DUPLICADOS).map(describirDuplicado);
@@ -75,7 +77,8 @@ export async function analizarImportacion(ctx: Contexto, csv: unknown): Promise<
       registros: analisis.registros,
       validas: analisis.validas.length,
       errores: analisis.errores,
-      posiblesDuplicados: duplicados,
+      posiblesDuplicados: duplicados.slice(0, MAXIMO_MENSAJES_DUPLICADOS),
+      totalPosiblesDuplicados: duplicados.length,
       muestra: analisis.validas
         .slice(0, TAMANO_MUESTRA)
         .map(({ fila, entrada }) => ({ fila, nombre: entrada.nombre, direccion: entrada.direccion })),
