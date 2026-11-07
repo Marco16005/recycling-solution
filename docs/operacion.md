@@ -1,6 +1,6 @@
 # Operación: levantar, respaldar y mudar Recycling Solution
 
-Todo corre en contenedores. La máquina solo necesita Docker (con Compose 2.24 o posterior) y git. Los contenedores se pueden borrar y recrear sin perder nada; los datos viven en el volumen de Postgres y en los respaldos (especificación §2, supuesto "efímero").
+Todo corre en contenedores. La máquina solo necesita Docker (con Compose 2.24 o posterior) y git. En Windows sirve Docker Desktop: `.gitattributes` mantiene los scripts con finales de línea LF y `COMPOSE_PATH_SEPARATOR=:` (ya en `.env.example`) hace que `COMPOSE_FILE` se lea igual que en Linux y macOS. Si el proyecto se clonó antes de que existiera `.gitattributes` y la base no arranca: hacer un respaldo si ya hay datos (§3), detener con `docker compose down` (sin `-v`), renombrar la carpeta, clonar de nuevo **con el mismo nombre de carpeta** y copiar el `.env`. Compose toma el nombre del proyecto de la carpeta, así que vuelve a encontrar los mismos volúmenes y la base. Los contenedores se pueden borrar y recrear sin perder nada; los datos viven en el volumen de Postgres y en los respaldos (especificación §2, supuesto "efímero").
 
 ## 1. Primera vez en una máquina
 
@@ -15,6 +15,7 @@ Llenar `.env`:
 | Variable | Qué poner |
 |---|---|
 | `COMPOSE_FILE` | `compose.yaml:compose.dev.yaml` para desarrollo; `compose.yaml:compose.prod.yaml` para operar |
+| `COMPOSE_PATH_SEPARATOR` | `:` (déjalo así; hace que `COMPOSE_FILE` funcione también en Windows) |
 | `POSTGRES_PASSWORD`, `RS_MIGRADOR_PASSWORD`, `RS_APP_PASSWORD` | Contraseñas distintas, solo letras y números (`openssl rand -hex 24`) |
 | `BETTER_AUTH_SECRET` | `openssl rand -hex 32` |
 | `BETTER_AUTH_URL` | La dirección con la que se abre la aplicación: `http://localhost:3000` en desarrollo; `https://<DOMINIO>` en producción |

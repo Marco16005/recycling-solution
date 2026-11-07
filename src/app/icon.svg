@@ -1,0 +1,11 @@
+<!-- Recycling Solution: tres flechas de reciclaje (el símbolo universal, de uso libre) en blanco sobre verde.
+     Es la fuente de favicon.ico y apple-icon.png: después de cambiarlo, npm run iconos (scripts/generar-iconos.mts). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" rx="22" fill="#15803d"/>
+  <path d="M39.26 42.60 L45.50 31.79 Q50.00 24.00 54.50 31.79 L58.30 38.38" fill="none" stroke="#ffffff" stroke-width="11" stroke-linejoin="round"/>
+  <path d="M64.55 49.21 L48.09 43.70 L68.01 32.20 Z" fill="#ffffff" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M66.11 51.90 L72.35 62.71 Q76.85 70.50 67.85 70.50 L60.24 70.50" fill="none" stroke="#ffffff" stroke-width="11" stroke-linejoin="round"/>
+  <path d="M47.74 70.50 L60.74 59.00 L60.74 82.00 Z" fill="#ffffff" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M44.63 70.50 L32.15 70.50 Q23.15 70.50 27.65 62.71 L31.46 56.12" fill="none" stroke="#ffffff" stroke-width="11" stroke-linejoin="round"/>
+  <path d="M37.71 45.29 L41.17 62.30 L21.25 50.80 Z" fill="#ffffff" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round"/>
+</svg>
