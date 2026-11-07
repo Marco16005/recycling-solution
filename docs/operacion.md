@@ -72,7 +72,7 @@ Si falla, la aplicación queda detenida y la base sin cambios: revisar el mensaj
 Caddy atiende `DOMINIO`:
 
 - **Dominio público** (`rs.empresa.mx` apuntando a la máquina, puertos 80 y 443 abiertos): Caddy obtiene y renueva el certificado solo.
-- **Nombre alterno** (opcional, por ejemplo `www.rs.empresa.mx`): con `DOMINIO_ALTERNO` en `.env`, Caddy también obtiene su certificado y lo redirige a `https://<DOMINIO>` con la misma ruta (301). Antes, el registro DNS del alterno debe apuntar a la máquina, por ejemplo un CNAME `www` hacia el dominio. Si no apunta, Caddy no consigue el certificado y lo reintenta en el log, aunque el dominio principal sigue funcionando. Se aplica con `docker compose up -d proxy`.
+- **Nombre alterno** (opcional, por ejemplo `www.rs.empresa.mx`): con `DOMINIO_ALTERNO` en `.env`, Caddy también obtiene su certificado y lo redirige a `https://<DOMINIO>` con la misma ruta (301; si se entra por `http://`, antes pasa a HTTPS con un 308). Antes, el registro DNS del alterno debe apuntar a la máquina, por ejemplo un CNAME `www` hacia el dominio. Si no apunta, Caddy no consigue el certificado y lo reintenta en el log, aunque el dominio principal sigue funcionando. Se aplica con `docker compose up -d proxy`.
 - **Red local sin dominio** (`localhost`, una IP o un nombre interno): Caddy firma con su propia autoridad. Cada teléfono y computadora debe instalar y confiar en esa autoridad, que está en el volumen `caddy_datos` (`/data/caddy/pki/authorities/local/root.crt`). Es la decisión abierta 11 de la especificación.
 
 Para obtener el certificado que se instala en los teléfonos (es público; la llave privada no sale del volumen):
