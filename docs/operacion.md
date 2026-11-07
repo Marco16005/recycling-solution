@@ -1,6 +1,6 @@
 # Operación: levantar, respaldar y mudar Recycling Solution
 
-Todo corre en contenedores. La máquina solo necesita Docker (con Compose 2.24 o posterior) y git. En Windows sirve Docker Desktop: `.gitattributes` mantiene los scripts con finales de línea LF y `COMPOSE_PATH_SEPARATOR=:` (ya en `.env.example`) hace que `COMPOSE_FILE` se lea igual que en Linux y macOS. Si el proyecto se clonó antes de que existiera `.gitattributes` y la base no arranca, lo más seguro es clonarlo de nuevo en otra carpeta y copiar el `.env`. Los contenedores se pueden borrar y recrear sin perder nada; los datos viven en el volumen de Postgres y en los respaldos (especificación §2, supuesto "efímero").
+Todo corre en contenedores. La máquina solo necesita Docker (con Compose 2.24 o posterior) y git. En Windows sirve Docker Desktop: `.gitattributes` mantiene los scripts con finales de línea LF y `COMPOSE_PATH_SEPARATOR=:` (ya en `.env.example`) hace que `COMPOSE_FILE` se lea igual que en Linux y macOS. Si el proyecto se clonó antes de que existiera `.gitattributes` y la base no arranca: hacer un respaldo si ya hay datos (§3), detener con `docker compose down` (sin `-v`), renombrar la carpeta, clonar de nuevo **con el mismo nombre de carpeta** y copiar el `.env`. Compose toma el nombre del proyecto de la carpeta, así que vuelve a encontrar los mismos volúmenes y la base. Los contenedores se pueden borrar y recrear sin perder nada; los datos viven en el volumen de Postgres y en los respaldos (especificación §2, supuesto "efímero").
 
 ## 1. Primera vez en una máquina
 

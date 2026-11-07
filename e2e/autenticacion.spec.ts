@@ -130,7 +130,8 @@ test("la pestaña lleva el ícono de reciclaje: SVG, favicon.ico e ícono para l
     return {
       svg: await leer(rutas.svg, 200, [[50, 8], [60, 42]]),
       apple: await leer(rutas.apple, 180, [[50, 8], [60, 42]]),
-      ico: await leer("/favicon.ico", 32, [[50, 8]]),
+      // Al tamaño de su imagen más grande (48 px), para que la punta de la flecha ocupe varios píxeles.
+      ico: await leer("/favicon.ico", 48, [[50, 8], [60, 42]]),
     };
   }, { svg: (await svg.getAttribute("href"))!, apple: (await apple.getAttribute("href"))! });
   const parecido = (color: number[], esperado: number[]) => color.every((c, i) => Math.abs(c - esperado[i]) <= 12);
@@ -138,6 +139,6 @@ test("la pestaña lleva el ícono de reciclaje: SVG, favicon.ico e ícono para l
   const BLANCO = [255, 255, 255];
   for (const [nombre, [fondo, flecha]] of Object.entries(colores)) {
     expect(parecido(fondo, VERDE), `${nombre}: fondo ${fondo}`).toBe(true);
-    if (flecha) expect(parecido(flecha, BLANCO), `${nombre}: flecha ${flecha}`).toBe(true);
+    expect(parecido(flecha, BLANCO), `${nombre}: flecha ${flecha}`).toBe(true);
   }
 });
