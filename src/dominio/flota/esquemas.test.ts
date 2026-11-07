@@ -13,10 +13,13 @@ describe("unidadSchema", () => {
     for (const capacidadKg of [1, 60000]) expect(unidadSchema.safeParse({ ...unidad, capacidadKg, rendimientoKmL: 50 }).success).toBe(true);
     expect(unidadSchema.safeParse({ ...unidad, rendimientoKmL: 0.1 }).success).toBe(true);
   });
+  it.each(["torton", "trailer"] as const)("acepta la unidad %s", tipo => {
+    expect(unidadSchema.parse({ ...unidad, tipo }).tipo).toBe(tipo);
+  });
   it.each([
     { placa: " - " }, { placa: "ABC/123" }, { capacidadKg: 0 }, { capacidadKg: 60001 },
     { capacidadKg: "1000" }, { capacidadKg: NaN }, { rendimientoKmL: 0 }, { rendimientoKmL: -1 },
-    { rendimientoKmL: 50.1 }, { rendimientoKmL: Infinity }, { tipo: "trailer" }, { activo: "sí" }, { notas: "x".repeat(501) },
+    { rendimientoKmL: 50.1 }, { rendimientoKmL: Infinity }, { tipo: "desconocido" }, { activo: "sí" }, { notas: "x".repeat(501) },
   ])("rechaza entrada inválida %j", (cambio) => expect(unidadSchema.safeParse({ ...unidad, ...cambio }).success).toBe(false));
 });
 

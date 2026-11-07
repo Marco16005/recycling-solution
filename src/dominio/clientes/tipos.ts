@@ -1,7 +1,7 @@
 export const TIPOS_RESIDUO = ["RSU", "RME", "RP"] as const;
 export type TipoResiduo = (typeof TIPOS_RESIDUO)[number];
 
-export const TIPOS_UNIDAD = ["doble_rodada", "rabon", "camioneta"] as const;
+export const TIPOS_UNIDAD = ["doble_rodada", "rabon", "camioneta", "torton", "trailer"] as const;
 export type TipoUnidad = (typeof TIPOS_UNIDAD)[number];
 
 export const ESTADOS_DOCUMENTO = ["vigente", "pendiente", "vencido"] as const;

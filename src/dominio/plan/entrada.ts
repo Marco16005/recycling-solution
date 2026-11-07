@@ -5,7 +5,7 @@ import type { EntradaPlan, Plan, VentanaMin } from "@/motor/tipos";
 import { diaSemanaDeFecha } from "../clientes/habilitacion";
 import { cargaEfectivaKg } from "../solicitudes/cola";
 import { fechaEnMexico } from "../tiempo";
-import type { Cliente, ClienteGuardado, TipoUnidad } from "../clientes/tipos";
+import { TIPOS_UNIDAD, type Cliente, type ClienteGuardado, type TipoUnidad } from "../clientes/tipos";
 import type { UnidadGuardada } from "../flota/tipos";
 import type { SolicitudGuardada } from "../solicitudes/tipos";
 import type { ConfiguracionPlan, JornadaParaPlan } from "./tipos";
@@ -128,7 +128,7 @@ export const MARGEN_REVISION_MIN = 10;
 
 /** Mayor capacidad de las unidades activas por tipo; compartida con la validación. */
 export function capacidadMaximaPorTipo(unidadesActivas: UnidadGuardada[]): Record<TipoUnidad, number> {
-  const capacidades: Record<TipoUnidad, number> = { doble_rodada: 0, rabon: 0, camioneta: 0 };
+  const capacidades = Object.fromEntries(TIPOS_UNIDAD.map(tipo => [tipo, 0])) as Record<TipoUnidad, number>;
   for (const u of unidadesActivas) if (u.activo) capacidades[u.tipo] = Math.max(capacidades[u.tipo], u.capacidadKg);
   return capacidades;
 }

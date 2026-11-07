@@ -2,8 +2,19 @@ import Papa from "papaparse";
 import { clienteSchema, erroresPorCampo, type ClienteEntrada } from "./esquemas";
 import { clienteNuevo } from "./formulario";
 import { escribirHorarios, leerHorarios } from "./horarios";
-import { TIPOS_UNIDAD, type ClienteGuardado } from "./tipos";
+import { ETIQUETA_UNIDAD } from "./etiquetas";
+import { TIPOS_UNIDAD, type ClienteGuardado, type TipoUnidad } from "./tipos";
 import { leerUbicacion } from "./ubicacion";
+
+function normalizarTipoUnidad(valor: string): string {
+  return valor.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[\s_]+/gu, "");
+}
+
+const tiposUnidadPorNombre = new Map<string, TipoUnidad>();
+for (const tipo of TIPOS_UNIDAD) {
+  tiposUnidadPorNombre.set(normalizarTipoUnidad(tipo), tipo);
+  tiposUnidadPorNombre.set(normalizarTipoUnidad(ETIQUETA_UNIDAD[tipo]), tipo);
+}
 
 export const LIMITES_CSV = { bytes: 1_000_000, registros: 2000 } as const;
 
@@ -87,9 +98,13 @@ export function analizarClientesCsv(entradaCruda: string | Uint8Array): Analisis
     // Plan CRM: horarios, tipos de unidad y ubicación pegada.
     const horarios = leerHorarios(texto("horarios") ?? "");
     if (!horarios.ok) mensajes.push(horarios.mensaje);
-    const tipos = (texto("tipos_unidad") ?? "").split("|").map((t) => t.trim().toLowerCase()).filter(Boolean);
-    const desconocidos = tipos.filter((t) => !(TIPOS_UNIDAD as readonly string[]).includes(t));
-    if (desconocidos.length) mensajes.push(`Tipo de unidad no reconocido: ${desconocidos.join(", ")}; usa doble_rodada, rabon o camioneta separados por |`);
+    const nombresTipos = (texto("tipos_unidad") ?? "").split("|").map(t => t.trim()).filter(Boolean);
+    const desconocidos = nombresTipos.filter(t => !tiposUnidadPorNombre.has(normalizarTipoUnidad(t)));
+    if (desconocidos.length) mensajes.push(`Tipo de unidad no reconocido: ${desconocidos.join(", ")}; usa ${TIPOS_UNIDAD.join(", ")} separados por |`);
+    const tipos = nombresTipos.flatMap(t => {
+      const tipo = tiposUnidadPorNombre.get(normalizarTipoUnidad(t));
+      return tipo === undefined ? [] : [tipo];
+    });
     let lat = numero("lat"), lng = numero("lng");
     const ubicacionTexto = texto("ubicacion");
     if (ubicacionTexto !== null) {

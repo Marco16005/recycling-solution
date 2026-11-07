@@ -13,5 +13,5 @@ export function unidad(id = "u1", cambios: Partial<UnidadMotor> = {}): UnidadMot
 export function entrada(solicitudes = [solicitud()], unidades = [unidad()]): EntradaPlan {
   return { fecha: "2026-10-14", instanteMin: 480, solicitudes, unidades,
     parametros: { patio: { ...patio }, turnoInicioMin: 480, turnoFinMin: 960, velocidadKmh: 30,
-      factorCircuidad: 1.3, descargaMin: 15, capacidadMaximaPorTipoKg: { doble_rodada: 8000, rabon: 12000, camioneta: 2000 }, semilla: 37 } };
+      factorCircuidad: 1.3, descargaMin: 15, capacidadMaximaPorTipoKg: { doble_rodada: 8000, rabon: 12000, camioneta: 2000, torton: 0, trailer: 0 }, semilla: 37 } };
 }

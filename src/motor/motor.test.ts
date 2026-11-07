@@ -75,6 +75,27 @@ describe("Propiedades 1 a 9 del motor", () => {
 });
 
 describe("Casos límite y regresiones", () => {
+  it("asigna una solicitud que solo admite tráiler a la unidad tráiler", () => {
+    const e = entrada([solicitud("solo-trailer", { tiposUnidadAdmitidos: ["trailer"] })], [
+      unidad("doble-rodada"), unidad("trailer", { tipo: "trailer", capacidadKg: 12000 }),
+    ]);
+    e.parametros.capacidadMaximaPorTipoKg.trailer = 12000;
+    const plan = generarPlan(e);
+    expect(plan.resumen.ruteadas).toBe(1);
+    expect(plan.rutas.find(r => r.unidadId === "trailer")?.viajes.flatMap(v => v.paradas).map(p => p.solicitudId))
+      .toEqual(["solo-trailer"]);
+    expect(plan.rutas.find(r => r.unidadId === "doble-rodada")?.viajes.flatMap(v => v.paradas)).toEqual([]);
+    expect(validarPlan(e, plan)).toEqual([]);
+  });
+  it("no asigna un tráiler a un cliente que no lo admite aunque sea la única unidad libre", () => {
+    const e = entrada([solicitud("sin-trailer")], [unidad("trailer", { tipo: "trailer", capacidadKg: 12000 })]);
+    e.parametros.capacidadMaximaPorTipoKg.trailer = 12000;
+    const plan = generarPlan(e);
+    expect(plan.resumen.ruteadas).toBe(0);
+    expect(plan.pospuestas).toEqual([expect.objectContaining({ solicitudId: "sin-trailer", motivo: "sin_unidad_compatible" })]);
+    expect(plan.rutas.find(r => r.unidadId === "trailer")?.viajes.flatMap(v => v.paradas)).toEqual([]);
+    expect(validarPlan(e, plan)).toEqual([]);
+  });
   it("sin unidades y sin tipo compatible", () => {
     expect(generarPlan(entrada([solicitud()], [])).pospuestas[0].motivo).toBe("sin_unidades_disponibles");
     expect(generarPlan(entrada([solicitud()], [unidad("u", { tipo: "camioneta" })])).pospuestas[0].motivo).toBe("sin_unidad_compatible");
