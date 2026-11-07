@@ -96,3 +96,24 @@ test("una redirección a media respuesta no reemplaza la pantalla que el operado
     await context.setOffline(false);
   }
 });
+
+test("la pestaña lleva el ícono de reciclaje: SVG, favicon.ico e ícono para la pantalla de inicio (2026-11-07)", async ({ page, request }) => {
+  await page.goto("/entrar");
+  const svg = page.locator('link[rel="icon"][type="image/svg+xml"]');
+  const apple = page.locator('link[rel="apple-touch-icon"]');
+  await expect(svg).toHaveCount(1);
+  await expect(page.locator('link[rel="icon"][href^="/favicon.ico"]')).toHaveCount(1);
+  await expect(apple).toHaveAttribute("sizes", "180x180");
+  const archivos = [
+    [await svg.getAttribute("href"), "image/svg+xml"],
+    ["/favicon.ico", "image/x-icon"],
+    [await apple.getAttribute("href"), "image/png"],
+  ] as const;
+  for (const [ruta, tipo] of archivos) {
+    const respuesta = await request.get(ruta!);
+    expect(respuesta.status(), ruta!).toBe(200);
+    expect(respuesta.headers()["content-type"], ruta!).toContain(tipo);
+  }
+  // Es el de reciclaje y no el genérico de Next.
+  expect(await (await request.get((await svg.getAttribute("href"))!)).text()).toContain("flechas de reciclaje");
+});

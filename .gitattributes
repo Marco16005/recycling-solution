@@ -1,0 +1,13 @@
+# Finales de línea LF en todas las plataformas. Todo corre en contenedores Linux, y con CRLF (lo que Git pone por
+# omisión en Windows) falla, por ejemplo, infra/db/init/01-roles.sh, el script que crea los roles de Postgres.
+* text=auto eol=lf
+
+# Imágenes y documentos: sin conversión de finales de línea ni diferencias de texto.
+*.ico binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.pdf binary
+*.xlsx binary
+*.docx binary
