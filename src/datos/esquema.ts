@@ -49,8 +49,10 @@ export const usuarios = pgTable("usuarios", {
   nombre: text("nombre").notNull(),
   rol: rolEnum("rol").notNull(),
   activo: boolean("activo").notNull().default(true),
-  /** Sube al desactivar, reactivar, restablecer la contraseña o cambiar el rol; invalida las entradas en curso. */
+  /** Sube al desactivar, reactivar, restablecer o cambiar la contraseña, o cambiar el rol; invalida las entradas en curso. */
   generacion: integer("generacion").notNull().default(1),
+  /** La contraseña la puso otra persona desde la aplicación (alta o restablecimiento): hay que cambiarla al entrar. */
+  debeCambiarClave: boolean("debe_cambiar_clave").notNull().default(false),
   version: integer("version").notNull().default(1),
   /** Ficha de operador del usuario; obligatoria si el rol es operador. */
   operadorId: uuid("operador_id")

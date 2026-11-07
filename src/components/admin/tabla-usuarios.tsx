@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type FormEvent } from "react";
 import {
@@ -7,7 +8,7 @@ import {
 } from "@/acciones/usuarios";
 import type { Resultado } from "@/acciones/tipos";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -84,7 +85,8 @@ export function TablaUsuarios({ usuarios, operadoresSinUsuario, usuarioActualId 
       {clave && (
         <div role="status" className="space-y-2 rounded-lg border border-amber-600/40 bg-background p-4 text-sm">
           <p>
-            Contraseña temporal de <strong>{clave.correo}</strong>. Cópiala y entrégala en persona; no se volverá a mostrar:
+            Contraseña temporal de <strong>{clave.correo}</strong>. Cópiala y entrégala en persona; no se volverá a mostrar.
+            Al entrar, el sistema le pedirá elegir una nueva:
           </p>
           <p className="font-mono text-lg tracking-wider">{clave.clave}</p>
           <Button type="button" variant="outline" size="sm" onClick={() => setClave(null)}>Ya la entregué</Button>
@@ -162,6 +164,7 @@ function FilaDeUsuario(props: {
   const { usuario: u, esActual, pendiente } = props;
   const [rol, setRol] = useState<Rol>(u.rol);
   const [operadorId, setOperadorId] = useState(u.operadorId ?? "");
+  const [confirmando, setConfirmando] = useState(false);
   const cambio = rol !== u.rol || (rol === "operador" && operadorId !== (u.operadorId ?? ""));
 
   return (
@@ -196,7 +199,18 @@ function FilaDeUsuario(props: {
         ) : (
           <Button type="button" variant="outline" size="sm" disabled={pendiente} onClick={props.alReactivar}>Reactivar</Button>
         )}
-        <Button type="button" variant="ghost" size="sm" disabled={pendiente} onClick={props.alRestablecer}>Restablecer contraseña</Button>
+        {esActual ? (
+          // Restablecer cierra las sesiones del usuario: el administrador se quedaría fuera antes de ver la temporal.
+          <Link href="/cuenta/contrasena" className={buttonVariants({ variant: "ghost", size: "sm" })}>Cambiar mi contraseña</Link>
+        ) : confirmando ? (
+          <span role="group" aria-label={`Confirmar restablecer la contraseña de ${u.nombre}`} className="inline-flex flex-wrap items-center gap-2 whitespace-normal">
+            <span className="text-xs">¿Restablecer su contraseña? Se cerrarán sus sesiones.</span>
+            <Button type="button" variant="destructive" size="sm" disabled={pendiente} onClick={() => { setConfirmando(false); props.alRestablecer(); }}>Sí, restablecer</Button>
+            <Button type="button" variant="ghost" size="sm" disabled={pendiente} onClick={() => setConfirmando(false)}>Cancelar</Button>
+          </span>
+        ) : (
+          <Button type="button" variant="ghost" size="sm" disabled={pendiente} onClick={() => setConfirmando(true)}>Restablecer contraseña</Button>
+        )}
       </TableCell>
     </TableRow>
   );

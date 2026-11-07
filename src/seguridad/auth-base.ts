@@ -48,6 +48,22 @@ async function generacionPorCorreo(bd: BD, correo: unknown): Promise<number | nu
   return fila?.generacion ?? null;
 }
 
+/**
+ * Las únicas rutas de Better Auth que usa la aplicación (diseño del 2026-11-07, §2.4). Las demás, como
+ * /change-password, /update-user o /revoke-sessions, escribirían en las tablas de autenticación sin bitácora y sin
+ * subir la generación; los cambios de credenciales van por `identidades.ts`.
+ */
+export const RUTAS_DE_AUTH = ["POST /sign-in/email", "POST /sign-out", "GET /get-session"] as const;
+
+const PREFIJO_AUTH = "/api/auth";
+
+export function rutaPermitida(peticion: Request): boolean {
+  const ruta = new URL(peticion.url).pathname;
+  if (!ruta.startsWith(`${PREFIJO_AUTH}/`)) return false;
+  const llave = `${peticion.method} ${ruta.slice(PREFIJO_AUTH.length).replace(/\/+$/, "")}`;
+  return (RUTAS_DE_AUTH as readonly string[]).includes(llave);
+}
+
 /** La sesión vale si el usuario está activo y nada cambió sus credenciales desde que empezó la petición de entrada. */
 async function sesionPermitida(bd: BD, authUserId: string): Promise<boolean> {
   const inicio = entradaEnCurso.getStore();
@@ -92,8 +108,9 @@ export function crearAuth(bd: BD, opciones: OpcionesAuth) {
     plugins: [nextCookies()],
   });
 
-  /** Única entrada HTTP a Better Auth (la usa la ruta /api/auth). */
+  /** Única entrada HTTP a Better Auth (la usa la ruta /api/auth). Las rutas que no usamos responden 404. */
   async function manejar(peticion: Request): Promise<Response> {
+    if (!rutaPermitida(peticion)) return Response.json({ message: "No encontrado" }, { status: 404 });
     const esEntrada = peticion.method === "POST" && new URL(peticion.url).pathname.endsWith("/sign-in/email");
     const cuerpo = esEntrada ? await peticion.clone().json().catch(() => null) : null;
     const generacion = esEntrada ? await generacionPorCorreo(bd, cuerpo?.email) : null;

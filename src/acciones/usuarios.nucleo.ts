@@ -15,7 +15,7 @@ import { esDuplicado, idSchema, invalido, versionSchema, type Fallo } from "./va
 
 /**
  * Reglas comunes (permiso usuarios.gestionar): rol operador ⇔ operadorId obligatorio y sin otro usuario; correo único;
- * no se puede quitar el rol de admin ni desactivar al último admin activo, ni desactivarse a uno mismo.
+ * no se puede quitar el rol de admin ni desactivar al último admin activo, ni desactivarse o restablecerse a uno mismo.
  * Todo cambio va con su bitácora en una transacción.
  */
 
@@ -35,6 +35,8 @@ async function operadorParaRol(tx: Tx, rol: string, operadorId: string | null, u
   if (!(await operadorLibre(tx, operadorId, usuarioId))) return invalido({ operadorId: ["Esa ficha no existe o ya tiene usuario"] });
   return operadorId;
 }
+
+export const MENSAJE_RESTABLECER_PROPIA = "Tu propia contraseña se cambia en «Mi contraseña»";
 
 const esFallo = (x: unknown): x is Fallo => typeof x === "object" && x !== null && "ok" in x;
 
@@ -148,6 +150,8 @@ export async function restablecerClaveDeUsuario(ctx: Contexto, id: unknown, vers
   if (!permiso.ok) return permiso;
   const ids = idYVersion(id, versionEsperada);
   if ("ok" in ids) return ids;
+  // Restablecer borra las sesiones del usuario: el administrador se quedaría fuera antes de ver la temporal.
+  if (ids.id === permiso.usuario.id) return invalido({ _: [MENSAJE_RESTABLECER_PROPIA] });
   const claveTemporal = claveAleatoria();
 
   return ctx.bd.transaction(async (tx): Promise<Resultado<{ version: number; claveTemporal: string }>> => {

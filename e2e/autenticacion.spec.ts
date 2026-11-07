@@ -27,7 +27,8 @@ test("el registro público está cerrado", async ({ request, baseURL }) => {
     headers: { origin: baseURL! },
     data: { email: "intruso@e2e.local", password: claveE2E(), name: "Intruso" },
   });
-  expect(respuesta.status()).toBe(400);
+  // Solo pasan las rutas de Better Auth que usa la aplicación (diseño del 2026-11-07, §2.4).
+  expect(respuesta.status()).toBe(404);
 });
 
 test("el operador entra a su ruta y no tiene acceso a despacho", async ({ page }) => {

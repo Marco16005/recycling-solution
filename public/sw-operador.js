@@ -6,6 +6,11 @@
 const USUARIO = new URL(self.location.href).searchParams.get("u") || "sin-usuario";
 const CACHE = `rs-operador-v1-${USUARIO}`;
 
+// Solo se guarda la pantalla del operador tal cual: una respuesta redirigida (a /entrar o a /cuenta/contrasena) no debe
+// reemplazar la ruta guardada (revisión de Codex, 2026-11-07).
+const esPantallaDelOperador = (respuesta) =>
+  respuesta.ok && !respuesta.redirected && new URL(respuesta.url).pathname.startsWith("/operador");
+
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (evento) => {
@@ -36,7 +41,7 @@ self.addEventListener("message", (evento) => {
           const pantalla = url.pathname.startsWith("/operador");
           if (!pantalla && !url.pathname.startsWith("/_next/static/")) continue;
           const respuesta = await fetch(url, { credentials: "same-origin" });
-          if (respuesta.ok) await cache.put(pantalla ? url.pathname : url.href, respuesta);
+          if (pantalla ? esPantallaDelOperador(respuesta) : respuesta.ok) await cache.put(pantalla ? url.pathname : url.href, respuesta);
         } catch {
           // Lo que no se pudo guardar ahora se guarda en la siguiente navegación con señal.
         }
@@ -57,7 +62,7 @@ self.addEventListener("fetch", (evento) => {
         const cache = await caches.open(CACHE);
         try {
           const respuesta = await fetch(peticion);
-          if (respuesta.ok) await cache.put(url.pathname, respuesta.clone());
+          if (esPantallaDelOperador(respuesta)) await cache.put(url.pathname, respuesta.clone());
           return respuesta;
         } catch {
           return (await cache.match(url.pathname)) ?? (await cache.match("/operador")) ?? Response.error();

@@ -134,6 +134,50 @@ describe("migraciones en Postgres real", () => {
     ]);
   });
 
+  it("la migración del cambio de contraseña obliga a cambiarla solo a quien tiene una temporal de la aplicación (2026-11-07)", async () => {
+    base = await crearBasePostgres({ migrar: false });
+    // Copia del repositorio hasta la migración anterior (0011), con sus permisos.
+    const raiz = mkdtempSync(path.join(tmpdir(), "claves-"));
+    cpSync("drizzle", path.join(raiz, "drizzle"), { recursive: true });
+    cpSync("infra/db", path.join(raiz, "infra/db"), { recursive: true });
+    const rutaJournal = path.join(raiz, "drizzle/meta/_journal.json");
+    const copia = JSON.parse(readFileSync(rutaJournal, "utf8")) as { entries: { tag: string }[] };
+    copia.entries = copia.entries.slice(0, copia.entries.findIndex((e) => e.tag === "0011_tipos_torton_trailer") + 1);
+    writeFileSync(rutaJournal, JSON.stringify(copia));
+    expect(await migrar(base.urlMigrador, raiz)).toEqual({ aplicadas: copia.entries.length });
+
+    // Último evento de contraseña de cada quien, en orden: el que cuenta es el más reciente.
+    const historia: Record<string, string[]> = {
+      alta_app: ["crear"],
+      alta_script: ["crear_por_script"],
+      app_luego_script: ["crear", "restablecer_clave_por_script"],
+      script_luego_app: ["crear_por_script", "restablecer_clave"],
+      script_luego_rol: ["crear_por_script", "cambiar_rol"],
+      sin_eventos: [],
+    };
+    for (const [clave, acciones] of Object.entries(historia)) {
+      await base.comoAdmin(`
+        INSERT INTO "user" (id, name, email, email_verified) VALUES ('auth-${clave}', '${clave}', '${clave}@claves.local', true);
+        INSERT INTO usuarios (auth_user_id, nombre, rol) VALUES ('auth-${clave}', '${clave}', 'despachador');`);
+      for (const [i, accion] of acciones.entries()) {
+        await base.comoAdmin(`
+          INSERT INTO bitacora (en, entidad, entidad_id, accion, campos)
+          SELECT timestamp with time zone '2026-11-01 10:00:00Z' + interval '${i} hour', 'usuario', id, '${accion}', '{clave}'
+          FROM usuarios WHERE auth_user_id = 'auth-${clave}'`);
+      }
+    }
+
+    expect(await migrar(base.urlMigrador)).toEqual({ aplicadas: journal.entries.length });
+    expect(filasDe(await base.bd.execute(sql`SELECT nombre, debe_cambiar_clave FROM usuarios ORDER BY nombre`))).toEqual([
+      { nombre: "alta_app", debe_cambiar_clave: true },
+      { nombre: "alta_script", debe_cambiar_clave: false },
+      { nombre: "app_luego_script", debe_cambiar_clave: false },
+      { nombre: "script_luego_app", debe_cambiar_clave: true },
+      { nombre: "script_luego_rol", debe_cambiar_clave: false },
+      { nombre: "sin_eventos", debe_cambiar_clave: false },
+    ]);
+  });
+
   it("detecta una migración aplicada que ya no coincide con su archivo", async () => {
     base = await crearBasePostgres();
     await base.comoAdmin("UPDATE drizzle.__drizzle_migrations SET hash = 'alterada' WHERE id = (SELECT min(id) FROM drizzle.__drizzle_migrations)");

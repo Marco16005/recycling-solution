@@ -36,7 +36,9 @@
      - la nueva, distinta de la actual.
   3. Límite de frecuencia `clave`: 5 por minuto por usuario. Con una sesión robada no se puede adivinar la contraseña a ritmo libre, y el cálculo de scrypt no satura el proceso.
   4. En una transacción, `cambiarClavePropia` (en `identidades.ts`, el único módulo que escribe en las tablas de Better Auth):
-     - toma la credencial con `FOR UPDATE` y verifica la actual con `verifyPassword` de `better-auth/crypto`; si no coincide, la acción responde `invalido({ actual: ["La contraseña actual no es correcta"] })` y no escribe nada;
+     - toma los candados en el mismo orden que restablecer, dar de baja y cambiar el rol: primero el renglón de `usuarios` (`FOR UPDATE`) y luego la credencial; con el orden contrario, un cambio propio y un restablecimiento simultáneos podrían bloquearse mutuamente;
+     - ya con el candado, vuelve a comprobar que el usuario sigue activo y que la sesión de la petición sigue existiendo, es suya y no ha caducado. Una baja o un restablecimiento que terminó mientras la acción esperaba borró esa sesión, y entonces la acción responde `no_autenticado` sin escribir nada;
+     - verifica la actual con `verifyPassword` de `better-auth/crypto`; si no coincide, la acción responde `invalido({ actual: ["La contraseña actual no es correcta"] })` y no escribe nada;
      - guarda el hash nuevo, sube `generacion` y pone `debe_cambiar_clave = false`;
      - borra las demás sesiones del usuario y conserva la actual;
      - escribe la bitácora `cambiar_clave` con los campos `["clave"]`.
@@ -50,11 +52,13 @@
 - **Regla:** una contraseña que pone otra persona desde la aplicación es temporal.
   - `crearIdentidad` y `restablecerClave` ponen `debe_cambiar_clave = (por !== null)`.
   - Los scripts (`bootstrap`, `alta-usuario`, `restablecer-clave` y la semilla de e2e) pasan `por = null`. Los ejecuta el dueño del servidor y no obligan el cambio. Quien reciba una contraseña así la cambia en "Mi contraseña".
+  - **Transición para las cuentas que ya existen.** Si la columna empezara en `false` para todos, las temporales que un administrador ya entregó seguirían sirviendo. La migración aplica la misma regla con la bitácora: marca a cada usuario cuyo último evento de contraseña fue `crear` o `restablecer_clave` hecho desde la aplicación, no `…_por_script`.
 - **Cumplimiento en el servidor, no solo en pantalla:**
   - `UsuarioSesion` agrega `debeCambiarClave?: boolean`. Es opcional para no tocar los datos de prueba existentes; si falta, vale `false`.
   - `puede()` niega todo permiso salvo `cuenta.cambiarClave` mientras sea `true`, también al administrador. Toda acción y consulta queda cerrada hasta el cambio, aunque se llame directo.
   - `usuarioDeLaSesion()`, que usan todos los layouts y `/`, redirige a `/cuenta/contrasena`. La pantalla de cuenta usa otra consulta, `cuentaDeLaSesion()`, que no redirige.
   - **Operador sin conexión:** si una acción se niega, `mi-ruta.tsx` ya conserva la cola ("No se pudo autorizar el envío. Conservamos la cola"). Al cambiar la contraseña, la cola se envía sola.
+- **Service worker de `/operador`.** Solo guarda una respuesta si no fue redirigida y su dirección final sigue en `/operador`. Así una redirección a `/cuenta/contrasena` o a `/entrar` no reemplaza la ruta guardada del operador. Hoy el riesgo es bajo, porque entrar borra la caché y el worker solo se registra desde `/operador` ya autorizado, pero la regla no cuesta nada.
 - **`proxy.ts`** agrega `/cuenta` y `/admin` a las rutas que exigen cookie. Hoy `/admin` solo se protege en el layout; el resultado es el mismo, pero llega antes.
 
 ### 2.4 Solo las rutas de Better Auth que usamos (Claude)
@@ -118,3 +122,15 @@
 - **Codex:**
   - `<EnlaceCuenta />` en los layouts de `despacho` y `operador`;
   - revisar este diseño y el commit final.
+
+## 6. Revisión de Codex (2026-11-07)
+
+Codex no aprobó la primera versión y señaló cuatro puntos, todos incorporados arriba:
+
+1. El orden de los candados entre el cambio propio y el restablecimiento.
+2. Volver a comprobar la sesión y el estado dentro de la transacción.
+3. El service worker no debe guardar respuestas redirigidas.
+4. La transición de las temporales existentes.
+
+Puso `<EnlaceCuenta />` en despacho y operador (commit 755de08).
+

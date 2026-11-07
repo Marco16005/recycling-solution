@@ -39,7 +39,9 @@ docker compose run --rm bootstrap npm run desactivar-usuario -- --correo ana@emp
 docker compose run --rm bootstrap npm run restablecer-clave -- --correo ana@empresa.mx
 ```
 
-Roles: `admin`, `despachador`, `operador`, `gerencia`. Si no se da `CLAVE_NUEVA` (`-e CLAVE_NUEVA=…`), el script genera una contraseña y la muestra una sola vez: entregarla en persona. Desactivar y restablecer cierran todas las sesiones del usuario. El script no desactiva al último administrador activo. Todo queda en la bitácora con la acción `…_por_script`.
+Lo normal es hacerlo desde la aplicación: el administrador da de alta y restablece en Usuarios, y la contraseña temporal obliga al usuario a elegir una nueva al entrar. Cada usuario cambia la suya en "Mi contraseña", junto a Salir. El administrador no puede restablecerse a sí mismo desde la pantalla; si olvidó la suya, se usa `restablecer-clave` en la terminal.
+
+Roles: `admin`, `despachador`, `operador`, `gerencia`. Si no se da `CLAVE_NUEVA` (`-e CLAVE_NUEVA=…`), el script genera una contraseña y la muestra una sola vez: entregarla en persona. Desactivar y restablecer cierran todas las sesiones del usuario. El script no desactiva al último administrador activo. Todo queda en la bitácora con la acción `…_por_script`. Una contraseña puesta por script no obliga a cambiarla; pide a la persona que la cambie en "Mi contraseña".
 
 ## 3. Respaldo
 

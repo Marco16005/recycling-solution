@@ -19,6 +19,8 @@ export const LIMITES = {
   motor: { maximo: 4, ventanaMs: 60_000 },
   importar: { maximo: 20, ventanaMs: 60_000 },
   enlace: { maximo: 30, ventanaMs: 60_000 },
+  /** Cambio de contraseña propio: con una sesión robada no se adivina la actual a ritmo libre, y scrypt cuesta CPU. */
+  clave: { maximo: 5, ventanaMs: 60_000 },
 } as const satisfies Record<string, Limite>;
 
 export type AccionLimitada = keyof typeof LIMITES;

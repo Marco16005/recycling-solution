@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { BotonSalir } from "@/components/sesion/boton-salir";
+import { EnlaceCuenta } from "@/components/sesion/enlace-cuenta";
 import { usuarioDeLaSesion } from "@/consultas/sesion";
 
 /** Lee la sesión; por eso va dentro de <Suspense>. Solo administradores. */
@@ -12,6 +13,7 @@ async function Encabezado() {
   return (
     <div className="flex items-center gap-3 text-sm">
       <span>{usuario.nombre}</span>
+      <EnlaceCuenta />
       <BotonSalir />
     </div>
   );

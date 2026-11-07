@@ -6,6 +6,8 @@ export interface UsuarioSesion {
   nombre: string;
   rol: Rol;
   activo: boolean;
+  /** Entró con una contraseña temporal: solo puede cambiarla (diseño del 2026-11-07). Si falta, vale false. */
+  debeCambiarClave?: boolean;
 }
 
 /** Matriz de la especificación §10. admin puede todo; un rol que no aparece no puede. */
@@ -16,6 +18,8 @@ export const PERMISOS = {
   /** Plan CRM: el archivo lleva teléfonos y correos; cada exportación queda en la bitácora. */
   "clientes.exportar": ["despachador"],
   "usuarios.gestionar": [],
+  /** Cada quien cambia su propia contraseña; es lo único que se permite mientras tenga una temporal. */
+  "cuenta.cambiarClave": ["despachador", "operador", "gerencia"],
   "flota.ver": ["despachador", "gerencia"],
   "flota.editar": ["despachador"],
   "jornada.gestionar": ["despachador"],
@@ -51,6 +55,7 @@ export class NoAutorizado extends Error {
 
 export function puede(usuario: UsuarioSesion | null, permiso: Permiso): boolean {
   if (usuario === null || !usuario.activo) return false;
+  if (usuario.debeCambiarClave === true && permiso !== "cuenta.cambiarClave") return false;
   if (usuario.rol === "admin") return true;
   return (PERMISOS[permiso] as readonly Rol[]).includes(usuario.rol);
 }
