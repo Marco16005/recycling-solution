@@ -7,6 +7,7 @@ import type { BD } from "@/datos/bd";
 import { session, user, usuarios } from "@/datos/esquema";
 import * as esquemaAuth from "@/datos/esquema-auth";
 import { correoNormalizado } from "./identidades";
+import { rutaPermitida } from "./rutas-auth";
 
 export interface OpcionesAuth {
   secreto: string;
@@ -92,8 +93,9 @@ export function crearAuth(bd: BD, opciones: OpcionesAuth) {
     plugins: [nextCookies()],
   });
 
-  /** Única entrada HTTP a Better Auth (la usa la ruta /api/auth). */
+  /** Única entrada HTTP a Better Auth (la usa la ruta /api/auth). Las rutas que no usamos responden 404. */
   async function manejar(peticion: Request): Promise<Response> {
+    if (!rutaPermitida(peticion)) return Response.json({ message: "No encontrado" }, { status: 404 });
     const esEntrada = peticion.method === "POST" && new URL(peticion.url).pathname.endsWith("/sign-in/email");
     const cuerpo = esEntrada ? await peticion.clone().json().catch(() => null) : null;
     const generacion = esEntrada ? await generacionPorCorreo(bd, cuerpo?.email) : null;

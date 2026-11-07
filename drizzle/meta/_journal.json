@@ -85,6 +85,13 @@
       "when": 1794073372185,
       "tag": "0011_tipos_torton_trailer",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794080044438,
+      "tag": "0012_cambio_de_clave",
+      "breakpoints": true
     }
   ]
 }

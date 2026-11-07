@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { hashPassword } from "better-auth/crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { hashPassword, verifyPassword } from "better-auth/crypto";
+import { and, eq, gt, ne, sql } from "drizzle-orm";
 import type { BD, Tx } from "@/datos/bd";
 import { registrarEvento } from "@/datos/bitacora";
 import { account, operadores, session, user, usuarios } from "@/datos/esquema";
@@ -25,8 +25,8 @@ export interface DatosIdentidad {
 /** Quién hace el cambio: un usuario de la aplicación, o null si es un script dentro del contenedor. */
 export type Autor = string | null;
 
-const CLAVE_MINIMA = 10;
-const CLAVE_MAXIMA = 128;
+export const CLAVE_MINIMA = 10;
+export const CLAVE_MAXIMA = 128;
 
 export const correoNormalizado = (correo: string) => correo.trim().toLowerCase();
 
@@ -37,6 +37,12 @@ function validarClave(clave: string): void {
 }
 
 const accion = (base: string, por: Autor) => (por === null ? `${base}_por_script` : base);
+
+/**
+ * Una contraseña que pone otra persona desde la aplicación (un administrador al dar de alta o restablecer) es temporal:
+ * el usuario debe cambiarla al entrar. Las de los scripts (por = null) las pone el dueño del servidor y no obligan.
+ */
+const esTemporal = (por: Autor) => por !== null;
 
 export interface IdentidadExistente {
   authUserId: string;
@@ -87,7 +93,7 @@ export async function crearIdentidad(tx: Tx, datos: DatosIdentidad, por: Autor, 
   }
   const [fila] = await tx
     .insert(usuarios)
-    .values({ authUserId, nombre, rol: datos.rol, operadorId, creadoEn: ahora, actualizadoEn: ahora })
+    .values({ authUserId, nombre, rol: datos.rol, operadorId, debeCambiarClave: esTemporal(por), creadoEn: ahora, actualizadoEn: ahora })
     .returning({ id: usuarios.id });
   await registrarEvento(tx, {
     usuarioId: por,
@@ -140,7 +146,10 @@ export async function reactivarUsuario(tx: Tx, usuarioId: string, por: Autor, ah
   return true;
 }
 
-/** Cambia la contraseña y borra todas las sesiones del usuario. false si el usuario no existe. */
+/**
+ * Otra persona cambia la contraseña del usuario: borra todas sus sesiones y, si fue desde la aplicación, lo obliga a
+ * elegir una nueva al entrar. false si el usuario no existe.
+ */
 export async function restablecerClave(tx: Tx, usuarioId: string, claveNueva: string, por: Autor, ahora: Date): Promise<boolean> {
   validarClave(claveNueva);
   const authUserId = await authUserIdDe(tx, usuarioId);
@@ -152,9 +161,53 @@ export async function restablecerClave(tx: Tx, usuarioId: string, claveNueva: st
     .where(and(eq(account.userId, authUserId), eq(account.providerId, "credential")));
   await tx
     .update(usuarios)
-    .set({ generacion: siguienteGeneracion, actualizadoEn: ahora })
+    .set({ generacion: siguienteGeneracion, debeCambiarClave: esTemporal(por), actualizadoEn: ahora })
     .where(eq(usuarios.id, usuarioId));
   await tx.delete(session).where(eq(session.userId, authUserId));
   await registrarEvento(tx, { usuarioId: por, entidad: "usuario", entidadId: usuarioId, accion: accion("restablecer_clave", por), campos: ["clave"] });
   return true;
+}
+
+export type CambioPropio = "cambiada" | "clave_incorrecta" | "sin_sesion";
+
+/**
+ * El usuario cambia su propia contraseña desde la sesión `sesionId`. Toma los candados en el mismo orden que
+ * restablecer, dar de baja y cambiar el rol (usuarios y luego la credencial) para no bloquearse con ellos. Ya con el
+ * candado vuelve a comprobar que siga activo y que la sesión siga viva: una baja o un restablecimiento que terminó
+ * mientras esperaba la borró. Conserva esa sesión y borra las demás.
+ */
+export async function cambiarClavePropia(
+  tx: Tx,
+  usuarioId: string,
+  datos: { actual: string; nueva: string; sesionId: string },
+  ahora: Date,
+): Promise<CambioPropio> {
+  validarClave(datos.nueva);
+  const [u] = await tx
+    .select({ authUserId: usuarios.authUserId, activo: usuarios.activo })
+    .from(usuarios)
+    .where(eq(usuarios.id, usuarioId))
+    .for("update");
+  if (!u?.activo) return "sin_sesion";
+  const [viva] = await tx
+    .select({ id: session.id })
+    .from(session)
+    .where(and(eq(session.id, datos.sesionId), eq(session.userId, u.authUserId), gt(session.expiresAt, ahora)));
+  if (!viva) return "sin_sesion";
+  const [credencial] = await tx
+    .select({ id: account.id, password: account.password })
+    .from(account)
+    .where(and(eq(account.userId, u.authUserId), eq(account.providerId, "credential")))
+    .for("update");
+  if (!credencial?.password || !(await verifyPassword({ hash: credencial.password, password: datos.actual }))) {
+    return "clave_incorrecta";
+  }
+  await tx.update(account).set({ password: await hashPassword(datos.nueva), updatedAt: ahora }).where(eq(account.id, credencial.id));
+  await tx
+    .update(usuarios)
+    .set({ generacion: siguienteGeneracion, debeCambiarClave: false, actualizadoEn: ahora })
+    .where(eq(usuarios.id, usuarioId));
+  await tx.delete(session).where(and(eq(session.userId, u.authUserId), ne(session.id, datos.sesionId)));
+  await registrarEvento(tx, { usuarioId, entidad: "usuario", entidadId: usuarioId, accion: "cambiar_clave", campos: ["clave"] });
+  return "cambiada";
 }

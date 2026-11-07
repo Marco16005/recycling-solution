@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { account, bitacora, session, user, usuarios } from "@/datos/esquema";
 import { crearBasePostgres, type BasePostgres } from "@/datos/pruebas/postgres-prueba";
 import { crearAuth, type Autenticacion, type OpcionesAuth } from "./auth-base";
-import { buscarPorCorreo, crearIdentidad, desactivarUsuario, reactivarUsuario, restablecerClave } from "./identidades";
+import { buscarPorCorreo, cambiarClavePropia, crearIdentidad, desactivarUsuario, reactivarUsuario, restablecerClave } from "./identidades";
 
 const URL_APP = "http://localhost:3000";
 const AHORA = new Date("2026-10-13T15:00:00Z");
@@ -43,9 +43,9 @@ describe("autenticación con Better Auth y Postgres real", () => {
   });
   afterAll(async () => base.cerrar());
 
-  it("el registro público está cerrado", async () => {
+  it("el registro público está cerrado (y su ruta ni siquiera llega a Better Auth)", async () => {
     const r = await peticion("sign-up/email", { email: "nuevo@prueba.local", password: CLAVE, name: "Nuevo" });
-    expect(r.status).toBe(400);
+    expect(r.status).toBe(404);
     expect(await buscarPorCorreo(base.bd, "nuevo@prueba.local")).toBeNull();
   });
 
@@ -96,6 +96,51 @@ describe("autenticación con Better Auth y Postgres real", () => {
     expect(await sesionCon(cookie)).toBeNull();
     expect((await entrar("olvido@prueba.local")).status).toBe(401);
     expect((await entrar("olvido@prueba.local", "clave-nueva-456")).status).toBe(200);
+  });
+
+  it("solo pasan las rutas de Better Auth que usa la aplicación; las demás responden 404 y no escriben (2026-11-07)", async () => {
+    await alta("rutas@prueba.local");
+    const cookie = cookieDe(await entrar("rutas@prueba.local"));
+    const conCookie = (ruta: string, cuerpo: unknown, metodo = "POST") =>
+      autenticacion.manejar(
+        new Request(`${URL_APP}/api/auth/${ruta}`, {
+          method: metodo,
+          headers: { "content-type": "application/json", origin: URL_APP, cookie },
+          body: metodo === "GET" ? undefined : JSON.stringify(cuerpo),
+        }),
+      );
+    for (const [ruta, cuerpo] of [
+      ["change-password", { currentPassword: CLAVE, newPassword: "clave-por-atras-1", revokeOtherSessions: true }],
+      ["update-user", { name: "Otro nombre" }],
+      ["revoke-sessions", {}],
+      ["request-password-reset", { email: "rutas@prueba.local" }],
+      ["sign-in/email/", { email: "rutas@prueba.local", password: CLAVE }],
+    ] as const) {
+      // El 404 lo da manejar, no Better Auth: su cuerpo es el nuestro (las variantes están en rutas-auth.test.ts).
+      const r = await conCookie(ruta, cuerpo);
+      expect(r.status, ruta).toBe(404);
+      expect(await r.json(), ruta).toEqual({ message: "No encontrado" });
+    }
+    expect((await conCookie("list-sessions", null, "GET")).status).toBe(404);
+    expect((await entrar("rutas@prueba.local")).status).toBe(200);
+    expect((await entrar("rutas@prueba.local", "clave-por-atras-1")).status).toBe(401);
+    expect(await sesionCon(cookie)).toMatchObject({ user: { name: "Prueba" } });
+    expect((await conCookie("get-session", null, "GET")).status).toBe(200);
+    expect((await conCookie("sign-out", {})).status).toBe(200);
+    expect(await sesionCon(cookie)).toBeNull();
+  });
+
+  it("el cambio de contraseña propio funciona con Better Auth: la anterior ya no entra y la sesión actual sigue (2026-11-07)", async () => {
+    const { usuarioId } = await alta("propia@prueba.local");
+    const actual = cookieDe(await entrar("propia@prueba.local"));
+    const otra = cookieDe(await entrar("propia@prueba.local"));
+    const sesionId = (await sesionCon(actual))!.session.id;
+    const r = await base.bd.transaction((tx) => cambiarClavePropia(tx, usuarioId, { actual: CLAVE, nueva: "clave-propia-456", sesionId }, AHORA));
+    expect(r).toBe("cambiada");
+    expect(await sesionCon(actual)).toMatchObject({ user: { email: "propia@prueba.local" } });
+    expect(await sesionCon(otra)).toBeNull();
+    expect((await entrar("propia@prueba.local")).status).toBe(401);
+    expect((await entrar("propia@prueba.local", "clave-propia-456")).status).toBe(200);
   });
 
   it("con el límite activo, el sexto intento de entrada en un minuto desde la misma IP responde 429", async () => {

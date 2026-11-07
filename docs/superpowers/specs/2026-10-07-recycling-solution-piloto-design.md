@@ -284,13 +284,15 @@ El paso 3 es agrupamiento no supervisado: las zonas se forman cada día con las 
 
 ### Autenticación
 
-- Better Auth con correo y contraseña (mínimo 10 caracteres). `disableSignUp: true`: el registro público responde 400 (comprobado el 2026-10-13).
+- Better Auth con correo y contraseña (mínimo 10 caracteres). `disableSignUp: true`. Desde el 2026-11-07, `manejar` solo deja pasar `POST /sign-in/email`, `POST /sign-out` y `GET /get-session`; las demás rutas, incluido el registro público, responden 404 sin llegar a Better Auth (rutas como `/change-password` o `/update-user` escribirían sin bitácora).
 - No se usa el plugin de administración de Better Auth: tiene roles y rutas propios que duplicarían la autorización.
 - Las altas no usan el adaptador de la librería, que está ligado a su propia conexión y no participaría en nuestra transacción. Un solo módulo, `src/seguridad/identidades.ts`, escribe con Drizzle y **en una sola transacción** la identidad (`user`), la credencial (`account` con proveedor `credential` y la contraseña calculada con `hashPassword` de `better-auth/crypto`), el renglón de `usuarios` y su bitácora. Si algo falla, no queda nada. Comprobado en contenedor el 2026-10-13: un usuario creado así entra con la API de Better Auth. El módulo depende de la versión fijada 1.7.7; actualizar Better Auth exige repetir esa prueba.
 - Un `databaseHook` de Better Auth (`session.create.before`) impide crear sesión si el usuario no tiene renglón en `usuarios` o está inactivo (comprobado el 2026-10-13: responde 401).
 - Better Auth verifica la contraseña y guarda la sesión en pasos separados. Para que una baja o un restablecimiento que caiga entre ambos no deje viva una sesión, `usuarios.generacion` sube con cada baja, reactivación o cambio de contraseña; toda petición HTTP a Better Auth pasa por `manejar` (en `auth-base.ts`), que lee la generación del correo antes de la verificación, y la sesión se revisa contra ella antes de guardarse (se niega) y después (se borra). Probado con pausas que fuerzan esos cruces (2026-10-14).
 - Desactivar un usuario pone `activo = false` y borra sus sesiones en la misma transacción, con su bitácora. Reactivarlo no revive sesiones. Cada petición protegida vuelve a leer `usuarios`, así que un cambio de rol surte efecto de inmediato.
-- Recuperación de acceso sin correo: el administrador restablece la contraseña (script en el Plan 1, pantalla en el Plan 2), lo que borra las sesiones del usuario y queda en la bitácora.
+- Recuperación de acceso sin correo: el administrador restablece la contraseña (script en el Plan 1, pantalla en el Plan 2), lo que borra las sesiones del usuario y queda en la bitácora. Desde la pantalla no puede restablecerse a sí mismo (se quedaría fuera antes de ver la temporal) y en las demás filas se pide confirmación.
+- Contraseña propia (2026-11-07): cada usuario la cambia en "Mi contraseña" (`/cuenta/contrasena`) con la actual; se conserva la sesión actual, se borran las demás, sube la generación y queda `cambiar_clave` en la bitácora. Límite de 5 intentos por minuto.
+- Una contraseña que pone un administrador desde la aplicación (alta o restablecimiento) es temporal (`usuarios.debe_cambiar_clave`). Mientras lo sea, `puede` niega todo salvo `cuenta.cambiarClave` y las pantallas llevan a cambiarla. Las de los scripts no obligan. Detalle en `2026-11-07-cambio-de-contrasena-design.md`.
 - `bootstrap` es idempotente: si el correo ya pertenece a un administrador, no hace nada (ni cambia su contraseña); si pertenece a una identidad con otro rol o sin renglón en `usuarios`, termina con error y no la promueve; si no existe, crea el administrador con la transacción anterior.
 
 ### Autorización: matriz de permisos
@@ -300,6 +302,7 @@ El paso 3 es agrupamiento no supervisado: las zonas se forman cada día con las 
 | Ver y editar clientes, importar | sí | sí | no | no |
 | Ver clientes (solo lectura) | sí | sí | no | sí |
 | Gestionar usuarios | sí | no | no | no |
+| Cambiar su propia contraseña | sí | sí | sí | sí |
 | Unidades, solicitudes, planes (Planes 2 y 4) | sí | sí | no | lectura |
 | Su propia ruta y sus eventos (Plan 5) | intervención registrada | lectura | sí, solo si la jornada es suya | lectura |
 | Panel (Plan 6) | sí | sí | no | sí |

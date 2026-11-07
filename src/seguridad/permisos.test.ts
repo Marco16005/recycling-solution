@@ -10,6 +10,7 @@ const ESPERADO: Record<Permiso, Rol[]> = {
   "clientes.importar": ["admin", "despachador"],
   "clientes.exportar": ["admin", "despachador"],
   "usuarios.gestionar": ["admin"],
+  "cuenta.cambiarClave": ["admin", "despachador", "operador", "gerencia"],
   "flota.ver": ["admin", "despachador", "gerencia"],
   "flota.editar": ["admin", "despachador"],
   "jornada.gestionar": ["admin", "despachador"],
@@ -42,6 +43,17 @@ describe("matriz de permisos", () => {
   it("sin sesión no se autentica", () => {
     expect(puede(null, "clientes.ver")).toBe(false);
     expect(() => autorizar(null, "clientes.ver")).toThrow(NoAutenticado);
+  });
+
+  it("con una contraseña temporal solo puede cambiarla, aunque sea admin", () => {
+    for (const rol of ROLES) {
+      const temporal: UsuarioSesion = { ...usuario(rol), debeCambiarClave: true };
+      for (const permiso of Object.keys(PERMISOS) as Permiso[]) {
+        expect(puede(temporal, permiso), `${rol} ${permiso}`).toBe(permiso === "cuenta.cambiarClave");
+      }
+      expect(() => autorizar(temporal, "clientes.ver")).toThrow(NoAutorizado);
+      expect(autorizar(temporal, "cuenta.cambiarClave").rol).toBe(rol);
+    }
   });
 
   it("un usuario inactivo no se autentica, aunque sea admin", () => {

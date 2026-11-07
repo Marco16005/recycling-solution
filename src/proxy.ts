@@ -2,7 +2,7 @@ import { getSessionCookie } from "better-auth/cookies";
 import { NextResponse, type NextRequest } from "next/server";
 import { encabezadosDinamicos } from "@/seguridad/encabezados";
 
-const PROTEGIDAS = ["/despacho", "/operador", "/gerencia"];
+const PROTEGIDAS = ["/despacho", "/operador", "/gerencia", "/admin", "/cuenta"];
 
 /**
  * Revisión optimista: sin cookie de sesión, a /entrar. No valida la sesión ni el rol;
