@@ -24,6 +24,8 @@ export const ETIQUETA_UNIDAD: Record<TipoUnidad, string> = {
   doble_rodada: "Doble rodada",
   rabon: "Rabón",
   camioneta: "Camioneta",
+  torton: "Torton",
+  trailer: "Tráiler",
 };
 
 export const ETIQUETA_ESTADO_DOCUMENTO: Record<EstadoDocumento, string> = {

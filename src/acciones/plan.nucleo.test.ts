@@ -236,6 +236,25 @@ describe("plan del día", () => {
     expect(await revisarYValidar(planId, version)).toMatchObject({ ok: false, error: "conflicto", motivo: { codigo: "capacidades_cambiaron" } });
   });
 
+  // Tipos torton y tráiler (2026-11-07): una propuesta generada antes del cambio guarda capacidades de solo tres tipos.
+  async function comoPropuestaAnterior(planId: string) {
+    await bd.execute(sql`UPDATE planes SET entrada = entrada #- '{parametros,capacidadMaximaPorTipoKg,torton}'
+      #- '{parametros,capacidadMaximaPorTipoKg,trailer}' WHERE id = ${planId}`);
+  }
+
+  it("una propuesta con capacidades de tres tipos detecta que se agregó el primer torton", async () => {
+    const { planId, version } = await generar();
+    await comoPropuestaAnterior(planId);
+    valor(await guardarUnidad(ctx(), null, null, unidadDePrueba({ placa: "TORTON1", tipo: "torton", capacidadKg: 15000 })));
+    expect(await revisarYValidar(planId, version)).toMatchObject({ ok: false, error: "conflicto", motivo: { codigo: "capacidades_cambiaron" } });
+  });
+
+  it("una propuesta con capacidades de tres tipos se valida si la flota no cambió", async () => {
+    const { planId, version } = await generar();
+    await comoPropuestaAnterior(planId);
+    expect(await revisarYValidar(planId, version)).toMatchObject({ ok: true });
+  });
+
   it("si la hora avanzó y hay salidas en el pasado, pide actualizar horarios; después valida", async () => {
     const { planId, version } = await generar();
     valor(await iniciarRevision(ctx(), planId));

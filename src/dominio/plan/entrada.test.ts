@@ -143,8 +143,17 @@ describe("construirEntrada", () => {
     d.unidadesActivas.push({ ...unidad, id: "sin-jornada", capacidadKg: 14000,
       documentos: [{ tipoDocumentoId: "seguro", obligatorio: true, estado: "vencido", venceEl: "2020-01-01", notas: null }] });
     d.unidadesActivas.push({ ...unidad, id: "inactiva", capacidadKg: 20000, activo: false });
-    expect(construirEntrada(d).parametros.capacidadMaximaPorTipoKg).toEqual({ doble_rodada: 0, rabon: 14000, camioneta: 0 });
-    expect(capacidadMaximaPorTipo([])).toEqual({ doble_rodada: 0, rabon: 0, camioneta: 0 });
+    expect(construirEntrada(d).parametros.capacidadMaximaPorTipoKg).toEqual({ doble_rodada: 0, rabon: 14000, camioneta: 0, torton: 0, trailer: 0 });
+    expect(capacidadMaximaPorTipo([])).toEqual({ doble_rodada: 0, rabon: 0, camioneta: 0, torton: 0, trailer: 0 });
+  });
+  it("calcula la capacidad de torton y tráiler activos aunque no tengan jornada", () => {
+    const d = datos();
+    d.unidadesActivas.push({ ...unidad, id: "torton", tipo: "torton", capacidadKg: 16000 });
+    d.unidadesActivas.push({ ...unidad, id: "trailer", tipo: "trailer", capacidadKg: 32000 });
+    d.unidadesActivas.push({ ...unidad, id: "trailer-inactivo", tipo: "trailer", capacidadKg: 60000, activo: false });
+    expect(construirEntrada(d).parametros.capacidadMaximaPorTipoKg).toEqual({
+      doble_rodada: 0, rabon: 8000, camioneta: 0, torton: 16000, trailer: 32000,
+    });
   });
 });
 

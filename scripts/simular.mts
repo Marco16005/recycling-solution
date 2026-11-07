@@ -25,7 +25,7 @@ const clientes = Array.from({ length: 100 }, (_, i) => {
 });
 const parametros: EntradaPlan["parametros"] = { patio, turnoInicioMin: 480, turnoFinMin: 960,
   velocidadKmh: 30, factorCircuidad: 1.3, descargaMin: 15, semilla, toleranciaReadmisionMin: 15,
-  capacidadMaximaPorTipoKg: { doble_rodada: 8000, rabon: 0, camioneta: 0 } };
+  capacidadMaximaPorTipoKg: { doble_rodada: 8000, rabon: 0, camioneta: 0, torton: 0, trailer: 0 } };
 
 // Las solicitudes nuevas de cada día se generan una sola vez: las dos versiones ven exactamente las mismas.
 const dias: { fecha: string; nuevas: SolicitudMotor[] }[] = [];

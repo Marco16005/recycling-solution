@@ -58,7 +58,7 @@ export async function sembrarJornadaAtrasada(): Promise<JornadaAtrasada> {
           tiempoServicioMin: 20, cargaKg: 800, tiposUnidadAdmitidos: ["doble_rodada"] }],
         unidades: [{ id: jornadaId, tipo: "doble_rodada", capacidadKg: 8000, ubicacionInicial: PATIO, libreDesdeMin: 480, cargaActualKg: 0 }],
         parametros: { patio: PATIO, turnoInicioMin: 480, turnoFinMin: 960, velocidadKmh: 30, factorCircuidad: 1.4, descargaMin: 20,
-          capacidadMaximaPorTipoKg: { doble_rodada: 8000, rabon: 0, camioneta: 0 }, semilla: 1, horasPico: [] },
+          capacidadMaximaPorTipoKg: { doble_rodada: 8000, rabon: 0, camioneta: 0, torton: 0, trailer: 0 }, semilla: 1, horasPico: [] },
       };
       const resultado: Plan = {
         versionMotor: "1.1.0",
