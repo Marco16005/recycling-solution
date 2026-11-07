@@ -20,6 +20,7 @@ Llenar `.env`:
 | `BETTER_AUTH_URL` | La dirección con la que se abre la aplicación: `http://localhost:3000` en desarrollo; `https://<DOMINIO>` en producción |
 | `ADMIN_CORREO`, `ADMIN_NOMBRE`, `ADMIN_CLAVE` | Primer administrador; la clave puede borrarse de `.env` después del primer arranque |
 | `DOMINIO` | Solo producción: nombre que atiende Caddy (ver §5) |
+| `DOMINIO_ALTERNO` | Opcional, solo producción con Caddy: otro nombre (p. ej. `www.`) que redirige a `DOMINIO` (ver §5) |
 
 Después:
 
@@ -71,6 +72,7 @@ Si falla, la aplicación queda detenida y la base sin cambios: revisar el mensaj
 Caddy atiende `DOMINIO`:
 
 - **Dominio público** (`rs.empresa.mx` apuntando a la máquina, puertos 80 y 443 abiertos): Caddy obtiene y renueva el certificado solo.
+- **Nombre alterno** (opcional, por ejemplo `www.rs.empresa.mx`): con `DOMINIO_ALTERNO` en `.env`, Caddy también obtiene su certificado y lo redirige a `https://<DOMINIO>` con la misma ruta (301). Antes, el registro DNS del alterno debe apuntar a la máquina, por ejemplo un CNAME `www` hacia el dominio. Si no apunta, Caddy no consigue el certificado y lo reintenta en el log, aunque el dominio principal sigue funcionando. Se aplica con `docker compose up -d proxy`.
 - **Red local sin dominio** (`localhost`, una IP o un nombre interno): Caddy firma con su propia autoridad. Cada teléfono y computadora debe instalar y confiar en esa autoridad, que está en el volumen `caddy_datos` (`/data/caddy/pki/authorities/local/root.crt`). Es la decisión abierta 11 de la especificación.
 
 Para obtener el certificado que se instala en los teléfonos (es público; la llave privada no sale del volumen):

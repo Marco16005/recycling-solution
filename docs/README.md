@@ -24,6 +24,7 @@ Piloto de un asistente de logística para una recicladora: CRM de clientes, cat�
 | [Documentos legales](legal/README.md) | Aviso de privacidad integral y simplificado, procedimiento interno y formato ARCO |
 | [Operación](operacion.md) | Levantar, respaldar, restaurar y mudar el sistema con Docker |
 | [Guía de auditoría](guia-de-auditoria.md) | Cómo revisar el proyecto con otra persona u otro modelo |
+| [Pendientes de la aplicación](pendientes.md) | Lo que falta en el sistema: ícono propio de reciclaje, preparación del piloto e instalación en Windows |
 | [Pendientes del Documento Integrador](pendientes-documento-integrador.md) | Decisiones por confirmar y datos reales que faltan en el documento académico |
 
 Estado al 2026-11-05: Planes 1 a 8, Plan CRM y Plan de seguridad validados por Claude y Codex en `main`; sigue la preparación del piloto. Antes de cada despliegue: `scripts/seguridad.sh`. Las decisiones de producto están en la especificación §14. Todo se ejecuta con Docker (`scripts/verificar-todo.sh`); la operación en el VPS está en [operacion.md](operacion.md).
