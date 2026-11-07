@@ -7,6 +7,7 @@ import type { BD } from "@/datos/bd";
 import { session, user, usuarios } from "@/datos/esquema";
 import * as esquemaAuth from "@/datos/esquema-auth";
 import { correoNormalizado } from "./identidades";
+import { rutaPermitida } from "./rutas-auth";
 
 export interface OpcionesAuth {
   secreto: string;
@@ -46,22 +47,6 @@ async function generacionPorCorreo(bd: BD, correo: unknown): Promise<number | nu
     .where(eq(user.email, correoNormalizado(correo)))
     .limit(1);
   return fila?.generacion ?? null;
-}
-
-/**
- * Las únicas rutas de Better Auth que usa la aplicación (diseño del 2026-11-07, §2.4). Las demás, como
- * /change-password, /update-user o /revoke-sessions, escribirían en las tablas de autenticación sin bitácora y sin
- * subir la generación; los cambios de credenciales van por `identidades.ts`.
- */
-export const RUTAS_DE_AUTH = ["POST /sign-in/email", "POST /sign-out", "GET /get-session"] as const;
-
-const PREFIJO_AUTH = "/api/auth";
-
-export function rutaPermitida(peticion: Request): boolean {
-  const ruta = new URL(peticion.url).pathname;
-  if (!ruta.startsWith(`${PREFIJO_AUTH}/`)) return false;
-  const llave = `${peticion.method} ${ruta.slice(PREFIJO_AUTH.length).replace(/\/+$/, "")}`;
-  return (RUTAS_DE_AUTH as readonly string[]).includes(llave);
 }
 
 /** La sesión vale si el usuario está activo y nada cambió sus credenciales desde que empezó la petición de entrada. */

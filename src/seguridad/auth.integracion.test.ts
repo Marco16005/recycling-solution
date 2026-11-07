@@ -116,7 +116,10 @@ describe("autenticación con Better Auth y Postgres real", () => {
       ["request-password-reset", { email: "rutas@prueba.local" }],
       ["sign-in/email/", { email: "rutas@prueba.local", password: CLAVE }],
     ] as const) {
-      expect((await conCookie(ruta, cuerpo)).status, ruta).toBe(404);
+      // El 404 lo da manejar, no Better Auth: su cuerpo es el nuestro (las variantes están en rutas-auth.test.ts).
+      const r = await conCookie(ruta, cuerpo);
+      expect(r.status, ruta).toBe(404);
+      expect(await r.json(), ruta).toEqual({ message: "No encontrado" });
     }
     expect((await conCookie("list-sessions", null, "GET")).status).toBe(404);
     expect((await entrar("rutas@prueba.local")).status).toBe(200);

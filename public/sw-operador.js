@@ -6,10 +6,15 @@
 const USUARIO = new URL(self.location.href).searchParams.get("u") || "sin-usuario";
 const CACHE = `rs-operador-v1-${USUARIO}`;
 
-// Solo se guarda la pantalla del operador tal cual: una respuesta redirigida (a /entrar o a /cuenta/contrasena) no debe
-// reemplazar la ruta guardada (revisión de Codex, 2026-11-07).
-const esPantallaDelOperador = (respuesta) =>
-  respuesta.ok && !respuesta.redirected && new URL(respuesta.url).pathname.startsWith("/operador");
+// Solo se guarda la pantalla del operador tal cual: una redirección (a /entrar o a /cuenta/contrasena) no debe reemplazar
+// la ruta guardada (revisiones de Codex, 2026-11-07). Hay dos clases: la de HTTP, y la que Next hace a media respuesta
+// cuando el layout redirige dentro de <Suspense>, que llega con estado 200 y <meta id="__next-page-redirect"> en el HTML
+// (por ejemplo, al recargar con la cookie de una sesión que un restablecimiento ya borró).
+async function esPantallaDelOperador(respuesta) {
+  if (!respuesta.ok || respuesta.redirected || !new URL(respuesta.url).pathname.startsWith("/operador")) return false;
+  if (!(respuesta.headers.get("content-type") || "").includes("text/html")) return true;
+  return !(await respuesta.clone().text()).includes("__next-page-redirect");
+}
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -41,7 +46,7 @@ self.addEventListener("message", (evento) => {
           const pantalla = url.pathname.startsWith("/operador");
           if (!pantalla && !url.pathname.startsWith("/_next/static/")) continue;
           const respuesta = await fetch(url, { credentials: "same-origin" });
-          if (pantalla ? esPantallaDelOperador(respuesta) : respuesta.ok) await cache.put(pantalla ? url.pathname : url.href, respuesta);
+          if (pantalla ? await esPantallaDelOperador(respuesta) : respuesta.ok) await cache.put(pantalla ? url.pathname : url.href, respuesta);
         } catch {
           // Lo que no se pudo guardar ahora se guarda en la siguiente navegación con señal.
         }
@@ -62,7 +67,7 @@ self.addEventListener("fetch", (evento) => {
         const cache = await caches.open(CACHE);
         try {
           const respuesta = await fetch(peticion);
-          if (esPantallaDelOperador(respuesta)) await cache.put(url.pathname, respuesta.clone());
+          if (await esPantallaDelOperador(respuesta)) await cache.put(url.pathname, respuesta.clone());
           return respuesta;
         } catch {
           return (await cache.match(url.pathname)) ?? (await cache.match("/operador")) ?? Response.error();

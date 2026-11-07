@@ -134,3 +134,8 @@ Codex no aprobó la primera versión y señaló cuatro puntos, todos incorporado
 
 Puso `<EnlaceCuenta />` en despacho y operador (commit 755de08).
 
+En la revisión del commit 96ca202, Codex no aprobó por dos puntos, ambos corregidos:
+
+1. **Redirección a media respuesta.** Con Cache Components, la redirección de un layout dentro de `<Suspense>` llega con estado 200 y una etiqueta `<meta id="__next-page-redirect">`. Pasa, por ejemplo, cuando el operador recarga `/operador` con la cookie de una sesión que un restablecimiento ya borró. El service worker la habría guardado en lugar de la ruta. Ahora tampoco guarda un HTML con esa etiqueta, y una e2e lo prueba con una cookie de una sesión que ya no existe.
+2. **Barras finales.** `rutaPermitida` quitaba las barras finales. Ahora compara exacto, en `src/seguridad/rutas-auth.ts`, y tiene pruebas de variantes.
+
