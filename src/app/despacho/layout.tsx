@@ -4,6 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { usuarioDeLaSesion } from "@/consultas/sesion";
 import { BotonSalir } from "@/components/sesion/boton-salir";
+import { EnlaceCuenta } from "@/components/sesion/enlace-cuenta";
 import { NavegacionDespacho } from "./navegacion";
 
 async function SesionDespacho() {
@@ -11,7 +12,8 @@ async function SesionDespacho() {
   if (!usuario) redirect("/entrar");
   return (
     <div className="flex min-w-0 items-center gap-3 text-sm">
-      <span className="max-w-48 truncate">{usuario.nombre}</span>
+      <span className="min-w-0 max-w-48 truncate">{usuario.nombre}</span>
+      <EnlaceCuenta />
       <BotonSalir />
     </div>
   );
