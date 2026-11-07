@@ -39,6 +39,10 @@ describe("clienteSchema", () => {
     expect(errores(minimo)).toEqual({});
   });
 
+  it.each(["torton", "trailer"] as const)("acepta el tipo de unidad %s", tipo => {
+    expect(clienteSchema.parse({ ...clienteValido, tiposUnidadAdmitidos: [tipo] }).tiposUnidadAdmitidos).toEqual([tipo]);
+  });
+
   it("rechaza coordenadas invertidas (latitud y longitud intercambiadas)", () => {
     const e = errores({ ...clienteValido, lat: -100.2801, lng: 20.6102 });
     expect(e.lat).toEqual(["Latitud fuera de México"]);
