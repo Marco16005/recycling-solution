@@ -49,6 +49,20 @@ export type PosibleDuplicado =
   | { fila: number; nombre: string; con: "archivo"; otraFila: number }
   | { fila: number; nombre: string; con: "cartera"; clienteId: string; nombreExistente: string };
 
+export function separadorDe(contenido: string): "," | ";" | "\t" {
+  const encabezado = contenido.split(/[\r\n]/, 1)[0] ?? "";
+  let separador: "," | ";" | "\t" = ",";
+  let mayor = 0;
+  for (const candidato of [",", ";", "\t"] as const) {
+    const apariciones = encabezado.split(candidato).length - 1;
+    if (apariciones > mayor) {
+      separador = candidato;
+      mayor = apariciones;
+    }
+  }
+  return separador;
+}
+
 /** Convierte el CSV exportado desde Excel en entradas validadas, con los errores por fila. */
 export function analizarClientesCsv(entradaCruda: string | Uint8Array): AnalisisCsv {
   const contenido = typeof entradaCruda === "string" ? entradaCruda : decodificar(entradaCruda);
@@ -61,12 +75,11 @@ export function analizarClientesCsv(entradaCruda: string | Uint8Array): Analisis
     return errorArchivo(`El archivo supera el límite de ${LIMITES_CSV.bytes} bytes`);
   }
   // Sin header: true para detectar repeticiones antes del renombrado automático del lector.
-  const leido = Papa.parse<string[]>(contenido.replace(/^\uFEFF/, ""), { skipEmptyLines: false });
+  // La barra separa tipos_unidad, no columnas; el encabezado determina el separador CSV.
+  const leido = Papa.parse<string[]>(contenido.replace(/^\uFEFF/, ""), { skipEmptyLines: false, delimiter: separadorDe(contenido) });
   const encabezados = (leido.data[0] ?? []).map((h) => h.trim().toLowerCase());
   const erroresPorFila = new Map<number, string[]>();
   for (const error of leido.errors) {
-    // Un archivo de una sola columna es válido; Papa usa coma si no detecta separador.
-    if (error.code === "UndetectableDelimiter") continue;
     const fila = typeof error.row === "number" ? error.row + 1 : null;
     const mensaje = error.code === "MissingQuotes" ? "Campo con comillas sin cerrar" : "No se pudo leer el registro CSV: comillas inválidas";
     if (fila === null) resultado.errores.push({ fila, mensajes: [mensaje] });

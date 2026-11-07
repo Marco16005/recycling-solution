@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { analizarClientesCsv, COLUMNAS_CSV, filaCsvDeCliente, LIMITES_CSV, nombreNormalizado, posiblesDuplicados } from "./csv";
+import { analizarClientesCsv, COLUMNAS_CSV, filaCsvDeCliente, LIMITES_CSV, nombreNormalizado, posiblesDuplicados, separadorDe } from "./csv";
+
+describe("separadorDe", () => {
+  it.each([
+    ["nombre,tipos_unidad\nUno;trailer|rabon", ","],
+    ["nombre;tipos_unidad\nUno,trailer|rabon", ";"],
+    ["nombre\ttipos_unidad\nUno,trailer|rabon", "\t"],
+    ["nombre\nUno;trailer|rabon", ","],
+    ["\uFEFFnombre;tipos_unidad\nUno,trailer|rabon", ";"],
+  ])("elige el separador del encabezado en %s", (contenido, esperado) => {
+    expect(separadorDe(contenido)).toBe(esperado);
+  });
+});
 
 describe("analizarClientesCsv", () => {
   it("acepta BOM, punto y coma, coma decimal y renglones vacíos", () => {
@@ -166,6 +178,11 @@ describe("columnas del Plan CRM", () => {
     expect(entrada.tiposUnidadAdmitidos).toEqual(["trailer", "rabon", "doble_rodada", "torton", "camioneta"]);
     expect(filaCsvDeCliente({ ...entrada, id: "x", version: 1, privacidad: null } as never).tipos_unidad)
       .toBe("trailer|rabon|doble_rodada|torton|camioneta");
+  });
+  it("detecta punto y coma en dos columnas aunque los tipos tengan barras", () => {
+    const r = analizarClientesCsv("nombre;tipos_unidad\nCartonera;trailer|rabon|doble_rodada|torton|camioneta\n");
+    expect(r.errores).toEqual([]);
+    expect(r.validas[0].entrada.tiposUnidadAdmitidos).toEqual(["trailer", "rabon", "doble_rodada", "torton", "camioneta"]);
   });
   it("rechaza un tipo desconocido incluso entre etiquetas válidas", () => {
     const r = analizarClientesCsv('nombre,tipos_unidad\nCartonera,"Tráiler | camión"\n');
