@@ -114,6 +114,30 @@ test("la pestaña lleva el ícono de reciclaje: SVG, favicon.ico e ícono para l
     expect(respuesta.status(), ruta!).toBe(200);
     expect(respuesta.headers()["content-type"], ruta!).toContain(tipo);
   }
-  // Es el de reciclaje y no el genérico de Next.
-  expect(await (await request.get((await svg.getAttribute("href"))!)).text()).toContain("flechas de reciclaje");
+  // Que el navegador las decodifique y sean el ícono de reciclaje, no el genérico de Next: se dibujan en un lienzo y se
+  // leen dos píxeles (coordenadas en la escala 0–100 del SVG): el fondo verde arriba al centro y la punta de una flecha.
+  const colores = await page.evaluate(async (rutas) => {
+    const leer = async (src: string, lado: number, puntos: [number, number][]) => {
+      const imagen = new Image();
+      imagen.src = src;
+      await imagen.decode();
+      const lienzo = document.createElement("canvas");
+      lienzo.width = lienzo.height = lado;
+      const contexto = lienzo.getContext("2d")!;
+      contexto.drawImage(imagen, 0, 0, lado, lado);
+      return puntos.map(([x, y]) => Array.from(contexto.getImageData(Math.round((x * lado) / 100), Math.round((y * lado) / 100), 1, 1).data.slice(0, 3)));
+    };
+    return {
+      svg: await leer(rutas.svg, 200, [[50, 8], [60, 42]]),
+      apple: await leer(rutas.apple, 180, [[50, 8], [60, 42]]),
+      ico: await leer("/favicon.ico", 32, [[50, 8]]),
+    };
+  }, { svg: (await svg.getAttribute("href"))!, apple: (await apple.getAttribute("href"))! });
+  const parecido = (color: number[], esperado: number[]) => color.every((c, i) => Math.abs(c - esperado[i]) <= 12);
+  const VERDE = [0x15, 0x80, 0x3d];
+  const BLANCO = [255, 255, 255];
+  for (const [nombre, [fondo, flecha]] of Object.entries(colores)) {
+    expect(parecido(fondo, VERDE), `${nombre}: fondo ${fondo}`).toBe(true);
+    if (flecha) expect(parecido(flecha, BLANCO), `${nombre}: flecha ${flecha}`).toBe(true);
+  }
 });
