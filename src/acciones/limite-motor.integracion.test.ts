@@ -29,7 +29,7 @@ function entradaDe(solicitudes: number, unidades: number): EntradaPlan {
     fecha: "2026-11-05", instanteMin: 480, solicitudes: lista,
     unidades: Array.from({ length: unidades }, (_, i) => ({ id: `u${i}`, tipo: "doble_rodada" as const, capacidadKg: 8000, ubicacionInicial: patio, libreDesdeMin: 480, cargaActualKg: 0 })),
     parametros: { patio, turnoInicioMin: 480, turnoFinMin: 960, velocidadKmh: 30, factorCircuidad: 1.3, descargaMin: 15, semilla: 1,
-      toleranciaReadmisionMin: 15, capacidadMaximaPorTipoKg: { doble_rodada: 8000, rabon: 0, camioneta: 0 } },
+      toleranciaReadmisionMin: 15, capacidadMaximaPorTipoKg: { doble_rodada: 8000, rabon: 0, camioneta: 0, torton: 0, trailer: 0 } },
   };
 }
 

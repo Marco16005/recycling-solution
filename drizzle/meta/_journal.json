@@ -78,6 +78,13 @@
       "when": 1792692343575,
       "tag": "0010_reacomodo",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794073372185,
+      "tag": "0011_tipos_torton_trailer",
+      "breakpoints": true
     }
   ]
 }

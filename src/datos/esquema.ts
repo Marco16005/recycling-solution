@@ -11,7 +11,7 @@ export * from "./esquema-auth";
 
 export const rolEnum = pgEnum("rol", ["admin", "despachador", "operador", "gerencia"]);
 export const tipoResiduoEnum = pgEnum("tipo_residuo", ["RSU", "RME", "RP"]);
-export const tipoUnidadEnum = pgEnum("tipo_unidad", ["doble_rodada", "rabon", "camioneta"]);
+export const tipoUnidadEnum = pgEnum("tipo_unidad", ["doble_rodada", "rabon", "camioneta", "torton", "trailer"]);
 export const estadoDocumentoEnum = pgEnum("estado_documento", ["vigente", "pendiente", "vencido"]);
 export const accionPrivacidadEnum = pgEnum("accion_privacidad", ["aceptado", "retirado"]);
 export const medioPrivacidadEnum = pgEnum("medio_privacidad", ["papel", "correo", "verbal", "otro"]);

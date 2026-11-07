@@ -171,8 +171,11 @@ export async function comprobarValidacion(
 
   const activas = await leerUnidades(tx);
   const maximas = capacidadMaximaPorTipo(activas.filter((u) => u.activo));
-  const guardadas = entrada.parametros.capacidadMaximaPorTipoKg;
-  if (Object.keys(guardadas).some((t) => maximas[t as keyof typeof maximas] !== guardadas[t as keyof typeof guardadas])) {
+  // Una propuesta generada antes de agregar torton y tráiler trae solo tres tipos: se compara la unión, con 0 si falta.
+  const guardadas: Partial<Record<string, number>> = entrada.parametros.capacidadMaximaPorTipoKg;
+  const actuales: Partial<Record<string, number>> = maximas;
+  const tipos = new Set([...Object.keys(guardadas), ...Object.keys(actuales)]);
+  if ([...tipos].some((t) => (actuales[t] ?? 0) !== (guardadas[t] ?? 0))) {
     return conflicto("capacidades_cambiaron", "Cambió la capacidad de la flota desde que se generó la propuesta; regenérala");
   }
 
