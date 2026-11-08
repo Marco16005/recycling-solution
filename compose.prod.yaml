@@ -41,7 +41,7 @@ services:
   # antes de cada arranque; así sirven también los volúmenes que creó una versión anterior que corría como root.
   proxy-permisos:
     build: { context: ./infra/caddy }
-    image: rs-caddy:2.11.8
+    image: rs-caddy:2.11.9
     profiles: ["caddy"]
     user: root
     network_mode: none
@@ -54,7 +54,7 @@ services:
   proxy:
     # Plan de seguridad (S4): imagen propia, compilada con dependencias corregidas y sin curl (infra/caddy/Dockerfile).
     build: { context: ./infra/caddy }
-    image: rs-caddy:2.11.8
+    image: rs-caddy:2.11.9
     profiles: ["caddy"]
     mem_limit: 128m
     ports:

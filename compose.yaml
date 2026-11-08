@@ -2,7 +2,9 @@
 # (ver COMPOSE_FILE en .env.example y el Plan 1 v2, §6).
 services:
   db:
-    image: postgres:17.11-alpine
+    # Postgres oficial con zlib 1.4 (infra/db/Dockerfile, plan de seguridad del 2026-11-07).
+    build: { context: ./infra/db }
+    image: rs-postgres:17.11
     environment:
       POSTGRES_USER: rs_super
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}  # obligatorio fuera de pruebas (ver .env.example)
@@ -50,7 +52,9 @@ services:
 
   # Respaldo con pg_dump a ./respaldos (docs/operacion.md explica cómo restaurar).
   respaldo:
-    image: postgres:17.11-alpine
+    # Postgres oficial con zlib 1.4 (infra/db/Dockerfile, plan de seguridad del 2026-11-07).
+    build: { context: ./infra/db }
+    image: rs-postgres:17.11
     profiles: ["respaldo"]
     environment:
       PGPASSWORD: ${RS_MIGRADOR_PASSWORD:-}

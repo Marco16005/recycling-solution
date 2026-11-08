@@ -8,4 +8,4 @@ Lo que falta en el sistema. Lo del documento académico está en [pendientes-doc
 - Respaldos guardados fuera del servidor.
 - Línea base de K2 con la hoja de cronometraje.
 - Carga de la cartera real, siempre fuera del repositorio.
-- Escaneo con nmap y ZAP contra el servidor ya desplegado, solo con autorización del dueño.
+- Escaneo con nmap, testssl y ZAP baseline contra feruga.tech (plan de seguridad §7). El dueño lo autorizó para después de desplegar las correcciones de Caddy y Postgres del 2026-11-07.

@@ -196,7 +196,7 @@ Compilar la aplicación consume más memoria de la que conviene usar en un servi
 ```bash
 # En la computadora de desarrollo, con el mismo .env de producción (COMPOSE_FILE=compose.yaml:compose.prod.yaml):
 DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose build
-docker save recycling-solution-web recycling-solution-migrate recycling-solution-bootstrap rs-caddy:2.11.8 | gzip | ssh usuario@vps 'gunzip | docker load'
+docker save recycling-solution-web recycling-solution-migrate recycling-solution-bootstrap rs-caddy:2.11.9 rs-postgres:17.11 | gzip | ssh usuario@vps 'gunzip | docker load'
 
 # En el VPS:
 docker compose up -d --no-build

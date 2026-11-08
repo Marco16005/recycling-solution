@@ -25,8 +25,8 @@ ZAP=zaproxy/zap-stable:2.17.0@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a
 # La misma imagen de Node que el Dockerfile.
 NODE=node:24.22.2-trixie-slim
 # Los mismos nombres que compose.yaml y compose.prod.yaml.
-IMAGEN_DB=postgres:17.11-alpine
-IMAGEN_PROXY=rs-caddy:2.11.8
+IMAGEN_DB=rs-postgres:17.11
+IMAGEN_PROXY=rs-caddy:2.11.9
 IMAGEN_MAPA=rs-mapa:v26.9.0
 
 RAPIDO=no
@@ -108,7 +108,7 @@ codigo() {
 
 dockerfiles() {
   ok=0
-  for archivo in Dockerfile infra/mapa/Dockerfile infra/caddy/Dockerfile; do
+  for archivo in Dockerfile infra/mapa/Dockerfile infra/caddy/Dockerfile infra/db/Dockerfile; do
     docker run --rm -i "$HADOLINT" hadolint --failure-threshold warning - < "$COPIA/$archivo" || ok=1
   done
   docker run --rm -v "$COPIA:/src:ro" -v trivy-cache-seguridad:/root/.cache "$TRIVY" config --quiet --exit-code 1 \
@@ -123,8 +123,9 @@ construir() {
     return
   fi
   compose build web mapa-prueba >/dev/null
-  docker build -q -t "$IMAGEN_PROXY" "$COPIA/infra/caddy" >/dev/null
-  docker pull -q "$IMAGEN_DB" >/dev/null
+  # --pull: se escanea sobre la versión vigente de las imágenes base (una oficial reconstruida trae sus correcciones).
+  docker build -q --pull -t "$IMAGEN_PROXY" "$COPIA/infra/caddy" >/dev/null
+  docker build -q --pull -t "$IMAGEN_DB" "$COPIA/infra/db" >/dev/null
 }
 
 # Falla con críticos o altos que tengan corrección y no estén en infra/seguridad/grype.yaml.
