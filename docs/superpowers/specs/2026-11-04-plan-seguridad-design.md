@@ -109,11 +109,16 @@ El dueño lo autorizó por escrito, ya desplegada la versión del 2026-11-07. Se
 
 Atendido:
 
-- **HSTS en los estáticos:** Caddy pone `Strict-Transport-Security` en toda respuesta que no lo traiga (`header ?…`), sin duplicar el de la aplicación. Probado con Caddy delante de un servidor de prueba. En el modo B lo tiene que poner el proxy del punto de venta.
+- **HSTS en los estáticos:** Caddy pone `Strict-Transport-Security` en toda respuesta que no lo traiga (`header ?…`), sin duplicar el de la aplicación. Probado con Caddy delante de un servidor de prueba. En el modo B lo tiene que poner el proxy del punto de venta. En la red local, las IP no quedan fijadas por HSTS, pero un nombre interno sí, durante un año. Si cambia la autoridad de Caddy, cada equipo debe instalar la nueva (`docs/operacion.md` §5). Ya pasaba con las páginas; ahora también con los estáticos.
+
+- **BREACH (testssl, medio).** Primero se aceptó con dos premisas falsas: que la cookie `SameSite=Lax` no viaja desde otro sitio (sí viaja en una navegación GET de primer nivel) y que ninguna página refleja lo que se escribe (la cartera refleja el filtro `q` junto a datos de clientes). Lo señaló Codex. Ahora se mitiga:
+  - Next ya no comprime (`compress: false`; antes mandaba `gzip` por su cuenta).
+  - Caddy comprime solo los archivos estáticos y `/operador` (`@comprimible`). El operador trabaja con poca señal y su pantalla no refleja texto que venga de otro sitio. Despacho, gerencia, administración, cuenta, entrada y API van sin comprimir: son pantallas de oficina y el costo es menor.
+  - Probado con Caddy delante de un servidor de prueba: `zstd` en estáticos y `/operador`, nada en las demás.
+  - En el modo B, el proxy del punto de venta no debe comprimir esas pantallas (`docs/operacion.md` §9).
 
 Aceptado, con motivo:
 
-- **BREACH (testssl, medio):** las respuestas HTTPS se comprimen (`encode zstd gzip`), lo que ayuda al operador con poca señal. El ataque necesita un secreto en el cuerpo de la respuesta y que otro sitio haga muchas peticiones con la sesión de la víctima. La sesión va en una cookie `SameSite=Lax`, que no viaja en esas peticiones, y las páginas no llevan tokens secretos (las acciones de servidor se protegen revisando el origen).
 - **`Server: Caddy` en la redirección de HTTP a HTTPS (puerto 80):** no dice la versión, y quitarlo exigiría un bloque `http://` propio que cambia cómo se atienden las IP y la red local.
 - **Sin OCSP stapling:** Let's Encrypt dejó de ofrecer OCSP en 2025.
 

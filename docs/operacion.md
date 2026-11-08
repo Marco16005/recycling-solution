@@ -74,7 +74,7 @@ Caddy atiende `DOMINIO`:
 
 - **Dominio público** (`rs.empresa.mx` apuntando a la máquina, puertos 80 y 443 abiertos): Caddy obtiene y renueva el certificado solo.
 - **Nombre alterno** (opcional, por ejemplo `www.rs.empresa.mx`): con `DOMINIO_ALTERNO` en `.env`, Caddy también obtiene su certificado y lo redirige a `https://<DOMINIO>` con la misma ruta (301; si se entra por `http://`, antes pasa a HTTPS con un 308). Antes, el registro DNS del alterno debe apuntar a la máquina, por ejemplo un CNAME `www` hacia el dominio. Si no apunta, Caddy no consigue el certificado y lo reintenta en el log, aunque el dominio principal sigue funcionando. Se aplica con `docker compose up -d proxy`.
-- **Red local sin dominio** (`localhost`, una IP o un nombre interno): Caddy firma con su propia autoridad. Cada teléfono y computadora debe instalar y confiar en esa autoridad, que está en el volumen `caddy_datos` (`/data/caddy/pki/authorities/local/root.crt`). Es la decisión abierta 11 de la especificación.
+- **Red local sin dominio** (`localhost`, una IP o un nombre interno): Caddy firma con su propia autoridad. Cada teléfono y computadora debe instalar y confiar en esa autoridad, que está en el volumen `caddy_datos` (`/data/caddy/pki/authorities/local/root.crt`). Es la decisión abierta 11 de la especificación. Por HSTS, un nombre interno queda fijado a HTTPS durante un año: si cambia la autoridad de Caddy, cada equipo debe instalar la nueva antes de volver a entrar.
 
 Para obtener el certificado que se instala en los teléfonos (es público; la llave privada no sale del volumen):
 
@@ -206,6 +206,11 @@ done; echo   # esperado: 401 401 401 401 401 429
 ```
 
 Si los seis responden `401`, el proxy está pasando la IP falsa: corregir su configuración antes de abrir el sistema. Comprobado el 2026-10-15 con el modo A (Caddy): `401 401 401 401 401 429`. La aplicación misma escucha solo en `127.0.0.1`, así que desde fuera del servidor no se puede llegar a ella sin pasar por el proxy.
+
+Ese proxy debe cumplir dos cosas que en el modo A hace Caddy (plan de seguridad §7):
+
+- **HSTS:** poner `Strict-Transport-Security: max-age=31536000` también en los archivos estáticos.
+- **Compresión:** comprimir solo `/_next/static/*` y `/operador`; las pantallas de despacho, gerencia, administración, cuenta y API van sin comprimir, por BREACH. La aplicación no comprime por su cuenta.
 
 ### Construir la imagen sin cargar el VPS
 
