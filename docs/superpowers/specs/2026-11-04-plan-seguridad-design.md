@@ -141,8 +141,8 @@ Las encontró `scripts/seguridad.sh` en el servidor, ya desplegado. Se corrigen 
 | Imagen | Paquete | Gravedad | Corrección |
 |---|---|---|---|
 | Caddy | `klauspost/compress` 1.20.1 (GO-2026-6865), lo usa `encode zstd gzip` | Alta | Caddy 2.11.9 compilado con `--replace` a 1.20.2; también conserva `x/net` 0.62.0. go-jose 4.1.6 ya viene en 2.11.9 |
-| Caddy | zlib 1.3.2 (CVE-2026-4738) | Crítica | `apk upgrade zlib` a 1.4-r0 en la imagen final |
-| Postgres | zlib 1.3.2 (CVE-2026-4738) | Crítica | Imagen propia mínima `rs-postgres:17.11` (`infra/db/Dockerfile`): la oficial más `apk upgrade zlib`. La usan `db` y `respaldo`, porque `pg_dump -Fc` comprime con zlib |
+| Caddy | zlib 1.3.2 (CVE-2026-4738) | Crítica | zlib 1.4-r0 (versión fija) en la imagen final |
+| Postgres | zlib 1.3.2 (CVE-2026-4738) | Crítica | Imagen propia mínima `rs-postgres:17.11` (`infra/db/Dockerfile`): la oficial más zlib 1.4-r0. La usan `db` y `respaldo`, porque `pg_dump -Fc` comprime con zlib |
 | Postgres | `moby/sys/user` | Media | No hace fallar el escaneo; llega con la siguiente imagen oficial |
 
 No se registró como excepción en `grype.yaml`, porque esa configuración aplica a las cuatro imágenes y ocultaría el mismo CVE en las demás. `seguridad.sh` construye Caddy y Postgres con `--pull`, para escanear sobre la imagen base vigente. Cuando la imagen oficial de Postgres traiga zlib 1.4, se vuelve a usar directo y se borra `infra/db/Dockerfile`.
@@ -150,7 +150,8 @@ No se registró como excepción en `grype.yaml`, porque esa configuración aplic
 Dos ajustes del escaneo:
 
 - **Trivy DS-0002 en `infra/db/Dockerfile`:** excepción con motivo, porque la imagen arranca como root igual que la oficial y baja a `postgres` con su-exec.
-- **ZAP 10096, Timestamp Disclosure:** se acepta en `zap-reglas.tsv`. Marcó dos números de 10 dígitos (1852294936 y 1782348074) que no son fechas de nada. No se repitieron en 50 peticiones con sesión ni en otra corrida de ZAP, y la aplicación no publica marcas de tiempo Unix.
+- **ZAP 10096, Timestamp Disclosure:** en una corrida marcó dos números de 10 dígitos (1852294936 en `/` y 1782348074 en `/operador`) que no son fechas de nada. No se repitieron en 50 peticiones con sesión ni en otra corrida de ZAP. **No se ignora:** una excepción para todas las URL ocultaría una divulgación real (revisión de Codex). Si vuelve a salir, se busca el origen con la respuesta completa antes de aceptarlo.
+- **zlib fija en `1.4-r0`** en los dos Dockerfiles, por la regla de versiones exactas. Si Alpine la reemplaza, la construcción falla con un mensaje claro.
 
 ## 10. Orden de trabajo
 

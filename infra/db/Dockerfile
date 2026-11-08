@@ -5,4 +5,5 @@ FROM postgres:17.11-alpine
 # checkov:skip=CKV_DOCKER_2: la salud de db la revisa Compose con pg_isready (healthcheck en compose.yaml).
 # checkov:skip=CKV_DOCKER_3: igual que la imagen oficial: el entrypoint arranca como root solo para ajustar permisos del
 # volumen y baja al usuario postgres con su-exec antes de iniciar el servidor.
-RUN apk upgrade --no-cache zlib
+# Versión fija: si Alpine la reemplaza por una revisión nueva, la construcción falla con un mensaje claro y se sube aquí.
+RUN apk add --no-cache zlib=1.4-r0

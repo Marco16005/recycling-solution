@@ -10,12 +10,14 @@ RUN xcaddy build v2.11.9 \
 
 # Sin curl (arrastraba libcurl y brotli, CVE-2026-111497) y sin privilegios: Docker deja usar los puertos 80 y 443 a
 # cualquier usuario dentro del contenedor. Los volúmenes ya existentes los ajusta proxy-permisos (compose.prod.yaml).
-# zlib 1.4 (CVE-2026-4738, crítica, 2026-11-07): la imagen base aún trae la 1.3.2 y Alpine 3.24 ya publica la corrección.
+# zlib 1.4-r0 fija (CVE-2026-4738, crítica, 2026-11-07): la imagen base aún trae la 1.3.2 y Alpine 3.24 ya publica la
+# corrección. Si Alpine la reemplaza por una revisión nueva, la construcción falla con un mensaje claro: subir la versión
+# aquí, o quitar la línea cuando caddy:<versión>-alpine ya la traiga.
 FROM caddy:2.11.9-alpine
 COPY --from=construir /usr/bin/caddy /usr/bin/caddy
 # checkov:skip=CKV_DOCKER_2: la salud de proxy la observa Compose a través de web; Caddy no expone un punto de salud propio.
 RUN apk del --no-cache curl \
- && apk upgrade --no-cache zlib \
+ && apk add --no-cache zlib=1.4-r0 \
  && addgroup -S -g 10001 caddy \
  && adduser -S -D -H -u 10001 -G caddy caddy \
  && chown -R caddy:caddy /data /config
