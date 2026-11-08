@@ -113,9 +113,9 @@ Atendido:
 
 - **BREACH (testssl, medio).** Primero se aceptó con dos premisas falsas: que la cookie `SameSite=Lax` no viaja desde otro sitio (sí viaja en una navegación GET de primer nivel) y que ninguna página refleja lo que se escribe (la cartera refleja el filtro `q` junto a datos de clientes). Lo señaló Codex. Ahora se mitiga:
   - Next ya no comprime (`compress: false`; antes mandaba `gzip` por su cuenta).
-  - Caddy comprime solo los archivos estáticos y `/operador` (`@comprimible`). El operador trabaja con poca señal y su pantalla no refleja texto que venga de otro sitio. Despacho, gerencia, administración, cuenta, entrada y API van sin comprimir: son pantallas de oficina y el costo es menor.
-  - Probado con Caddy delante de un servidor de prueba: `zstd` en estáticos y `/operador`, nada en las demás.
-  - En el modo B, el proxy del punto de venta no debe comprimir esas pantallas (`docs/operacion.md` §9).
+  - Caddy comprime solo los archivos estáticos (`@estaticos`), ninguna página. Codex señaló que Next 16 pone la dirección completa, con su query, en el HTML y en las respuestas RSC y de acciones. Así, `/operador?q=…` también reunía texto controlado con datos privados; por eso `/operador` tampoco se comprime. Lo pesado de su pantalla (JavaScript y fuentes) es estático: va comprimido y el teléfono lo guarda.
+  - Probado con Caddy delante de un servidor de prueba: `zstd` solo en los estáticos.
+  - En el modo B, el proxy del punto de venta hace lo mismo. Hay ejemplos completos para nginx y Caddy en `docs/operacion.md` §9.
 
 Aceptado, con motivo:
 

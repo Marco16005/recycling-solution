@@ -177,15 +177,34 @@ COMPOSE_PROFILES=caddy
 
 Dejar `COMPOSE_PROFILES` vacío. La aplicación queda solo en `127.0.0.1:3001` (`PUERTO_WEB_LOCAL`) y el proxy existente le envía el tráfico de su nombre.
 
-**Importante para la seguridad:** el límite de 5 intentos de entrada por minuto se cuenta por la IP que llega en `X-Forwarded-For`. El proxy debe **reemplazar** ese encabezado con la IP real del cliente, nunca agregarla al que trae la petición. Con `$proxy_add_x_forwarded_for`, un atacante podría inventar una IP distinta en cada intento y saltarse el límite. Ejemplo correcto para nginx:
+El proxy existente debe hacer lo que en el modo A hace Caddy (plan de seguridad §7):
+
+1. **IP real del cliente.** El límite de 5 intentos de entrada por minuto se cuenta por la IP que llega en `X-Forwarded-For`. El proxy debe **reemplazar** ese encabezado con la IP real, nunca agregarla al que trae la petición: con `$proxy_add_x_forwarded_for`, un atacante podría inventar una IP distinta en cada intento y saltarse el límite.
+2. **HSTS en todo.** La aplicación lo pone en las páginas; los archivos estáticos no pasan por ella. Hay que mandarlo una sola vez por respuesta.
+3. **Comprimir solo los archivos estáticos (BREACH).** Next pone la dirección completa en cada página, así que una página comprimida puede reunir texto controlado desde otro sitio con datos privados. La aplicación no comprime por su cuenta.
+
+Ejemplo completo para nginx:
 
 ```nginx
 server {
     server_name 203-0-113-25.sslip.io;
+    # 2. HSTS una sola vez en toda respuesta: se quita el de la aplicación y se pone aquí (always incluye errores).
+    proxy_hide_header Strict-Transport-Security;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    # 3. Sin compresión salvo en los estáticos.
+    gzip off;
+    location /_next/static/ {
+        gzip on;
+        gzip_types text/css application/javascript;
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
     location / {
         proxy_pass http://127.0.0.1:3001;
         proxy_set_header Host $host;
-        # Reemplaza (no agrega) la IP del cliente: el límite de intentos depende de ella.
+        # 1. Reemplaza (no agrega) la IP del cliente: el límite de intentos depende de ella.
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
@@ -193,7 +212,18 @@ server {
 }
 ```
 
-Si el proxy existente es Caddy, basta con un bloque `203-0-113-25.sslip.io { reverse_proxy 127.0.0.1:3001 }`: Caddy ignora el `X-Forwarded-For` de los clientes y pone la IP real, salvo que tenga configurado `trusted_proxies`. Antes de tocar el proxy del punto de venta, respaldar su configuración y coordinar con quien lo administra.
+Si el proxy existente es Caddy, el bloque es el siguiente. Caddy ignora el `X-Forwarded-For` de los clientes y pone la IP real, salvo que tenga configurado `trusted_proxies`.
+
+```caddyfile
+203-0-113-25.sslip.io {
+	header ?Strict-Transport-Security "max-age=31536000"
+	@estaticos path /_next/static/* /favicon.ico /icon.svg /apple-icon.png /maplibre-gl-worker.mjs /sw-operador.js
+	encode @estaticos zstd gzip
+	reverse_proxy 127.0.0.1:3001
+}
+```
+
+Antes de tocar el proxy del punto de venta, respaldar su configuración y coordinar con quien lo administra.
 
 **Comprobación obligatoria** en cualquiera de los dos modos: seis intentos de entrada con una IP falsa distinta en cada uno. El sexto debe responder `429`:
 
@@ -206,11 +236,6 @@ done; echo   # esperado: 401 401 401 401 401 429
 ```
 
 Si los seis responden `401`, el proxy está pasando la IP falsa: corregir su configuración antes de abrir el sistema. Comprobado el 2026-10-15 con el modo A (Caddy): `401 401 401 401 401 429`. La aplicación misma escucha solo en `127.0.0.1`, así que desde fuera del servidor no se puede llegar a ella sin pasar por el proxy.
-
-Ese proxy debe cumplir dos cosas que en el modo A hace Caddy (plan de seguridad §7):
-
-- **HSTS:** poner `Strict-Transport-Security: max-age=31536000` también en los archivos estáticos.
-- **Compresión:** comprimir solo `/_next/static/*` y `/operador`; las pantallas de despacho, gerencia, administración, cuenta y API van sin comprimir, por BREACH. La aplicación no comprime por su cuenta.
 
 ### Construir la imagen sin cargar el VPS
 

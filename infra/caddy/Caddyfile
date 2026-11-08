@@ -10,12 +10,13 @@
 # DOMINIO_ALTERNO (opcional, p. ej. www.feruga.tech) lleva al dominio principal con la misma ruta: una sola dirección
 # para las cookies de sesión y para BETTER_AUTH_URL. Vacío, el sitio atiende solo DOMINIO, como antes.
 {$DOMINIO} {$DOMINIO_ALTERNO} {
-	# Plan de seguridad (BREACH, 2026-11-07): solo se comprime lo que no mezcla datos de la sesión con lo que escribe el
-	# usuario: archivos estáticos y la pantalla del operador, que trabaja con poca señal. Despacho, gerencia,
-	# administración, cuenta y API van sin comprimir (la cartera refleja el filtro «q» junto a datos de clientes).
-	# Next no comprime (compress: false en next.config.ts).
-	@comprimible path /_next/static/* /operador /operador/* /favicon.ico /icon.svg /apple-icon.png /maplibre-gl-worker.mjs /sw-operador.js
-	encode @comprimible zstd gzip
+	# Plan de seguridad (BREACH, 2026-11-07): solo se comprimen los archivos estáticos, que no llevan datos de la sesión.
+	# Ninguna página: Next pone la dirección completa, con su query, en el HTML y en las respuestas RSC, así que cualquier
+	# página puede reunir texto controlado desde otro sitio con datos privados (la cartera, además, refleja «q»). Lo
+	# pesado del operador (JavaScript y fuentes) es estático: va comprimido y el teléfono lo guarda. Next no comprime
+	# (compress: false en next.config.ts).
+	@estaticos path /_next/static/* /favicon.ico /icon.svg /apple-icon.png /maplibre-gl-worker.mjs /sw-operador.js
+	encode @estaticos zstd gzip
 	# Plan de seguridad: no anunciar el servidor. Los demás encabezados los pone la aplicación (src/proxy.ts y
 	# next.config.ts) para que valgan también detrás del proxy del punto de venta (modo B).
 	header -Server
