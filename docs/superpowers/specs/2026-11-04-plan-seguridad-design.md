@@ -134,6 +134,35 @@ Antes se revisa la política de uso aceptable de Hostinger. El escaneo se limita
     - `S7773` y `S7767`: estilo (`Number.NaN`, `| 0` del generador con semilla).
   - Mientras SonarQube estuvo encendido (2.4 GB), siete pruebas de unidad agotaron su tiempo al crear la base. Se apagó, y la suite volvió a 815 de 815 en 26 s: por eso SonarQube no entra a `verificar-todo`.
 
+### Vulnerabilidades publicadas después de la línea base (2026-11-07)
+
+Las encontró `scripts/seguridad.sh` en el servidor, ya desplegado. Se corrigen sin excepciones:
+
+| Imagen | Paquete | Gravedad | Corrección |
+|---|---|---|---|
+| Caddy | `klauspost/compress` 1.20.1 (GO-2026-6865), lo usa `encode zstd gzip` | Alta | Caddy 2.11.9 compilado con `--replace` a 1.20.2; también conserva `x/net` 0.62.0. go-jose 4.1.6 ya viene en 2.11.9 |
+| Caddy | zlib 1.3.2 (CVE-2026-4738) | Crítica | zlib 1.4-r0 (versión fija) en la imagen final |
+| Postgres | zlib 1.3.2 (CVE-2026-4738) | Crítica | Imagen propia mínima `rs-postgres:17.11` (`infra/db/Dockerfile`): la oficial más zlib 1.4-r0. La usan `db` y `respaldo`, porque `pg_dump -Fc` comprime con zlib |
+| Postgres | `moby/sys/user` | Media | No hace fallar el escaneo; llega con la siguiente imagen oficial |
+
+No se registró como excepción en `grype.yaml`, porque esa configuración aplica a las cuatro imágenes y ocultaría el mismo CVE en las demás. `seguridad.sh` construye Caddy y Postgres con `--pull`, para escanear sobre la imagen base vigente. Cuando la imagen oficial de Postgres traiga zlib 1.4, se vuelve a usar directo y se borra `infra/db/Dockerfile`.
+
+Dos ajustes del escaneo:
+
+- **Trivy DS-0002 en `infra/db/Dockerfile`:** excepción con motivo, porque la imagen arranca como root igual que la oficial y baja a `postgres` con su-exec.
+- **ZAP 10096, Timestamp Disclosure: era un error del propio escaneo.** Lo que ZAP tomó por fechas (1852294936, 1782348074, 1669211576, 1776565560 y 1723363511) eran digests de React: errores del servidor dentro de `<Suspense>`, que responden 200 y React repinta en el navegador.
+  - **Error:** el log del servidor decía `column "debe_cambiar_clave" does not exist`.
+  - **Causa:** `seguridad.sh` usa siempre el proyecto `rs-seguridad` y solo reconstruía `web`. El migrador y la semilla eran imágenes de días antes, sin la migración 0012.
+  - **Por qué parecía intermitente:** ZAP solo avisaba cuando el digest caía en su rango de fechas.
+  - **Efecto:** desde el cambio de contraseña, el recorrido con sesión no revisaba las páginas reales; llegaba a 24 URL con despachador y 23 con operador.
+  - **Corrección en `seguridad.sh`:**
+    - construye `web`, `migrate`, `semilla`, `mapa-prueba-osm`, `mapa-prueba` y `osrm`;
+    - guarda el log del servidor (`web.log`) y falla si registró errores durante ZAP;
+    - un gancho (`infra/seguridad/zap-gancho.py`) guarda la petición y la respuesta completas de cada alerta no aceptada.
+  - **Resultado:** con la corrección, ZAP recorre 80 URL con despachador y 31 con operador, sin errores ni avisos.
+  - **Producción no se afectó:** `docker compose up -d --build` también reconstruye el migrador.
+- **zlib fija en `1.4-r0`** en los dos Dockerfiles, por la regla de versiones exactas. Si Alpine la reemplaza, la construcción falla con un mensaje claro.
+
 ## 10. Orden de trabajo
 
 1. P-S1: S1, S2, S3 y S6 (dependencias e imagen base). `verificar-todo` en verde.

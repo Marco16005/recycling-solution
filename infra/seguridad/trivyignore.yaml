@@ -5,3 +5,9 @@ misconfigurations:
     statement: >-
       La imagen del mapa prepara el volumen como root (preparar-mapa, sin puertos y solo al actualizar). El servicio osrm
       corre como nobody (user 65534 en compose.yaml) y monta el mapa en solo lectura.
+  - id: DS-0002
+    paths: ["infra/db/Dockerfile"]
+    statement: >-
+      Postgres oficial más zlib 1.4 (2026-11-07). Igual que la imagen oficial: el entrypoint arranca como root solo para
+      ajustar permisos del volumen y baja al usuario postgres con su-exec antes de iniciar el servidor. Postgres no
+      publica puertos. El archivo se borra cuando la oficial traiga zlib 1.4.

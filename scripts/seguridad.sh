@@ -25,8 +25,8 @@ ZAP=zaproxy/zap-stable:2.17.0@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a
 # La misma imagen de Node que el Dockerfile.
 NODE=node:24.22.2-trixie-slim
 # Los mismos nombres que compose.yaml y compose.prod.yaml.
-IMAGEN_DB=postgres:17.11-alpine
-IMAGEN_PROXY=rs-caddy:2.11.8
+IMAGEN_DB=rs-postgres:17.11
+IMAGEN_PROXY=rs-caddy:2.11.9
 IMAGEN_MAPA=rs-mapa:v26.9.0
 
 RAPIDO=no
@@ -108,7 +108,7 @@ codigo() {
 
 dockerfiles() {
   ok=0
-  for archivo in Dockerfile infra/mapa/Dockerfile infra/caddy/Dockerfile; do
+  for archivo in Dockerfile infra/mapa/Dockerfile infra/caddy/Dockerfile infra/db/Dockerfile; do
     docker run --rm -i "$HADOLINT" hadolint --failure-threshold warning - < "$COPIA/$archivo" || ok=1
   done
   docker run --rm -v "$COPIA:/src:ro" -v trivy-cache-seguridad:/root/.cache "$TRIVY" config --quiet --exit-code 1 \
@@ -122,9 +122,13 @@ construir() {
     compose build web >/dev/null
     return
   fi
-  compose build web mapa-prueba >/dev/null
-  docker build -q -t "$IMAGEN_PROXY" "$COPIA/infra/caddy" >/dev/null
-  docker pull -q "$IMAGEN_DB" >/dev/null
+  # Todo lo que levanta zap(): el proyecto rs-seguridad conserva sus imágenes entre corridas, y un migrador o una semilla
+  # viejos dejan la base sin las migraciones nuevas (2026-11-07: sin debe_cambiar_clave, toda página con sesión fallaba
+  # dentro de <Suspense> con estado 200 y ZAP lo veía solo como «Timestamp Disclosure» por el digest del error).
+  compose build web migrate semilla mapa-prueba-osm mapa-prueba osrm >/dev/null
+  # --pull: se escanea sobre la versión vigente de las imágenes base (una oficial reconstruida trae sus correcciones).
+  docker build -q --pull -t "$IMAGEN_PROXY" "$COPIA/infra/caddy" >/dev/null
+  docker build -q --pull -t "$IMAGEN_DB" "$COPIA/infra/db" >/dev/null
 }
 
 # Falla con críticos o altos que tengan corrección y no estén en infra/seguridad/grype.yaml.
@@ -158,17 +162,19 @@ zap_corrida() {
   carpeta="$REPORTES/zap-$1"
   mkdir -p "$carpeta"
   cp "$COPIA/infra/seguridad/zap-reglas.tsv" "$carpeta/reglas.tsv"
+  # El gancho guarda en alertas-con-mensaje.json la petición y la respuesta de cada alerta no aceptada.
+  cp "$COPIA/infra/seguridad/zap-gancho.py" "$carpeta/zap-gancho.py"
   chmod 777 "$carpeta"
   resultado=0
   if [ -z "${3:-}" ]; then
     docker run --rm --network "${PROYECTO}_default" -v "$carpeta:/zap/wrk:rw" "$ZAP" \
-      zap-baseline.py -t "$2" -c reglas.tsv -r zap.html -J zap.json -l WARN || resultado=$?
+      zap-baseline.py -t "$2" -c reglas.tsv --hook=/zap/wrk/zap-gancho.py -r zap.html -J zap.json -l WARN || resultado=$?
     return $resultado
   fi
   # ZAP_AUTH_HEADER_SITE es el nombre del servidor sin puerto: con «web:3000» ZAP no manda la cookie.
   docker run --rm --network "${PROYECTO}_default" -v "$carpeta:/zap/wrk:rw" -e ZAP_AUTH_HEADER=Cookie \
     -e "ZAP_AUTH_HEADER_VALUE=$3" -e ZAP_AUTH_HEADER_SITE=web "$ZAP" \
-    zap-baseline.py -t "$2" -c reglas.tsv -r zap.html -J zap.json -l WARN -d > "$carpeta/zap.log" 2>&1 || resultado=$?
+    zap-baseline.py -t "$2" -c reglas.tsv --hook=/zap/wrk/zap-gancho.py -r zap.html -J zap.json -l WARN -d > "$carpeta/zap.log" 2>&1 || resultado=$?
   grep -E "^(WARN|FAIL)" "$carpeta/zap.log" || true
   # Con -d, zap-baseline registra su propia petición a la página de inicio a través de ZAP: 200 prueba que ZAP mandó la
   # cookie (sin ella, la página protegida responde 307 hacia /entrar).
@@ -191,6 +197,15 @@ zap() {
     echo "   -- con sesión de $rol"
     zap_corrida "$rol" "http://web:3000$inicio" "$cookie" || ok=1
   done
+  # El log del servidor durante ZAP. Un error dentro de <Suspense> no cambia el estado HTTP (la página responde 200 y React
+  # la repinta en el navegador), así que se revisa aquí: con errores, el recorrido no probó las páginas reales.
+  if ! compose logs --no-color web > "$REPORTES/web.log" 2>&1; then
+    echo "   No se pudo leer el log del servidor: no se comprobó que ZAP recorriera páginas sin errores"
+    ok=1
+  elif grep -q "⨯" "$REPORTES/web.log"; then
+    echo "   El servidor registró errores durante ZAP: $(grep -c "⨯" "$REPORTES/web.log") (ver $REPORTES/web.log)"
+    ok=1
+  fi
   return $ok
 }
 

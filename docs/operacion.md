@@ -117,6 +117,24 @@ docker compose up -d --build
 
 **Al pasar a la versión del Plan de seguridad (2026-11):** OSRM sirve ahora sin privilegios (usuario `nobody`) y necesita que el mapa sea legible para todos. Si el mapa ya estaba preparado, correr una vez `scripts/preparar-mapa.sh`: con la misma fecha no descarga nada, solo corrige los permisos. Caddy ahora es una imagen propia (`infra/caddy/Dockerfile`), que `--build` construye.
 
+**Al pasar a la versión de seguridad del 2026-11-07** (Caddy 2.11.9, zlib 1.4 y la imagen `rs-postgres:17.11`):
+
+- **Qué cambia:** se recrean los contenedores `db` y `proxy`. La base sigue en Postgres 17.11 con el mismo volumen, sin migración de datos, y la aplicación deja de responder unos segundos.
+- **Compilación:** Caddy se compila con Go, lo que puede ocupar de 1 a 2 GB de memoria durante unos minutos.
+
+Pasos:
+
+1. **Respaldo:** `docker compose --profile respaldo run --rm respaldo`. Se hace antes del `git pull`, mientras la imagen de respaldo sigue siendo la anterior.
+2. **Código:** `git pull`.
+3. **Construir y arrancar**, según el servidor:
+   - **Dedicado y con memoria suficiente** (o swap): `docker compose up -d --build`.
+   - **Compartido con el punto de venta, o con poca memoria:** construir fuera del servidor (§9, "Construir la imagen sin cargar el VPS"), cargar las imágenes y arrancar con `docker compose up -d --no-build`.
+4. **Comprobar:**
+   - `docker compose ps`: todos sanos.
+   - Solo en el modo A, con Caddy propio: `docker compose exec proxy caddy version` debe dar `v2.11.9`. En el modo B no hay contenedor `proxy`; ahí se comprueba que la aplicación abre por el proxy del punto de venta.
+   - `docker compose exec db sh -c 'apk info -v zlib'`: `zlib-1.4-r0`.
+   - Entrar a la aplicación y revisar la lista de clientes.
+
 ## 8. Verificación completa
 
 ```bash
@@ -195,8 +213,8 @@ Compilar la aplicación consume más memoria de la que conviene usar en un servi
 
 ```bash
 # En la computadora de desarrollo, con el mismo .env de producción (COMPOSE_FILE=compose.yaml:compose.prod.yaml):
-DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose build
-docker save recycling-solution-web recycling-solution-migrate recycling-solution-bootstrap rs-caddy:2.11.8 | gzip | ssh usuario@vps 'gunzip | docker load'
+DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose --profile caddy build   # con el perfil, también construye Caddy
+docker save recycling-solution-web recycling-solution-migrate recycling-solution-bootstrap rs-caddy:2.11.9 rs-postgres:17.11 | gzip | ssh usuario@vps 'gunzip | docker load'
 
 # En el VPS:
 docker compose up -d --no-build
