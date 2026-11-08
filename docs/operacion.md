@@ -131,7 +131,7 @@ Pasos:
    - **Compartido con el punto de venta, o con poca memoria:** construir fuera del servidor (§9, "Construir la imagen sin cargar el VPS"), cargar las imágenes y arrancar con `docker compose up -d --no-build`.
 4. **Comprobar:**
    - `docker compose ps`: todos sanos.
-   - `docker compose exec proxy caddy version`: `v2.11.9`.
+   - Solo en el modo A, con Caddy propio: `docker compose exec proxy caddy version` debe dar `v2.11.9`. En el modo B no hay contenedor `proxy`; ahí se comprueba que la aplicación abre por el proxy del punto de venta.
    - `docker compose exec db sh -c 'apk info -v zlib'`: `zlib-1.4-r0`.
    - Entrar a la aplicación y revisar la lista de clientes.
 
