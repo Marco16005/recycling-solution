@@ -96,6 +96,34 @@ El VPS es de Hostinger y lo comparte un punto de venta, así que solo se prueba 
 
 Antes se revisa la política de uso aceptable de Hostinger. El escaneo se limita a la IP propia del VPS.
 
+### Resultados del 2026-11-07 (feruga.tech, 45.90.223.219)
+
+El dueño lo autorizó por escrito, ya desplegada la versión del 2026-11-07. Se corrió desde la computadora de desarrollo, en contenedores con imágenes fijas por digest, a baja velocidad y solo contra la IP del VPS. El servidor ya no lo comparte el punto de venta; está dedicado a la aplicación. No se encontró la política de uso aceptable de Hostinger sobre escanear el servidor propio desde fuera; las de otros proveedores prohíben escanear desde el VPS o sistemas ajenos, que no es el caso.
+
+| Prueba | Resultado |
+|---|---|
+| nmap `-sT -sV`, 1000 puertos principales, 50 paquetes/s | Solo 22, 80 y 443 abiertos; los demás, filtrados. Postgres, OSRM y la aplicación no se ven desde fuera |
+| nmap `ssh-auth-methods` y `ssh2-enum-algos` | SSH acepta solo `publickey`. Intercambio de llaves moderno (incluye `mlkem768x25519`) |
+| testssl.sh 3.2 | **A+ (96)**. Solo TLS 1.2 y 1.3; certificado de Let's Encrypt válido y con cadena correcta. HSTS de un año en las páginas |
+| ZAP baseline, sin sesión, 1 minuto | 1 aviso: HSTS faltaba en los archivos estáticos (`/_next/static`, `favicon.ico`), que no pasan por `src/proxy.ts` |
+
+Atendido:
+
+- **HSTS en los estáticos:** Caddy pone `Strict-Transport-Security` en toda respuesta que no lo traiga (`header ?…`), sin duplicar el de la aplicación. Probado con Caddy delante de un servidor de prueba. En el modo B lo tiene que poner el proxy del punto de venta.
+
+Aceptado, con motivo:
+
+- **BREACH (testssl, medio):** las respuestas HTTPS se comprimen (`encode zstd gzip`), lo que ayuda al operador con poca señal. El ataque necesita un secreto en el cuerpo de la respuesta y que otro sitio haga muchas peticiones con la sesión de la víctima. La sesión va en una cookie `SameSite=Lax`, que no viaja en esas peticiones, y las páginas no llevan tokens secretos (las acciones de servidor se protegen revisando el origen).
+- **`Server: Caddy` en la redirección de HTTP a HTTPS (puerto 80):** no dice la versión, y quitarlo exigiría un bloque `http://` propio que cambia cómo se atienden las IP y la red local.
+- **Sin OCSP stapling:** Let's Encrypt dejó de ofrecer OCSP en 2025.
+
+Para el dueño, fuera del repositorio:
+
+- **Registro CAA en el DNS:** testssl lo marca como bajo. Limita qué autoridades pueden emitir certificados del dominio; ver `docs/pendientes.md`.
+- **SSH, opcional:** todavía permite `hmac-sha1` y `umac-64`, como OpenSSH por omisión. Se pueden quitar en `sshd_config` (`MACs`).
+
+Reportes en `reportes-seguridad/*-vps/` (no se versionan).
+
 ## 8. SonarQube y Burp Suite
 
 - **SonarQube Community 26.10** se corre una sola vez en local, con Docker y `sonar-scanner-cli` 12.3, como segunda opinión de calidad y de "security hotspots". Pide unos 4 GB de RAM, así que se levanta, se lee el reporte y se borra. No entra a `verificar-todo` porque Semgrep y las reglas propias cubren lo mismo de forma reproducible.
