@@ -74,7 +74,7 @@ Caddy atiende `DOMINIO`:
 
 - **Dominio público** (`rs.empresa.mx` apuntando a la máquina, puertos 80 y 443 abiertos): Caddy obtiene y renueva el certificado solo.
 - **Nombre alterno** (opcional, por ejemplo `www.rs.empresa.mx`): con `DOMINIO_ALTERNO` en `.env`, Caddy también obtiene su certificado y lo redirige a `https://<DOMINIO>` con la misma ruta (301; si se entra por `http://`, antes pasa a HTTPS con un 308). Antes, el registro DNS del alterno debe apuntar a la máquina, por ejemplo un CNAME `www` hacia el dominio. Si no apunta, Caddy no consigue el certificado y lo reintenta en el log, aunque el dominio principal sigue funcionando. Se aplica con `docker compose up -d proxy`.
-- **Red local sin dominio** (`localhost`, una IP o un nombre interno): Caddy firma con su propia autoridad. Cada teléfono y computadora debe instalar y confiar en esa autoridad, que está en el volumen `caddy_datos` (`/data/caddy/pki/authorities/local/root.crt`). Es la decisión abierta 11 de la especificación.
+- **Red local sin dominio** (`localhost`, una IP o un nombre interno): Caddy firma con su propia autoridad. Cada teléfono y computadora debe instalar y confiar en esa autoridad, que está en el volumen `caddy_datos` (`/data/caddy/pki/authorities/local/root.crt`). Es la decisión abierta 11 de la especificación. Por HSTS, un nombre interno queda fijado a HTTPS durante un año: si cambia la autoridad de Caddy, cada equipo debe instalar la nueva antes de volver a entrar.
 
 Para obtener el certificado que se instala en los teléfonos (es público; la llave privada no sale del volumen):
 
@@ -177,15 +177,34 @@ COMPOSE_PROFILES=caddy
 
 Dejar `COMPOSE_PROFILES` vacío. La aplicación queda solo en `127.0.0.1:3001` (`PUERTO_WEB_LOCAL`) y el proxy existente le envía el tráfico de su nombre.
 
-**Importante para la seguridad:** el límite de 5 intentos de entrada por minuto se cuenta por la IP que llega en `X-Forwarded-For`. El proxy debe **reemplazar** ese encabezado con la IP real del cliente, nunca agregarla al que trae la petición. Con `$proxy_add_x_forwarded_for`, un atacante podría inventar una IP distinta en cada intento y saltarse el límite. Ejemplo correcto para nginx:
+El proxy existente debe hacer lo que en el modo A hace Caddy (plan de seguridad §7):
+
+1. **IP real del cliente.** El límite de 5 intentos de entrada por minuto se cuenta por la IP que llega en `X-Forwarded-For`. El proxy debe **reemplazar** ese encabezado con la IP real, nunca agregarla al que trae la petición: con `$proxy_add_x_forwarded_for`, un atacante podría inventar una IP distinta en cada intento y saltarse el límite.
+2. **HSTS en todo.** La aplicación lo pone en las páginas; los archivos estáticos no pasan por ella. Hay que mandarlo una sola vez por respuesta.
+3. **Comprimir solo los archivos estáticos (BREACH).** Next pone la dirección completa en cada página, así que una página comprimida puede reunir texto controlado desde otro sitio con datos privados. La aplicación no comprime por su cuenta.
+
+Ejemplo completo para nginx:
 
 ```nginx
 server {
     server_name 203-0-113-25.sslip.io;
+    # 2. HSTS una sola vez en toda respuesta: se quita el de la aplicación y se pone aquí (always incluye errores).
+    proxy_hide_header Strict-Transport-Security;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    # 3. Sin compresión salvo en los estáticos.
+    gzip off;
+    location /_next/static/ {
+        gzip on;
+        gzip_types text/css application/javascript;
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
     location / {
         proxy_pass http://127.0.0.1:3001;
         proxy_set_header Host $host;
-        # Reemplaza (no agrega) la IP del cliente: el límite de intentos depende de ella.
+        # 1. Reemplaza (no agrega) la IP del cliente: el límite de intentos depende de ella.
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
@@ -193,7 +212,18 @@ server {
 }
 ```
 
-Si el proxy existente es Caddy, basta con un bloque `203-0-113-25.sslip.io { reverse_proxy 127.0.0.1:3001 }`: Caddy ignora el `X-Forwarded-For` de los clientes y pone la IP real, salvo que tenga configurado `trusted_proxies`. Antes de tocar el proxy del punto de venta, respaldar su configuración y coordinar con quien lo administra.
+Si el proxy existente es Caddy, el bloque es el siguiente. Caddy ignora el `X-Forwarded-For` de los clientes y pone la IP real, salvo que tenga configurado `trusted_proxies`.
+
+```caddyfile
+203-0-113-25.sslip.io {
+	header ?Strict-Transport-Security "max-age=31536000"
+	@estaticos path /_next/static/* /favicon.ico /icon.svg /apple-icon.png /maplibre-gl-worker.mjs /sw-operador.js
+	encode @estaticos zstd gzip
+	reverse_proxy 127.0.0.1:3001
+}
+```
+
+Antes de tocar el proxy del punto de venta, respaldar su configuración y coordinar con quien lo administra.
 
 **Comprobación obligatoria** en cualquiera de los dos modos: seis intentos de entrada con una IP falsa distinta en cada uno. El sexto debe responder `429`:
 

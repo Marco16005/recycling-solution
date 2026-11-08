@@ -96,6 +96,39 @@ El VPS es de Hostinger y lo comparte un punto de venta, así que solo se prueba 
 
 Antes se revisa la política de uso aceptable de Hostinger. El escaneo se limita a la IP propia del VPS.
 
+### Resultados del 2026-11-07 (feruga.tech, 45.90.223.219)
+
+El dueño lo autorizó por escrito, ya desplegada la versión del 2026-11-07. Se corrió desde la computadora de desarrollo, en contenedores con imágenes fijas por digest, a baja velocidad y solo contra la IP del VPS. El servidor ya no lo comparte el punto de venta; está dedicado a la aplicación. No se encontró la política de uso aceptable de Hostinger sobre escanear el servidor propio desde fuera; las de otros proveedores prohíben escanear desde el VPS o sistemas ajenos, que no es el caso.
+
+| Prueba | Resultado |
+|---|---|
+| nmap `-sT -sV`, 1000 puertos principales, 50 paquetes/s | Solo 22, 80 y 443 abiertos; los demás, filtrados. Postgres, OSRM y la aplicación no se ven desde fuera |
+| nmap `ssh-auth-methods` y `ssh2-enum-algos` | SSH acepta solo `publickey`. Intercambio de llaves moderno (incluye `mlkem768x25519`) |
+| testssl.sh 3.2 | **A+ (96)**. Solo TLS 1.2 y 1.3; certificado de Let's Encrypt válido y con cadena correcta. HSTS de un año en las páginas |
+| ZAP baseline, sin sesión, 1 minuto | 1 aviso: HSTS faltaba en los archivos estáticos (`/_next/static`, `favicon.ico`), que no pasan por `src/proxy.ts` |
+
+Atendido:
+
+- **HSTS en los estáticos:** Caddy pone `Strict-Transport-Security` en toda respuesta que no lo traiga (`header ?…`), sin duplicar el de la aplicación. Probado con Caddy delante de un servidor de prueba. En el modo B lo tiene que poner el proxy del punto de venta. En la red local, las IP no quedan fijadas por HSTS, pero un nombre interno sí, durante un año. Si cambia la autoridad de Caddy, cada equipo debe instalar la nueva (`docs/operacion.md` §5). Ya pasaba con las páginas; ahora también con los estáticos.
+
+- **BREACH (testssl, medio).** Primero se aceptó con dos premisas falsas: que la cookie `SameSite=Lax` no viaja desde otro sitio (sí viaja en una navegación GET de primer nivel) y que ninguna página refleja lo que se escribe (la cartera refleja el filtro `q` junto a datos de clientes). Lo señaló Codex. Ahora se mitiga:
+  - Next ya no comprime (`compress: false`; antes mandaba `gzip` por su cuenta).
+  - Caddy comprime solo los archivos estáticos (`@estaticos`), ninguna página. Codex señaló que Next 16 pone la dirección completa, con su query, en el HTML y en las respuestas RSC y de acciones. Así, `/operador?q=…` también reunía texto controlado con datos privados; por eso `/operador` tampoco se comprime. Lo pesado de su pantalla (JavaScript y fuentes) es estático: va comprimido y el teléfono lo guarda.
+  - Probado con Caddy delante de un servidor de prueba: `zstd` solo en los estáticos.
+  - En el modo B, el proxy del punto de venta hace lo mismo. Hay ejemplos completos para nginx y Caddy en `docs/operacion.md` §9.
+
+Aceptado, con motivo:
+
+- **`Server: Caddy` en la redirección de HTTP a HTTPS (puerto 80):** no dice la versión, y quitarlo exigiría un bloque `http://` propio que cambia cómo se atienden las IP y la red local.
+- **Sin OCSP stapling:** Let's Encrypt dejó de ofrecer OCSP en 2025.
+
+Para el dueño, fuera del repositorio:
+
+- **Registro CAA en el DNS:** testssl lo marca como bajo. Limita qué autoridades pueden emitir certificados del dominio; ver `docs/pendientes.md`.
+- **SSH, opcional:** todavía permite `hmac-sha1` y `umac-64`, como OpenSSH por omisión. Se pueden quitar en `sshd_config` (`MACs`).
+
+Reportes en `reportes-seguridad/*-vps/` (no se versionan).
+
 ## 8. SonarQube y Burp Suite
 
 - **SonarQube Community 26.10** se corre una sola vez en local, con Docker y `sonar-scanner-cli` 12.3, como segunda opinión de calidad y de "security hotspots". Pide unos 4 GB de RAM, así que se levanta, se lee el reporte y se borra. No entra a `verificar-todo` porque Semgrep y las reglas propias cubren lo mismo de forma reproducible.

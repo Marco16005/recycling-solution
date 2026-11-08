@@ -10,10 +10,19 @@
 # DOMINIO_ALTERNO (opcional, p. ej. www.feruga.tech) lleva al dominio principal con la misma ruta: una sola dirección
 # para las cookies de sesión y para BETTER_AUTH_URL. Vacío, el sitio atiende solo DOMINIO, como antes.
 {$DOMINIO} {$DOMINIO_ALTERNO} {
-	encode zstd gzip
+	# Plan de seguridad (BREACH, 2026-11-07): solo se comprimen los archivos estáticos, que no llevan datos de la sesión.
+	# Ninguna página: Next pone la dirección completa, con su query, en el HTML y en las respuestas RSC, así que cualquier
+	# página puede reunir texto controlado desde otro sitio con datos privados (la cartera, además, refleja «q»). Lo
+	# pesado del operador (JavaScript y fuentes) es estático: va comprimido y el teléfono lo guarda. Next no comprime
+	# (compress: false en next.config.ts).
+	@estaticos path /_next/static/* /favicon.ico /icon.svg /apple-icon.png /maplibre-gl-worker.mjs /sw-operador.js
+	encode @estaticos zstd gzip
 	# Plan de seguridad: no anunciar el servidor. Los demás encabezados los pone la aplicación (src/proxy.ts y
 	# next.config.ts) para que valgan también detrás del proxy del punto de venta (modo B).
 	header -Server
+	# HSTS también en lo que no pasa por src/proxy.ts (archivos de /_next/static y favicon.ico), sin pisar el de la
+	# aplicación («?»: solo si la respuesta no lo trae). ZAP contra el VPS lo marcó el 2026-11-07.
+	header ?Strict-Transport-Security "max-age=31536000"
 	@alterno not host {$DOMINIO}
 	redir @alterno https://{$DOMINIO}{uri} permanent
 	reverse_proxy web:3000
