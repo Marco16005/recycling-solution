@@ -199,8 +199,10 @@ zap() {
   done
   # El log del servidor durante ZAP. Un error dentro de <Suspense> no cambia el estado HTTP (la página responde 200 y React
   # la repinta en el navegador), así que se revisa aquí: con errores, el recorrido no probó las páginas reales.
-  compose logs --no-color web > "$REPORTES/web.log" 2>&1 || true
-  if grep -q "⨯" "$REPORTES/web.log"; then
+  if ! compose logs --no-color web > "$REPORTES/web.log" 2>&1; then
+    echo "   No se pudo leer el log del servidor: no se comprobó que ZAP recorriera páginas sin errores"
+    ok=1
+  elif grep -q "⨯" "$REPORTES/web.log"; then
     echo "   El servidor registró errores durante ZAP: $(grep -c "⨯" "$REPORTES/web.log") (ver $REPORTES/web.log)"
     ok=1
   fi
