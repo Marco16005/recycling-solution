@@ -150,7 +150,17 @@ No se registró como excepción en `grype.yaml`, porque esa configuración aplic
 Dos ajustes del escaneo:
 
 - **Trivy DS-0002 en `infra/db/Dockerfile`:** excepción con motivo, porque la imagen arranca como root igual que la oficial y baja a `postgres` con su-exec.
-- **ZAP 10096, Timestamp Disclosure:** en una corrida marcó dos números de 10 dígitos (1852294936 en `/` y 1782348074 en `/operador`) que no son fechas de nada. No se repitieron en 50 peticiones con sesión ni en otra corrida de ZAP. **No se ignora:** una excepción para todas las URL ocultaría una divulgación real (revisión de Codex). Si vuelve a salir, se busca el origen con la respuesta completa antes de aceptarlo.
+- **ZAP 10096, Timestamp Disclosure: era un error del propio escaneo.** Lo que ZAP tomó por fechas (1852294936, 1782348074, 1669211576, 1776565560 y 1723363511) eran digests de React: errores del servidor dentro de `<Suspense>`, que responden 200 y React repinta en el navegador.
+  - **Error:** el log del servidor decía `column "debe_cambiar_clave" does not exist`.
+  - **Causa:** `seguridad.sh` usa siempre el proyecto `rs-seguridad` y solo reconstruía `web`. El migrador y la semilla eran imágenes de días antes, sin la migración 0012.
+  - **Por qué parecía intermitente:** ZAP solo avisaba cuando el digest caía en su rango de fechas.
+  - **Efecto:** desde el cambio de contraseña, el recorrido con sesión no revisaba las páginas reales; llegaba a 24 URL con despachador y 23 con operador.
+  - **Corrección en `seguridad.sh`:**
+    - construye `web`, `migrate`, `semilla`, `mapa-prueba-osm`, `mapa-prueba` y `osrm`;
+    - guarda el log del servidor (`web.log`) y falla si registró errores durante ZAP;
+    - un gancho (`infra/seguridad/zap-gancho.py`) guarda la petición y la respuesta completas de cada alerta no aceptada.
+  - **Resultado:** con la corrección, ZAP recorre 80 URL con despachador y 31 con operador, sin errores ni avisos.
+  - **Producción no se afectó:** `docker compose up -d --build` también reconstruye el migrador.
 - **zlib fija en `1.4-r0`** en los dos Dockerfiles, por la regla de versiones exactas. Si Alpine la reemplaza, la construcción falla con un mensaje claro.
 
 ## 10. Orden de trabajo
