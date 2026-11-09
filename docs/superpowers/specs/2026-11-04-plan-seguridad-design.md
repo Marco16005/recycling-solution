@@ -177,6 +177,7 @@ Las encontró `scripts/seguridad.sh` en el servidor, ya desplegado. Se corrigen 
 | Caddy | zlib 1.3.2 (CVE-2026-4738) | Crítica | zlib 1.4-r0 (versión fija) en la imagen final |
 | Postgres | zlib 1.3.2 (CVE-2026-4738) | Crítica | Imagen propia mínima `rs-postgres:17.11` (`infra/db/Dockerfile`): la oficial más zlib 1.4-r0. La usan `db` y `respaldo`, porque `pg_dump -Fc` comprime con zlib |
 | Postgres | `moby/sys/user` | Media | No hace fallar el escaneo; llega con la siguiente imagen oficial |
+| Aplicación (2026-11-09) | `zlib1g` 1.3.1-1+b1 de Debian (CVE-2026-76844 y CVE-2026-85091, altas; CVE-2026-27171, media) | Alta | `apt-get install --only-upgrade zlib1g=…+deb13u1` (versión fija) en la etapa `runner`; se quita cuando la imagen de Node la traiga |
 
 No se registró como excepción en `grype.yaml`, porque esa configuración aplica a las cuatro imágenes y ocultaría el mismo CVE en las demás. `seguridad.sh` construye Caddy y Postgres con `--pull`, para escanear sobre la imagen base vigente. Cuando la imagen oficial de Postgres traiga zlib 1.4, se vuelve a usar directo y se borra `infra/db/Dockerfile`.
 
