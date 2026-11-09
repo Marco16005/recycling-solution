@@ -237,6 +237,36 @@ done; echo   # esperado: 401 401 401 401 401 429
 
 Si los seis responden `401`, el proxy está pasando la IP falsa: corregir su configuración antes de abrir el sistema. Comprobado el 2026-10-15 con el modo A (Caddy): `401 401 401 401 401 429`. La aplicación misma escucha solo en `127.0.0.1`, así que desde fuera del servidor no se puede llegar a ella sin pasar por el proxy.
 
+### Feruga detrás del mismo Caddy
+
+En el servidor de producción vive también feruga (gestión de la recicladora), en `gestion.feruga.tech`. El Caddy de Recycling sigue siendo la única puerta en 80 y 443:
+
+- obtiene ese certificado;
+- le pasa el tráfico al proxy de feruga (`feruga-proxy`, puerto 80) por la red interna `feruga-entrada`, que solo comparten los dos proxies.
+
+Es opcional: en desarrollo y en las pruebas no se activa (diseño en `docs/superpowers/specs/2026-11-09-vecino-feruga-design.md`).
+
+**Activar.** En este orden: sin la red, el proxy no arranca y Recycling se queda sin entrada.
+
+1. El DNS de `gestion.feruga.tech` debe apuntar al servidor. Si no, Caddy no obtiene ese certificado y lo reintenta en el log, aunque `feruga.tech` sigue igual.
+2. `docker network create --internal feruga-entrada`, y comprobar que existe con `docker network inspect feruga-entrada`.
+3. `git pull`.
+4. En `.env`, agregar `:compose.feruga.yaml` al final de `COMPOSE_FILE` (queda `compose.yaml:compose.prod.yaml:compose.feruga.yaml`).
+5. `docker compose up -d --force-recreate --no-deps proxy`: unos segundos sin servicio, en una hora tranquila.
+6. Comprobar:
+   - Recycling abre como siempre;
+   - `curl -sI https://gestion.feruga.tech` responde 502, con certificado válido, hasta que feruga se publique.
+
+**Cambios posteriores** en `infra/caddy/vecinos/*.caddy`: `git pull` y `docker compose exec proxy caddy reload --config /etc/caddy/Caddyfile`, sin corte; la carpeta está montada. Un cambio al `Caddyfile` principal sí necesita recrear el proxy, como en el paso 5: está montado como archivo suelto.
+
+**Volver atrás:** quitar `:compose.feruga.yaml` de `COMPOSE_FILE` y repetir el paso 5. La red se puede borrar después con `docker network rm feruga-entrada`, cuando feruga ya no la use.
+
+**Lo que le toca a feruga:**
+
+- su proxy se llama `feruga-proxy` en `feruga-entrada` y escucha en el puerto 80;
+- confía en `X-Forwarded-For` solo si viene de este Caddy, que reemplaza el de los clientes con su IP real;
+- pone sus propios encabezados (CSP, marcos y demás) y decide la compresión, por BREACH (plan de seguridad §7). Este Caddy solo quita `Server` y pone HSTS si falta.
+
 ### Construir la imagen sin cargar el VPS
 
 Compilar la aplicación consume más memoria de la que conviene usar en un servidor compartido. Se puede construir en otra computadora para `linux/amd64` y copiar las imágenes:

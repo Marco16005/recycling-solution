@@ -1,0 +1,16 @@
+# Solo en el servidor de producción que comparte con feruga (docs/operacion.md §9, «Feruga detrás del mismo Caddy»):
+# se agrega a COMPOSE_FILE después de compose.prod.yaml. El Caddy de Recycling atiende también gestion.feruga.tech y le
+# pasa ese tráfico al proxy de feruga por la red interna feruga-entrada, que solo comparten los dos proxies.
+# La red la crea antes el administrador (docker network create --internal feruga-entrada): si no existe, proxy no arranca.
+services:
+  proxy:
+    networks:
+      default: {}
+      feruga-entrada: {}
+    volumes:
+      # La carpeta y no el archivo: después de un git pull basta caddy reload.
+      - ./infra/caddy/vecinos:/etc/caddy/vecinos:ro
+
+networks:
+  feruga-entrada:
+    external: true

@@ -1,0 +1,10 @@
+# Feruga (gestión de la recicladora) detrás del Caddy de Recycling. Solo se carga en el servidor que monta esta carpeta
+# con compose.feruga.yaml; en desarrollo y en las pruebas, nadie pide este certificado.
+# Como en Recycling: no se anuncia el servidor y se pone HSTS si feruga no lo manda. No se comprime (BREACH lo decide
+# feruga), y los demás encabezados los pone feruga. Caddy reemplaza el X-Forwarded-For de los clientes con su IP real:
+# el proxy de feruga debe confiar en ese encabezado solo si viene de este Caddy por feruga-entrada.
+gestion.feruga.tech {
+	header -Server
+	header ?Strict-Transport-Security "max-age=31536000"
+	reverse_proxy feruga-proxy:80
+}
