@@ -20,15 +20,15 @@ El cambio es **opcional**: solo se activa en ese servidor. En las máquinas de d
    - monta `./infra/caddy/vecinos` en `/etc/caddy/vecinos`, solo de lectura;
    - declara `feruga-entrada` como `external: true`.
 
-   Se monta la carpeta y no el archivo: `git pull` cambia los archivos dentro de la carpeta montada, y basta `caddy reload`. Con un archivo suelto, el montaje seguiría apuntando al archivo viejo.
+   Se monta la carpeta y no el archivo: `git pull` cambia los archivos dentro de la carpeta montada, y basta `caddy reload`, sin recrear el contenedor (puede cerrar conexiones largas, como WebSockets). Con un archivo suelto, el montaje seguiría apuntando al archivo viejo.
 2. **`infra/caddy/Caddyfile`:** una última línea `import /etc/caddy/vecinos/*.caddy`. Si la carpeta no está montada o está vacía, Caddy solo avisa («No files matching import glob pattern») y la configuración es válida (comprobado con 2.11.9).
 3. **`infra/caddy/vecinos/feruga.caddy`:**
 
    ```caddyfile
    gestion.feruga.tech {
-   	header -Server
-   	header ?Strict-Transport-Security "max-age=31536000"
-   	reverse_proxy feruga-proxy:80
+       header -Server
+       header ?Strict-Transport-Security "max-age=31536000"
+       reverse_proxy feruga-proxy:80
    }
    ```
 

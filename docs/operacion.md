@@ -257,7 +257,7 @@ Es opcional: en desarrollo y en las pruebas no se activa (diseño en `docs/super
    - Recycling abre como siempre;
    - `curl -sI https://gestion.feruga.tech` responde 502, con certificado válido, hasta que feruga se publique.
 
-**Cambios posteriores** en `infra/caddy/vecinos/*.caddy`: `git pull` y `docker compose exec proxy caddy reload --config /etc/caddy/Caddyfile`, sin corte; la carpeta está montada. Un cambio al `Caddyfile` principal sí necesita recrear el proxy, como en el paso 5: está montado como archivo suelto.
+**Cambios posteriores** en `infra/caddy/vecinos/*.caddy`: `git pull` y `docker compose exec proxy caddy reload --config /etc/caddy/Caddyfile`, sin recrear el contenedor; la carpeta está montada. Caddy aplica la configuración nueva sin cortar las peticiones normales, aunque puede cerrar conexiones largas, como WebSockets. Un cambio al `Caddyfile` principal sí necesita recrear el proxy, como en el paso 5: está montado como archivo suelto.
 
 **Volver atrás:** quitar `:compose.feruga.yaml` de `COMPOSE_FILE` y repetir el paso 5. La red se puede borrar después con `docker network rm feruga-entrada`, cuando feruga ya no la use.
 
