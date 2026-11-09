@@ -28,6 +28,11 @@ WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
     /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
+# Plan de seguridad (2026-11-09): zlib1g con la corrección de Debian (CVE-2026-76844 y CVE-2026-85091, altas). La imagen
+# de Node aún trae 1.3.1-1+b1. Versión fija; cuando node:<versión>-trixie-slim la traiga, se quita este paso.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends --only-upgrade zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1 \
+ && rm -rf /var/lib/apt/lists/*
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static

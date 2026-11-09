@@ -27,3 +27,7 @@
 	redir @alterno https://{$DOMINIO}{uri} permanent
 	reverse_proxy web:3000
 }
+
+# Otros sistemas del mismo servidor detrás de este Caddy (compose.feruga.yaml monta infra/caddy/vecinos aquí). Sin la
+# carpeta, o con la carpeta vacía, Caddy solo avisa «No files matching import glob pattern» y sigue igual.
+import /etc/caddy/vecinos/*.caddy
