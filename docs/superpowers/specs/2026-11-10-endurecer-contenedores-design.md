@@ -46,7 +46,13 @@ Un fragmento `(errores)` del `Caddyfile`, con `handle_errors`, pone HSTS y quita
   - comprueba que `db`, `web` y `proxy` corren con `NoNewPrivs: 1` y `CapEff` en 0;
   - comprueba que la entrada por HTTPS responde 200 con HSTS.
 
-  Hasta ahora, ninguna prueba levantaba `compose.prod.yaml`.
+  Hasta ahora, ninguna prueba levantaba `compose.prod.yaml`. No publica puertos: las peticiones entran por la red interna, así que no falla si la máquina tiene 80, 443 o 3001 ocupados. Además muda el volumen de Caddy con los dos comandos de `docs/operacion.md` §6, tal cual, y comprueba que Caddy vuelve con la misma autoridad.
+
+**Revisión de Codex del 19bf312:**
+
+- **Comandos para mudar el volumen de Caddy.** Corrían `proxy` como root, que ya no tenía capacidades, y no habrían podido leer ni cambiar el dueño de sus archivos. Ahora cada uno pide solo las que usa, comprobadas con un volumen real: copiar, `DAC_OVERRIDE`; restaurar, `CHOWN` y `DAC_OVERRIDE`.
+- **Puertos fijos de la prueba.** Se quitaron.
+- **Lista de capacidades.** La revisión estática exige exactamente las capacidades de la lista: también detecta una que falte.
 - Además, integración, e2e, restauración y el ZAP de `seguridad.sh` corren ya con `db`, `migrate`, `semilla`, `osrm` y `web` endurecidos.
 
 ## 4. Al desplegar

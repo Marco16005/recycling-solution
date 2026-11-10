@@ -1,9 +1,12 @@
 #!/bin/sh
 # La combinación de producción en esta máquina (diseño del 2026-11-10): compose.yaml + compose.prod.yaml con Caddy, con
-# valores sintéticos y puertos altos. Ninguna otra prueba levanta compose.prod.yaml. Comprueba que:
+# valores sintéticos y sin publicar puertos (las peticiones entran por la red interna del proyecto). Ninguna otra prueba
+# levanta compose.prod.yaml. Comprueba que:
 # - db, web y proxy corren sin poder ganar privilegios (NoNewPrivs 1) y sin capacidades (CapEff en 0);
 # - la entrada por HTTPS responde 200, con HSTS y sin Server;
-# - con web detenido, el 502 de Caddy también lleva HSTS y no lleva Server.
+# - con web detenido, el 502 de Caddy también lleva HSTS y no lleva Server;
+# - el volumen de Caddy se muda con los dos comandos de docs/operacion.md §6, tal cual, y Caddy vuelve con la misma
+#   autoridad (la de los teléfonos en la red local).
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -13,7 +16,8 @@ TEMP=$(mktemp -d)
 fallas=0
 
 compose() {
-  docker compose -p "$PROYECTO" --env-file "$TEMP/entorno" -f compose.yaml -f compose.prod.yaml --profile caddy "$@"
+  docker compose -p "$PROYECTO" --env-file "$TEMP/entorno" -f compose.yaml -f compose.prod.yaml -f "$TEMP/sin-puertos.yaml" \
+    --profile caddy "$@"
 }
 limpiar() {
   compose down -v --remove-orphans >/dev/null 2>&1 || true
@@ -32,9 +36,14 @@ DOMINIO=localhost
 ADMIN_CORREO=admin@prod-local.test
 ADMIN_NOMBRE=Administrador de prueba
 ADMIN_CLAVE=clave-sintetica-de-prueba-123
-PUERTO_HTTP=18080
-PUERTO_HTTPS=18443
-PUERTO_WEB_LOCAL=13001
+FIN
+# Sin puertos en la máquina: una prueba no debe fallar porque 80, 443 o 3001 estén ocupados.
+cat > "$TEMP/sin-puertos.yaml" <<'FIN'
+services:
+  web:
+    ports: !reset []
+  proxy:
+    ports: !reset []
 FIN
 
 echo "   -- Construir y levantar (db, migrate, bootstrap, web, proxy-permisos, proxy)"
@@ -43,12 +52,15 @@ if ! compose build >"$TEMP/build.log" 2>&1; then
   tail -20 "$TEMP/build.log"
   exit 1
 fi
-if ! compose up -d --wait proxy >"$TEMP/up.log" 2>&1; then
-  echo "   FALLA: no arrancó"
-  tail -20 "$TEMP/up.log"
-  compose logs --no-color --tail 30 2>&1 | tail -40
-  exit 1
-fi
+levantar() {
+  if ! compose up -d --wait proxy >"$TEMP/up.log" 2>&1; then
+    echo "   FALLA: no arrancó"
+    tail -20 "$TEMP/up.log"
+    compose logs --no-color --tail 30 2>&1 | tail -40
+    exit 1
+  fi
+}
+levantar
 
 echo "   -- Privilegios de lo que queda corriendo"
 for servicio in db web proxy; do
@@ -70,10 +82,35 @@ revisar() { # $1: descripción; $2: ruta; $3: resultado esperado
   resultado=$(pedir "$2")
   if [ "$resultado" = "$3" ]; then echo "   ok: $1 ($resultado)"; else echo "   FALLA: $1: «$resultado», se esperaba «$3»"; fallas=1; fi
 }
+# Huella del certificado raíz de la autoridad de Caddy (público): debe ser la misma después de mudar el volumen.
+raiz() { compose exec -T proxy sha256sum /data/caddy/pki/authorities/local/root.crt | cut -d' ' -f1; }
 
 echo "   -- HTTPS por Caddy"
 revisar "la entrada" /entrar "200 hsts sin-server"
+huella=$(raiz)
 compose stop web >/dev/null 2>&1
 revisar "502 con web detenido" /entrar "502 hsts sin-server"
+
+echo "   -- Mudar el volumen de Caddy con los comandos de docs/operacion.md §6"
+mkdir -p "$TEMP/respaldos"
+compose stop proxy >/dev/null 2>&1
+if compose run --rm --no-deps --user root --cap-add DAC_OVERRIDE --entrypoint tar -v "$TEMP/respaldos:/salida" proxy \
+  czf /salida/caddy-datos.tgz -C /data . >"$TEMP/mudar.log" 2>&1; then
+  echo "   ok: copiar el volumen"
+else
+  echo "   FALLA: copiar el volumen"; tail -5 "$TEMP/mudar.log"; fallas=1
+fi
+# Como en la máquina nueva: sin el volumen anterior.
+compose rm -f -s proxy proxy-permisos >/dev/null 2>&1
+docker volume rm "${PROYECTO}_caddy_datos" >/dev/null
+if compose run --rm --no-deps --user root --cap-add CHOWN --cap-add DAC_OVERRIDE --entrypoint sh -v "$TEMP/respaldos:/entrada" proxy \
+  -c 'tar xzf /entrada/caddy-datos.tgz -C /data && chown -R caddy:caddy /data' >"$TEMP/mudar.log" 2>&1; then
+  echo "   ok: restaurarlo en un volumen nuevo"
+else
+  echo "   FALLA: restaurar el volumen"; tail -5 "$TEMP/mudar.log"; fallas=1
+fi
+levantar
+revisar "la entrada, con el volumen restaurado" /entrar "200 hsts sin-server"
+if [ "$(raiz)" = "$huella" ]; then echo "   ok: la misma autoridad de Caddy"; else echo "   FALLA: la autoridad de Caddy cambió al mudar el volumen"; fallas=1; fi
 
 exit $fallas

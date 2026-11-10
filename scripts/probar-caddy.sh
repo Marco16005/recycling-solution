@@ -130,7 +130,7 @@ for feruga in no si; do
   fi
 done
 
-# Endurecimiento (2026-11-10): cada servicio sin privilegios nuevos y sin capacidades, salvo las de esta lista. Fuera:
+# Endurecimiento (2026-11-10): cada servicio sin privilegios nuevos y sin capacidades, salvo exactamente las de esta lista. Fuera:
 # unit, integration y e2e de compose.test.yaml (herramientas de prueba; Chromium usa su propio aislamiento).
 ENDURECIDO='let t = ""; process.stdin.on("data", (d) => (t += d)).on("end", () => {
   const permitidas = { db: ["CHOWN", "DAC_READ_SEARCH", "FOWNER", "SETGID", "SETUID"], respaldo: ["DAC_OVERRIDE"], "proxy-permisos": ["CHOWN", "DAC_READ_SEARCH"] };
@@ -140,12 +140,13 @@ ENDURECIDO='let t = ""; process.stdin.on("data", (d) => (t += d)).on("end", () =
     if (fuera.has(nombre)) continue;
     if (!(s.security_opt ?? []).includes("no-new-privileges:true")) problemas.push(nombre + " sin no-new-privileges");
     if (JSON.stringify(s.cap_drop ?? []) !== JSON.stringify(["ALL"])) problemas.push(nombre + " sin cap_drop ALL");
-    const extra = (s.cap_add ?? []).filter((c) => !(permitidas[nombre] ?? []).includes(c));
-    if (extra.length) problemas.push(nombre + " con capacidades de más: " + extra.join(","));
+    // Exactamente las de la lista: de más es un privilegio que sobra; de menos, un servicio que no arrancaría.
+    const tiene = [...(s.cap_add ?? [])].sort().join(","), debe = [...(permitidas[nombre] ?? [])].sort().join(",");
+    if (tiene !== debe) problemas.push(nombre + " con capacidades «" + tiene + "», se esperaban «" + debe + "»");
   }
   console.log(problemas.length ? problemas.join("; ") : "ok");
 });'
-echo "   -- Endurecimiento (no-new-privileges, cap_drop ALL y solo las capacidades permitidas)"
+echo "   -- Endurecimiento (no-new-privileges, cap_drop ALL y exactamente las capacidades permitidas)"
 for combinacion in "producción:compose.yaml compose.prod.yaml compose.feruga.yaml" "pruebas:compose.yaml compose.test.yaml"; do
   nombre=${combinacion%%:*}
   set --
