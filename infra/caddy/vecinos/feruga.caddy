@@ -7,4 +7,6 @@ gestion.feruga.tech {
 	header -Server
 	header ?Strict-Transport-Security "max-age=31536000"
 	reverse_proxy feruga-proxy:80
+	# Mientras feruga no responde (502), también con HSTS y sin Server (fragmento del Caddyfile principal).
+	import errores
 }

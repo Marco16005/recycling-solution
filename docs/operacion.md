@@ -90,17 +90,17 @@ docker compose cp proxy:/data/caddy/pki/authorities/local/root.crt respaldos/cad
 
      ```bash
      docker compose stop proxy
-     docker compose run --rm --no-deps --user root --entrypoint tar -v "$PWD/respaldos:/salida" proxy czf /salida/caddy-datos.tgz -C /data .
+     docker compose run --rm --no-deps --user root --cap-add DAC_OVERRIDE --entrypoint tar -v "$PWD/respaldos:/salida" proxy czf /salida/caddy-datos.tgz -C /data .
      ```
 
      En la máquina nueva, antes del primer arranque de `proxy`:
 
      ```bash
-     docker compose run --rm --no-deps --user root --entrypoint sh -v "$PWD/respaldos:/entrada" proxy \
+     docker compose run --rm --no-deps --user root --cap-add CHOWN --cap-add DAC_OVERRIDE --entrypoint sh -v "$PWD/respaldos:/entrada" proxy \
        -c 'tar xzf /entrada/caddy-datos.tgz -C /data && chown -R caddy:caddy /data'
      ```
 
-     Caddy corre sin privilegios (Plan de seguridad): `--user root` solo es para leer y escribir el respaldo, y el `chown` le devuelve sus archivos.
+     Caddy corre sin privilegios (Plan de seguridad): `--user root` solo es para leer y escribir el respaldo, y el `chown` le devuelve sus archivos. Como `proxy` empieza sin capacidades (`cap_drop: ALL`), cada comando pide solo las que usa: copiar, `DAC_OVERRIDE` (leer los archivos `0600` de Caddy y escribir en `respaldos/`); restaurar, `CHOWN` y `DAC_OVERRIDE`. `scripts/probar-produccion.sh` corre estos dos comandos tal cual.
 
    - **Crear una nueva**: no copiar nada; en la máquina nueva Caddy genera otra autoridad y hay que instalar su certificado (§5) en cada teléfono y computadora antes del cambio.
 3. Copiar el último `respaldos/*.dump`, el archivo `.env` y, si aplica, `caddy-datos.tgz`, por un medio seguro (contienen secretos).
@@ -116,6 +116,8 @@ docker compose up -d --build
 ```
 
 **Al pasar a la versión del Plan de seguridad (2026-11):** OSRM sirve ahora sin privilegios (usuario `nobody`) y necesita que el mapa sea legible para todos. Si el mapa ya estaba preparado, correr una vez `scripts/preparar-mapa.sh`: con la misma fecha no descarga nada, solo corrige los permisos. Caddy ahora es una imagen propia (`infra/caddy/Dockerfile`), que `--build` construye.
+
+**Al pasar a la versión del 2026-11-10** (contenedores sin privilegios): cambia la configuración de todos los contenedores, así que `docker compose up -d --build` los recrea todos, con unos segundos sin servicio. La base conserva su volumen. Si un contenedor no arranca, por ejemplo en un servidor con otra configuración de Docker, `docker compose logs <servicio>` lo dice. Las capacidades que necesita cada uno están en `compose.yaml` y `compose.prod.yaml`, con su motivo.
 
 **Al pasar a la versión de seguridad del 2026-11-07** (Caddy 2.11.9, zlib 1.4 y la imagen `rs-postgres:17.11`):
 

@@ -2,7 +2,8 @@
 # Configuración de Caddy y de Compose, sin compilar Caddy ni levantar nada (diseño del 2026-11-09, vecino feruga):
 # - el Caddyfile es válido sin la carpeta de vecinos, con la carpeta vacía y con la del repositorio, y solo en el último
 #   caso atiende gestion.feruga.tech;
-# - sin compose.feruga.yaml, proxy no está en feruga-entrada ni monta los vecinos; con él, sí, y la red es externa.
+# - sin compose.feruga.yaml, proxy no está en feruga-entrada ni monta los vecinos; con él, sí, y la red es externa;
+# - los errores de cada sitio llevan HSTS y quitan Server, y cada servicio corre sin privilegios (2026-11-10).
 # Usa la imagen oficial de Caddy de la misma versión que la base de infra/caddy/Dockerfile: el binario propio solo
 # cambia versiones de dependencias, no cómo se lee el Caddyfile.
 set -eu
@@ -40,6 +41,21 @@ NOMBRES='let t = ""; process.stdin.on("data", (d) => (t += d)).on("end", () => {
   console.log([...nombres].sort().join(" "));
 });'
 
+# Nombres cuyos errores (handle_errors) ponen HSTS y quitan Server: el fragmento (errores) del Caddyfile (2026-11-10).
+ERRORES='let t = ""; process.stdin.on("data", (d) => (t += d)).on("end", () => {
+  // Caddy convierte cada «header» en un manejador aparte: se buscan los dos dentro de la misma ruta de errores.
+  const todos = (manejadores) => (manejadores ?? []).flatMap((h) => [h, ...(h.routes ?? []).flatMap((r) => todos(r.handle))]);
+  const busca = (manejadores) => {
+    const encabezados = todos(manejadores).filter((h) => h.handler === "headers");
+    return encabezados.some((h) => h.response?.set?.["Strict-Transport-Security"]) &&
+      encabezados.some((h) => (h.response?.delete ?? []).includes("Server"));
+  };
+  const nombres = new Set();
+  for (const s of Object.values(JSON.parse(t).apps.http.servers))
+    for (const r of s.errors?.routes ?? []) if (busca(r.handle)) for (const m of r.match ?? []) for (const h of m.host ?? []) nombres.add(h);
+  console.log([...nombres].sort().join(" "));
+});'
+
 # $1: descripción; $2: carpeta de vecinos ("" = sin montar); $3: nombres esperados.
 caso() {
   if ! caddy_con "$2" validate > "$TEMP/validar.log" 2>&1; then
@@ -48,12 +64,17 @@ caso() {
     fallas=1
     return
   fi
-  nombres=$(caddy_con "$2" adapt 2>/dev/null | docker run --rm -i "$NODE" node -e "$NOMBRES")
-  if [ "$nombres" = "$3" ]; then
-    echo "   ok: $1 ($nombres)"
-  else
+  caddy_con "$2" adapt > "$TEMP/adaptado.json" 2>/dev/null
+  nombres=$(docker run --rm -i "$NODE" node -e "$NOMBRES" < "$TEMP/adaptado.json")
+  errores=$(docker run --rm -i "$NODE" node -e "$ERRORES" < "$TEMP/adaptado.json")
+  if [ "$nombres" != "$3" ]; then
     echo "   FALLA: $1: atiende «${nombres}», se esperaba «${3}»"
     fallas=1
+  elif [ "$errores" != "$3" ]; then
+    echo "   FALLA: $1: sus errores llevan HSTS y quitan Server solo en «${errores}», se esperaba «${3}»"
+    fallas=1
+  else
+    echo "   ok: $1 ($nombres; errores con HSTS)"
   fi
 }
 
@@ -107,6 +128,34 @@ for feruga in no si; do
     echo "   FALLA: producción $([ "$feruga" = si ] && echo con || echo sin) compose.feruga.yaml: $resultado"
     fallas=1
   fi
+done
+
+# Endurecimiento (2026-11-10): cada servicio sin privilegios nuevos y sin capacidades, salvo exactamente las de esta lista. Fuera:
+# unit, integration y e2e de compose.test.yaml (herramientas de prueba; Chromium usa su propio aislamiento).
+ENDURECIDO='let t = ""; process.stdin.on("data", (d) => (t += d)).on("end", () => {
+  const permitidas = { db: ["CHOWN", "DAC_READ_SEARCH", "FOWNER", "SETGID", "SETUID"], respaldo: ["DAC_OVERRIDE"], "proxy-permisos": ["CHOWN", "DAC_READ_SEARCH"] };
+  const fuera = new Set(["unit", "integration", "e2e"]);
+  const problemas = [];
+  for (const [nombre, s] of Object.entries(JSON.parse(t).services)) {
+    if (fuera.has(nombre)) continue;
+    if (!(s.security_opt ?? []).includes("no-new-privileges:true")) problemas.push(nombre + " sin no-new-privileges");
+    if (JSON.stringify(s.cap_drop ?? []) !== JSON.stringify(["ALL"])) problemas.push(nombre + " sin cap_drop ALL");
+    // Exactamente las de la lista: de más es un privilegio que sobra; de menos, un servicio que no arrancaría.
+    const tiene = [...(s.cap_add ?? [])].sort().join(","), debe = [...(permitidas[nombre] ?? [])].sort().join(",");
+    if (tiene !== debe) problemas.push(nombre + " con capacidades «" + tiene + "», se esperaban «" + debe + "»");
+  }
+  console.log(problemas.length ? problemas.join("; ") : "ok");
+});'
+echo "   -- Endurecimiento (no-new-privileges, cap_drop ALL y exactamente las capacidades permitidas)"
+for combinacion in "producción:compose.yaml compose.prod.yaml compose.feruga.yaml" "pruebas:compose.yaml compose.test.yaml"; do
+  nombre=${combinacion%%:*}
+  set --
+  for archivo in ${combinacion#*:}; do set -- "$@" -f "$archivo"; done
+  if ! json=$(docker compose --env-file "$TEMP/entorno" --profile "*" "$@" config --format json 2>"$TEMP/compose.log"); then
+    echo "   FALLA: compose config de $nombre"; cat "$TEMP/compose.log"; fallas=1; continue
+  fi
+  resultado=$(printf '%s' "$json" | docker run --rm -i "$NODE" node -e "$ENDURECIDO")
+  if [ "$resultado" = ok ]; then echo "   ok: $nombre, todos los servicios con todos los perfiles"; else echo "   FALLA: $nombre: $resultado"; fallas=1; fi
 done
 
 exit $fallas

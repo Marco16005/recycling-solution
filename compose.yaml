@@ -1,7 +1,18 @@
 # Servicios comunes. Se combina con compose.dev.yaml, compose.test.yaml o compose.prod.yaml
 # (ver COMPOSE_FILE en .env.example y el Plan 1 v2, §6).
+# Plan de seguridad (2026-11-10, docs/superpowers/specs/2026-11-10-endurecer-contenedores-design.md): ningún proceso gana
+# privilegios al ejecutar otro programa, y todos empiezan sin capacidades del sistema. Las pocas que un servicio necesita
+# se devuelven en él, una por una y con su motivo.
+x-endurecido: &endurecido
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+
 services:
   db:
+    <<: *endurecido
+    # El arranque oficial corre como root: recorre y ajusta la carpeta de datos (de postgres, 0700) y baja a postgres con
+    # su-exec. Ya en marcha, Postgres no tiene ninguna capacidad.
+    cap_add: [CHOWN, DAC_READ_SEARCH, FOWNER, SETUID, SETGID]
     # Postgres oficial con zlib 1.4 (infra/db/Dockerfile, plan de seguridad del 2026-11-07).
     build: { context: ./infra/db }
     image: rs-postgres:17.11
@@ -24,6 +35,7 @@ services:
 
   # Aplica migraciones como rs_migrador, vuelve a aplicar permisos y verifica huellas. Termina y sale.
   migrate:
+    <<: *endurecido
     build: { context: ., target: dev }
     command: ["npm", "run", "migrar"]
     # Los datos AVISO_* y PUBLICADO_POR los usa scripts/publicar-aviso.mts, que corre en este servicio.
@@ -39,6 +51,7 @@ services:
   # Crea el primer administrador si no existe (ADMIN_* en .env). Idempotente. También sirve para los
   # scripts de usuarios: docker compose run --rm bootstrap npm run alta-usuario -- --correo … --nombre … --rol …
   bootstrap:
+    <<: *endurecido
     build: { context: ., target: dev }
     command: ["npm", "run", "bootstrap"]
     environment:
@@ -52,6 +65,9 @@ services:
 
   # Respaldo con pg_dump a ./respaldos (docs/operacion.md explica cómo restaurar).
   respaldo:
+    <<: *endurecido
+    # Corre como root y escribe en ./respaldos, que en el servidor es de otro usuario.
+    cap_add: [DAC_OVERRIDE]
     # Postgres oficial con zlib 1.4 (infra/db/Dockerfile, plan de seguridad del 2026-11-07).
     build: { context: ./infra/db }
     image: rs-postgres:17.11
@@ -72,6 +88,7 @@ services:
   # Plan 7: mapa de calles. Se prepara una vez con scripts/preparar-mapa.sh (perfil preparar-mapa) y osrm lo sirve solo a
   # la red interna (sin puertos publicados). Sin el perfil mapa, la aplicación planea con la fórmula aproximada.
   mapa-preparar:
+    <<: *endurecido
     build: { context: ./infra/mapa }
     image: rs-mapa:v26.9.0
     profiles: ["preparar-mapa"]
@@ -83,6 +100,7 @@ services:
       - mapa_datos:/mapa
 
   osrm:
+    <<: *endurecido
     build: { context: ./infra/mapa }
     image: rs-mapa:v26.9.0
     profiles: ["mapa"]
