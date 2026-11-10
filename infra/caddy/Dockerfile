@@ -16,8 +16,11 @@ RUN xcaddy build v2.11.9 \
 FROM caddy:2.11.9-alpine
 COPY --from=construir /usr/bin/caddy /usr/bin/caddy
 # checkov:skip=CKV_DOCKER_2: la salud de proxy la observa Compose a través de web; Caddy no expone un punto de salud propio.
+# Sin la capacidad de archivo cap_net_bind_service que trae el binario: con cap_drop ALL (compose.prod.yaml) Linux no lo
+# ejecutaría («operation not permitted»), y no hace falta, porque Docker deja usar 80 y 443 a cualquier usuario (2026-11-10).
 RUN apk del --no-cache curl \
  && apk add --no-cache zlib=1.4-r0 \
+ && setcap -r /usr/bin/caddy \
  && addgroup -S -g 10001 caddy \
  && adduser -S -D -H -u 10001 -G caddy caddy \
  && chown -R caddy:caddy /data /config

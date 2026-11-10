@@ -4,12 +4,20 @@
 #   - detrás de un proxy que ya existe (p. ej. el del punto de venta): sin perfil; ese proxy envía el tráfico a
 #     127.0.0.1:${PUERTO_WEB_LOCAL} (solo accesible desde el propio servidor).
 # Los límites de memoria evitan que el piloto le quite recursos al otro sistema del servidor.
+# Plan de seguridad (2026-11-10, docs/superpowers/specs/2026-11-10-endurecer-contenedores-design.md): ningún proceso gana
+# privilegios al ejecutar otro programa, y todos empiezan sin capacidades del sistema. Las pocas que un servicio necesita
+# se devuelven en él, una por una y con su motivo.
+x-endurecido: &endurecido
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+
 services:
   db:
     restart: unless-stopped
     mem_limit: ${LIMITE_MEMORIA_DB:-512m}
 
   web:
+    <<: *endurecido
     build: { context: ., target: runner }
     environment:
       DATABASE_URL: postgres://rs_app:${RS_APP_PASSWORD:?Falta RS_APP_PASSWORD en .env}@db:5432/recycling
@@ -40,6 +48,9 @@ services:
   # Plan de seguridad (S4): Caddy corre sin privilegios. Este paso, como root y sin red, deja /data y /config a su nombre
   # antes de cada arranque; así sirven también los volúmenes que creó una versión anterior que corría como root.
   proxy-permisos:
+    <<: *endurecido
+    # Cambia el dueño de los volúmenes de Caddy, cuyas carpetas son 0700.
+    cap_add: [CHOWN, DAC_READ_SEARCH]
     build: { context: ./infra/caddy }
     image: rs-caddy:2.11.9
     profiles: ["caddy"]
@@ -52,6 +63,7 @@ services:
     restart: "no"
 
   proxy:
+    <<: *endurecido
     # Plan de seguridad (S4): imagen propia, compilada con dependencias corregidas y sin curl (infra/caddy/Dockerfile).
     build: { context: ./infra/caddy }
     image: rs-caddy:2.11.9

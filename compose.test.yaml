@@ -1,4 +1,11 @@
 # Pruebas: base desechable en memoria y servicios de verificación.
+# Plan de seguridad (2026-11-10, docs/superpowers/specs/2026-11-10-endurecer-contenedores-design.md): ningún proceso gana
+# privilegios al ejecutar otro programa, y todos empiezan sin capacidades del sistema. Las pocas que un servicio necesita
+# se devuelven en él, una por una y con su motivo.
+x-endurecido: &endurecido
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+
 services:
   db:
     environment:
@@ -37,6 +44,7 @@ services:
 
   # Plan 7: OSRM con un mapa sintético propio (infra/mapa/prueba), siempre activo en las pruebas.
   mapa-prueba-osm:
+    <<: *endurecido
     build: { context: ., target: dev }
     command: ["node", "/generador/generar-cuadricula.mjs", "/mapa/prueba.osm"]
     volumes:
@@ -44,6 +52,7 @@ services:
       - mapa_prueba:/mapa
 
   mapa-prueba:
+    <<: *endurecido
     build: { context: ./infra/mapa }
     image: rs-mapa:v26.9.0
     entrypoint: ["preparar-mapa", "prueba"]
@@ -69,6 +78,7 @@ services:
 
   # Usuarios sintéticos para punta a punta. Se niega a correr fuera de este archivo.
   semilla:
+    <<: *endurecido
     build: { context: ., target: dev }
     command: ["npx", "tsx", "scripts/semilla-e2e.mts"]
     environment:
@@ -80,6 +90,7 @@ services:
 
   # La imagen de producción, como la correría la empresa.
   web:
+    <<: *endurecido
     build: { context: ., target: runner }
     environment:
       DATABASE_URL: postgres://rs_app:app_prueba@db:5432/recycling

@@ -117,6 +117,8 @@ docker compose up -d --build
 
 **Al pasar a la versión del Plan de seguridad (2026-11):** OSRM sirve ahora sin privilegios (usuario `nobody`) y necesita que el mapa sea legible para todos. Si el mapa ya estaba preparado, correr una vez `scripts/preparar-mapa.sh`: con la misma fecha no descarga nada, solo corrige los permisos. Caddy ahora es una imagen propia (`infra/caddy/Dockerfile`), que `--build` construye.
 
+**Al pasar a la versión del 2026-11-10** (contenedores sin privilegios): cambia la configuración de todos los contenedores, así que `docker compose up -d --build` los recrea todos, con unos segundos sin servicio. La base conserva su volumen. Si un contenedor no arranca, por ejemplo en un servidor con otra configuración de Docker, `docker compose logs <servicio>` lo dice. Las capacidades que necesita cada uno están en `compose.yaml` y `compose.prod.yaml`, con su motivo.
+
 **Al pasar a la versión de seguridad del 2026-11-07** (Caddy 2.11.9, zlib 1.4 y la imagen `rs-postgres:17.11`):
 
 - **Qué cambia:** se recrean los contenedores `db` y `proxy`. La base sigue en Postgres 17.11 con el mismo volumen, sin migración de datos, y la aplicación deja de responder unos segundos.

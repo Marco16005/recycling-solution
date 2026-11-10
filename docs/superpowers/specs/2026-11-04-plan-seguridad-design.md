@@ -197,6 +197,20 @@ Dos ajustes del escaneo:
   - **Producción no se afectó:** `docker compose up -d --build` también reconstruye el migrador.
 - **zlib fija en `1.4-r0`** en los dos Dockerfiles, por la regla de versiones exactas. Si Alpine la reemplaza, la construcción falla con un mensaje claro.
 
+### Contenedores sin privilegios y errores de Caddy con HSTS (2026-11-10)
+
+Lo pidió el servidor de producción; feruga ya lo hacía. Diseño en `2026-11-10-endurecer-contenedores-design.md`.
+
+- **Contenedores.** Todos los servicios de producción y sus equivalentes de prueba llevan `no-new-privileges` y `cap_drop: ALL`. Solo tres recuperan capacidades, comprobadas una por una:
+  - `db`: `CHOWN`, `DAC_READ_SEARCH`, `FOWNER`, `SETUID` y `SETGID`, para el arranque oficial como root. Ya en marcha, Postgres no tiene ninguna;
+  - `respaldo`: `DAC_OVERRIDE`, para escribir en `./respaldos`;
+  - `proxy-permisos`: `CHOWN` y `DAC_READ_SEARCH`.
+- **Caddy.** El binario traía la capacidad de archivo `cap_net_bind_service`, que con `cap_drop: ALL` impedía ejecutarlo. Se le quita (`setcap -r`): Docker ya deja usar 80 y 443 sin ella.
+- **Errores de Caddy.** Un 502 generado por el propio Caddy salía sin HSTS y con `Server: Caddy`, porque los `header` del sitio no se aplican a esos errores. El fragmento `(errores)` (`handle_errors`) los pone en Recycling y en feruga.
+- **Pruebas:**
+  - `probar-caddy.sh` revisa las rutas de errores y el endurecimiento de cada servicio en las combinaciones de producción y de pruebas;
+  - `probar-produccion.sh` (paso 8 de `verificar-todo.sh`) levanta la producción en local y comprueba `NoNewPrivs: 1` y `CapEff: 0` en `db`, `web` y `proxy`, la entrada 200 con HSTS y el 502 con HSTS y sin `Server`.
+
 ## 10. Orden de trabajo
 
 1. P-S1: S1, S2, S3 y S6 (dependencias e imagen base). `verificar-todo` en verde.
