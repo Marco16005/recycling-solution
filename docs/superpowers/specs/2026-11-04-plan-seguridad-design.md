@@ -166,18 +166,24 @@ Atendido:
 
 - **HTTP/3 anunciado sin poder usarse.** Caddy queda solo con HTTP/1.1 y HTTP/2 (`servers { protocols h1 h2 }`). Usar HTTP/3 exigiría publicar 443/udp y abrirlo en el firewall; el piloto no lo necesita.
 - **`TRACE`.** Next falla antes de `src/proxy.ts` (`'TRACE' HTTP method is unsupported`): responde 500 y deja un error en el log por cada petición. Ahora:
-  - a Recycling, Caddy solo le deja pasar GET, HEAD y POST, los métodos que usa; a lo demás responde 405, con `Allow`;
-  - a feruga le corta solo `TRACE` y `TRACK`, porque sus demás métodos los decide feruga.
+  - a Recycling, Caddy solo le deja pasar GET, HEAD y POST, los métodos que usa; a lo demás responde 405, con `Allow`. El nombre alterno (`www`) solo redirige esos tres métodos, porque Caddy ejecuta `redir` antes que `respond`; los demás reciben el mismo 405;
+  - a feruga le contesta `TRACE` y `TRACK` con 501 (no implementado). Un 405 exigiría listar en `Allow` los métodos de feruga, y esos los decide feruga.
 - **Pruebas:**
-  - `probar-caddy.sh`: cada nombre responde 405 a `TRACE` sin bloquear GET ni POST, y ningún servidor anuncia HTTP/3;
-  - `probar-produccion.sh`: HEAD y POST llegan a la aplicación, `TRACE` y `PUT` reciben 405 con HSTS y sin `Server`, y ninguna respuesta trae `Alt-Svc`.
+  - `probar-caddy.sh` simula el orden de las rutas de Caddy en cada nombre: a `TRACE` le contesta Caddy (405 con `Allow`, o 501), GET y POST siguen a la aplicación o a la redirección, y ningún servidor anuncia HTTP/3;
+  - `probar-produccion.sh`, con un nombre alterno: HEAD y POST llegan a la aplicación, `TRACE` y `PUT` reciben 405 con HSTS, sin `Server` y con `Allow` (también en el alterno, que redirige GET), y ninguna respuesta trae `Alt-Svc`.
+- **Revisión de Codex del 9ce0b5e** (no aprobado):
+  - el alterno respondía 301 a `TRACE`, y la primera versión de `probar-caddy.sh` daba un falso verde, porque solo buscaba que existiera un 405 en la configuración;
+  - feruga y los ejemplos del modo B respondían 405 sin `Allow`, que el RFC 9110 exige;
+  - quitar el MX no basta (abajo).
+
+  Corregido, con controles negativos: el Caddyfile de 9ce0b5e, el de `main` y un 405 sin `Allow` en feruga hacen fallar `probar-caddy.sh`.
 
 Para el dueño, fuera del repositorio:
 
 - **Correo del dominio.** Si `feruga.tech` no manda ni recibe correo:
   - un TXT `v=spf1 -all` en `feruga.tech`;
   - un TXT `v=DMARC1; p=reject` en `_dmarc.feruga.tech`;
-  - quitar el MX.
+  - cambiar el MX por un MX nulo: prioridad `0` y destino `.` (RFC 7505). Sin MX, los remitentes intentarían entregar en la IP del dominio.
 
   Sin esos registros, cualquiera puede mandar correos que parezcan de `@feruga.tech`. Si el dominio sí usa correo, los registros los da el proveedor.
 - **Feruga, en su repositorio:** `Permissions-Policy`, `Cross-Origin-Resource-Policy` y BREACH (no comprimir páginas con datos de la sesión).
@@ -234,6 +240,8 @@ Las encontró `scripts/seguridad.sh` en el servidor, ya desplegado. Se corrigen 
 | Postgres | zlib 1.3.2 (CVE-2026-4738) | Crítica | Imagen propia mínima `rs-postgres:17.11` (`infra/db/Dockerfile`): la oficial más zlib 1.4-r0. La usan `db` y `respaldo`, porque `pg_dump -Fc` comprime con zlib |
 | Postgres | `moby/sys/user` | Media | No hace fallar el escaneo; llega con la siguiente imagen oficial |
 | Aplicación (2026-11-09) | `zlib1g` 1.3.1-1+b1 de Debian (CVE-2026-76844 y CVE-2026-85091, altas; CVE-2026-27171, media) | Alta | `apt-get install --only-upgrade zlib1g=…+deb13u1` (versión fija) en la etapa `runner`; se quita cuando la imagen de Node la traiga |
+| Postgres (2026-11-12) | `libxslt` 1.1.43-r3 (CVE-2026-125350, en la lista KEV: se explota activamente; CVE-2026-87636 y CVE-2026-9947) | Alta | `libxslt=1.1.43-r4` (versión fija) en `infra/db/Dockerfile` |
+| Postgres (2026-11-12) | `krb5-libs` 1.22.2-r1 (nueve altas, entre ellas CVE-2026-112314 y CVE-2026-40355, y doce más) | Alta | `krb5-libs=1.22.3-r0` (versión fija) en `infra/db/Dockerfile` |
 
 No se registró como excepción en `grype.yaml`, porque esa configuración aplica a las cuatro imágenes y ocultaría el mismo CVE en las demás. `seguridad.sh` construye Caddy y Postgres con `--pull`, para escanear sobre la imagen base vigente. Cuando la imagen oficial de Postgres traiga zlib 1.4, se vuelve a usar directo y se borra `infra/db/Dockerfile`.
 

@@ -4,7 +4,8 @@
 # levanta compose.prod.yaml. Comprueba que:
 # - db, web y proxy corren sin poder ganar privilegios (NoNewPrivs 1) y sin capacidades (CapEff en 0);
 # - la entrada por HTTPS responde 200, con HSTS, sin Server y sin anunciar HTTP/3 (Alt-Svc);
-# - GET, HEAD y POST llegan a la aplicación, y TRACE o PUT reciben 405 de Caddy (prueba externa del 2026-11-11);
+# - GET, HEAD y POST llegan a la aplicación, y TRACE o PUT reciben 405 de Caddy, también en el nombre alterno, que
+#   redirige GET al principal (prueba externa del 2026-11-11);
 # - con web detenido, el 502 de Caddy también lleva HSTS y no lleva Server;
 # - el volumen de Caddy se muda con los dos comandos de docs/operacion.md §6, tal cual, y Caddy vuelve con la misma
 #   autoridad (la de los teléfonos en la red local).
@@ -34,6 +35,7 @@ RS_APP_PASSWORD=sinteticaprodlocal3
 BETTER_AUTH_SECRET=valor-sintetico-de-la-prueba-de-produccion-local
 BETTER_AUTH_URL=https://localhost
 DOMINIO=localhost
+DOMINIO_ALTERNO=www.localhost
 ADMIN_CORREO=admin@prod-local.test
 ADMIN_NOMBRE=Administrador de prueba
 ADMIN_CLAVE=clave-sintetica-de-prueba-123
@@ -72,20 +74,22 @@ for servicio in db web proxy; do
   esac
 done
 
-# Una petición HTTPS a Caddy desde la red del proyecto, como la haría un navegador que pide «localhost». Alt-Svc y Allow
-# solo aparecen en el resultado si vienen: Alt-Svc nunca debe venir (sin HTTP/3); Allow, en los 405 de Caddy.
+# Una petición HTTPS a Caddy desde la red del proyecto, como la haría un navegador que pide ese nombre («localhost» o el
+# alterno). Alt-Svc, Allow y Location solo aparecen en el resultado si vienen: Alt-Svc nunca debe venir (sin HTTP/3);
+# Allow, en los 405 de Caddy; Location, en la redirección del alterno.
 PEDIR='const https = require("node:https");
-const [ruta, metodo] = process.argv.slice(1);
-https.request({ host: "proxy", port: 443, path: ruta, method: metodo, servername: "localhost", headers: { host: "localhost" }, rejectUnauthorized: false }, (r) => {
+const [ruta, metodo, nombre] = process.argv.slice(1);
+https.request({ host: "proxy", port: 443, path: ruta, method: metodo, servername: nombre, headers: { host: nombre }, rejectUnauthorized: false }, (r) => {
   const partes = [r.statusCode, r.headers["strict-transport-security"] ? "hsts" : "sin-hsts", r.headers.server ? "con-server" : "sin-server"];
   if (r.headers["alt-svc"]) partes.push("alt-svc=" + r.headers["alt-svc"]);
   if (r.headers.allow) partes.push("allow=" + r.headers.allow);
+  if (r.headers.location) partes.push("location=" + r.headers.location);
   console.log(partes.join(" "));
   r.resume();
 }).on("error", (e) => { console.log("error " + e.message); }).end();'
-pedir() { docker run --rm --network "${PROYECTO}_default" "$NODE" node -e "$PEDIR" "$1" "$2"; }
-revisar() { # $1: descripción; $2: ruta; $3: resultado esperado; $4: método (GET si falta)
-  resultado=$(pedir "$2" "${4:-GET}")
+pedir() { docker run --rm --network "${PROYECTO}_default" "$NODE" node -e "$PEDIR" "$1" "$2" "$3"; }
+revisar() { # $1: descripción; $2: ruta; $3: resultado esperado; $4: método (GET si falta); $5: nombre (localhost si falta)
+  resultado=$(pedir "$2" "${4:-GET}" "${5:-localhost}")
   if [ "$resultado" = "$3" ]; then echo "   ok: $1 ($resultado)"; else echo "   FALLA: $1: «$resultado», se esperaba «$3»"; fallas=1; fi
 }
 # Huella del certificado raíz de la autoridad de Caddy (público): debe ser la misma después de mudar el volumen.
@@ -99,6 +103,9 @@ revisar "HEAD a la entrada" /entrar "200 hsts sin-server" HEAD
 revisar "POST llega a la aplicación" /api/auth/get-session "404 hsts sin-server" POST
 revisar "TRACE se queda en Caddy" /entrar "405 hsts sin-server allow=GET, HEAD, POST" TRACE
 revisar "PUT se queda en Caddy" /entrar "405 hsts sin-server allow=GET, HEAD, POST" PUT
+# El nombre alterno redirige GET al principal, pero a TRACE le contesta el mismo 405: «redir» va antes que «respond».
+revisar "GET al nombre alterno" /entrar "301 hsts sin-server location=https://localhost/entrar" GET www.localhost
+revisar "TRACE al nombre alterno" /entrar "405 hsts sin-server allow=GET, HEAD, POST" TRACE www.localhost
 huella=$(raiz)
 compose stop web >/dev/null 2>&1
 revisar "502 con web detenido" /entrar "502 hsts sin-server"
