@@ -3,7 +3,8 @@
 # - el Caddyfile es válido sin la carpeta de vecinos, con la carpeta vacía y con la del repositorio, y solo en el último
 #   caso atiende gestion.feruga.tech;
 # - sin compose.feruga.yaml, proxy no está en feruga-entrada ni monta los vecinos; con él, sí, y la red es externa;
-# - los errores de cada sitio llevan HSTS y quitan Server, y cada servicio corre sin privilegios (2026-11-10).
+# - los errores de cada sitio llevan HSTS y quitan Server, y cada servicio corre sin privilegios (2026-11-10);
+# - cada sitio responde 405 a TRACE en Caddy, y ningún servidor anuncia HTTP/3 (prueba externa del 2026-11-11).
 # Usa la imagen oficial de Caddy de la misma versión que la base de infra/caddy/Dockerfile: el binario propio solo
 # cambia versiones de dependencias, no cómo se lee el Caddyfile.
 set -eu
@@ -56,6 +57,22 @@ ERRORES='let t = ""; process.stdin.on("data", (d) => (t += d)).on("end", () => {
   console.log([...nombres].sort().join(" "));
 });'
 
+# Prueba externa del 2026-11-11: nombres donde Caddy responde 405 a TRACE sin bloquear GET ni POST (Next falla con
+# TRACE), o «FALLA …» si algún servidor no va solo con HTTP/1.1 y HTTP/2 (el 443 se publica solo por TCP).
+METODOS='let t = ""; process.stdin.on("data", (d) => (t += d)).on("end", () => {
+  const nombres = new Set(), problemas = [];
+  // Si un «match» de Caddy atrapa ese método: «method» lo lista, o «not method» no lo lista.
+  const atrapa = (m, metodo) => m.method ? m.method.includes(metodo) : (m.not ?? []).some((n) => n.method && !n.method.includes(metodo));
+  const rutas = (manejadores) => (manejadores ?? []).flatMap((h) => (h.routes ?? []).flatMap((r) => [r, ...rutas(r.handle)]));
+  const rechaza405 = (r) => (r.handle ?? []).some((h) => h.handler === "static_response" && String(h.status_code) === "405") &&
+    (r.match ?? []).some((m) => atrapa(m, "TRACE") && !atrapa(m, "GET") && !atrapa(m, "POST"));
+  for (const [id, s] of Object.entries(JSON.parse(t).apps.http.servers)) {
+    if (JSON.stringify(s.protocols) !== JSON.stringify(["h1", "h2"])) problemas.push(id + " con protocolos " + JSON.stringify(s.protocols ?? "por omisión (h1 h2 h3)"));
+    for (const r of s.routes ?? []) if (rutas(r.handle).some(rechaza405)) for (const m of r.match ?? []) for (const h of m.host ?? []) nombres.add(h);
+  }
+  console.log(problemas.length ? "FALLA " + problemas.join("; ") : [...nombres].sort().join(" "));
+});'
+
 # $1: descripción; $2: carpeta de vecinos ("" = sin montar); $3: nombres esperados.
 caso() {
   if ! caddy_con "$2" validate > "$TEMP/validar.log" 2>&1; then
@@ -67,14 +84,21 @@ caso() {
   caddy_con "$2" adapt > "$TEMP/adaptado.json" 2>/dev/null
   nombres=$(docker run --rm -i "$NODE" node -e "$NOMBRES" < "$TEMP/adaptado.json")
   errores=$(docker run --rm -i "$NODE" node -e "$ERRORES" < "$TEMP/adaptado.json")
+  metodos=$(docker run --rm -i "$NODE" node -e "$METODOS" < "$TEMP/adaptado.json")
   if [ "$nombres" != "$3" ]; then
     echo "   FALLA: $1: atiende «${nombres}», se esperaba «${3}»"
     fallas=1
   elif [ "$errores" != "$3" ]; then
     echo "   FALLA: $1: sus errores llevan HSTS y quitan Server solo en «${errores}», se esperaba «${3}»"
     fallas=1
+  elif [ "$metodos" != "$3" ]; then
+    case "$metodos" in
+      FALLA*) echo "   FALLA: $1: ${metodos#FALLA }" ;;
+      *) echo "   FALLA: $1: Caddy responde 405 a TRACE (y deja pasar GET y POST) solo en «${metodos}», se esperaba «${3}»" ;;
+    esac
+    fallas=1
   else
-    echo "   ok: $1 ($nombres; errores con HSTS)"
+    echo "   ok: $1 ($nombres; errores con HSTS; TRACE con 405; sin HTTP/3)"
   fi
 }
 

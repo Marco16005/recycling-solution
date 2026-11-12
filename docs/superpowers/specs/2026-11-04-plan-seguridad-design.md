@@ -124,10 +124,66 @@ Aceptado, con motivo:
 
 Para el dueño, fuera del repositorio:
 
-- **Registro CAA en el DNS:** testssl lo marca como bajo. Limita qué autoridades pueden emitir certificados del dominio; ver `docs/pendientes.md`.
+- **Registro CAA en el DNS:** testssl lo marca como bajo. Limita qué autoridades pueden emitir certificados del dominio. Ya está puesto (prueba del 2026-11-11).
 - **SSH, opcional:** todavía permite `hmac-sha1` y `umac-64`, como OpenSSH por omisión. Se pueden quitar en `sshd_config` (`MACs`).
 
 Reportes en `reportes-seguridad/*-vps/` (no se versionan).
+
+### Resultados del 2026-11-11 (con contenedores sin privilegios y feruga publicado)
+
+El dueño la pidió por escrito: «hagamos las pruebas externas… todo lo que nos falte». Se corrió con las mismas condiciones que la del 2026-11-07: desde la computadora de desarrollo, con imágenes fijas por digest, a baja velocidad y solo contra la IP del VPS. Además de repetir esa prueba, cubre:
+
+- `gestion.feruga.tech`;
+- los 65 535 puertos TCP, UDP y HTTP/3;
+- los métodos HTTP y las rutas de Better Auth;
+- archivos expuestos y el límite de entrada desde fuera;
+- el DNS y el HTTP Observatory de Mozilla.
+
+| Prueba | Resultado |
+|---|---|
+| nmap `-sT -sV`, los 65 535 puertos TCP, 50 paquetes/s | Ningún puerto abierto fuera de 22, 80 y 443. Durante los cortes de red de la computadora de desarrollo, Docker dio rechazos falsos (`conn-refused`), incluso en el 443. Se repitió con reintentos sobre una muestra (3000, 3001, 5432, 6379, 8080, 8443, 27017 y otros) y desde fuera de Docker: 22, 80 y 443 abiertos, los demás filtrados, como el 2026-11-07 |
+| nmap UDP, 20 puertos principales | Ninguno responde, ni a las sondas de DNS, NTP o SNMP |
+| QUIC (HTTP/3), con aioquic 1.2.0 | Sin respuesta en UDP 443, aunque Caddy anunciaba `Alt-Svc: h3` |
+| nmap `ssh-auth-methods` y `ssh2-enum-algos` | Solo `publickey`. Sigue ofreciendo `hmac-sha1` y `umac-64` (opcional, ver arriba) |
+| testssl.sh 3.2, `feruga.tech` | **A+ (96)**, sin avisos: BREACH ya sale «not vulnerable» y el CAA está puesto |
+| testssl.sh 3.2, `gestion.feruga.tech` | Mismo TLS que `feruga.tech`. BREACH: feruga comprime sus páginas. La primera corrida dio B porque se cortó la conexión a la mitad; repetida, sí ofrece cifrados con *forward secrecy* |
+| ZAP baseline, `feruga.tech`, 2 minutos | 0 fallas y 0 avisos en 28 URL |
+| ZAP baseline, `gestion.feruga.tech` | 3 avisos, todos de feruga: `style-src 'unsafe-inline'`, sin `Permissions-Policy` y sin `Cross-Origin-Resource-Policy` |
+| Mozilla HTTP Observatory | `feruga.tech`, B+ (80): solo le resta `script-src 'unsafe-inline'`, aceptado en §5. `gestion.feruga.tech`, A+ (105) |
+| Pruebas HTTP a mano | Ver detalle abajo. `TRACE` respondía 500 |
+| DNS | CAA puesto, y `gestion` lo hereda. Sin SPF ni DMARC, y el MX apunta al propio servidor, que no recibe correo (el puerto 25 está cerrado) |
+
+**Pruebas HTTP a mano:**
+
+- No se ve ningún archivo interno: `.env`, `.git`, `package.json`, Dockerfile, mapas de código ni respaldos.
+- De Better Auth solo responden las tres rutas permitidas; las demás, incluidas las variantes con mayúsculas, dan 404.
+- Una petición desde un origen ajeno recibe 403 y ningún encabezado CORS.
+- Las páginas y los CSV protegidos no se abren sin sesión.
+- Un `Host` ajeno no llega a la aplicación, y un `X-Forwarded-Host` falso no cambia las redirecciones.
+- Un `X-Forwarded-For` falso no salta el límite de entrada: 429 al sexto intento.
+
+Atendido:
+
+- **HTTP/3 anunciado sin poder usarse.** Caddy queda solo con HTTP/1.1 y HTTP/2 (`servers { protocols h1 h2 }`). Usar HTTP/3 exigiría publicar 443/udp y abrirlo en el firewall; el piloto no lo necesita.
+- **`TRACE`.** Next falla antes de `src/proxy.ts` (`'TRACE' HTTP method is unsupported`): responde 500 y deja un error en el log por cada petición. Ahora:
+  - a Recycling, Caddy solo le deja pasar GET, HEAD y POST, los métodos que usa; a lo demás responde 405, con `Allow`;
+  - a feruga le corta solo `TRACE` y `TRACK`, porque sus demás métodos los decide feruga.
+- **Pruebas:**
+  - `probar-caddy.sh`: cada nombre responde 405 a `TRACE` sin bloquear GET ni POST, y ningún servidor anuncia HTTP/3;
+  - `probar-produccion.sh`: HEAD y POST llegan a la aplicación, `TRACE` y `PUT` reciben 405 con HSTS y sin `Server`, y ninguna respuesta trae `Alt-Svc`.
+
+Para el dueño, fuera del repositorio:
+
+- **Correo del dominio.** Si `feruga.tech` no manda ni recibe correo:
+  - un TXT `v=spf1 -all` en `feruga.tech`;
+  - un TXT `v=DMARC1; p=reject` en `_dmarc.feruga.tech`;
+  - quitar el MX.
+
+  Sin esos registros, cualquiera puede mandar correos que parezcan de `@feruga.tech`. Si el dominio sí usa correo, los registros los da el proveedor.
+- **Feruga, en su repositorio:** `Permissions-Policy`, `Cross-Origin-Resource-Policy` y BREACH (no comprimir páginas con datos de la sesión).
+- **DNSSEC, opcional:** no está activo y Hostinger lo ofrece.
+
+Reportes en `reportes-seguridad/20261111-235437-vps-3/`.
 
 ## 8. SonarQube y Burp Suite
 

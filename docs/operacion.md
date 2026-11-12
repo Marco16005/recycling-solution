@@ -184,6 +184,7 @@ El proxy existente debe hacer lo que en el modo A hace Caddy (plan de seguridad 
 1. **IP real del cliente.** El límite de 5 intentos de entrada por minuto se cuenta por la IP que llega en `X-Forwarded-For`. El proxy debe **reemplazar** ese encabezado con la IP real, nunca agregarla al que trae la petición: con `$proxy_add_x_forwarded_for`, un atacante podría inventar una IP distinta en cada intento y saltarse el límite.
 2. **HSTS en todo.** La aplicación lo pone en las páginas; los archivos estáticos no pasan por ella. Hay que mandarlo una sola vez por respuesta.
 3. **Comprimir solo los archivos estáticos (BREACH).** Next pone la dirección completa en cada página, así que una página comprimida puede reunir texto controlado desde otro sitio con datos privados. La aplicación no comprime por su cuenta.
+4. **Solo GET, HEAD y POST.** Son los métodos que usa la aplicación. Con `TRACE`, Next falla antes de llegar a ella: responde 500 y deja un error en el log por cada petición (prueba externa del 2026-11-11). A los demás, el proxy responde 405.
 
 Ejemplo completo para nginx:
 
@@ -195,6 +196,8 @@ server {
     add_header Strict-Transport-Security "max-age=31536000" always;
     # 3. Sin compresión salvo en los estáticos.
     gzip off;
+    # 4. Solo los métodos que usa la aplicación.
+    if ($request_method !~ ^(GET|HEAD|POST)$) { return 405; }
     location /_next/static/ {
         gzip on;
         gzip_types text/css application/javascript;
@@ -221,6 +224,8 @@ Si el proxy existente es Caddy, el bloque es el siguiente. Caddy ignora el `X-Fo
 	header ?Strict-Transport-Security "max-age=31536000"
 	@estaticos path /_next/static/* /favicon.ico /icon.svg /apple-icon.png /maplibre-gl-worker.mjs /sw-operador.js
 	encode @estaticos zstd gzip
+	@metodo_no_permitido not method GET HEAD POST
+	respond @metodo_no_permitido 405
 	reverse_proxy 127.0.0.1:3001
 }
 ```
