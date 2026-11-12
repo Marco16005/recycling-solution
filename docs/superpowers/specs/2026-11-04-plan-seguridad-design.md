@@ -169,14 +169,28 @@ Atendido:
   - a Recycling, Caddy solo le deja pasar GET, HEAD y POST, los métodos que usa; a lo demás responde 405, con `Allow`. El nombre alterno (`www`) solo redirige esos tres métodos, porque Caddy ejecuta `redir` antes que `respond`; los demás reciben el mismo 405;
   - a feruga le contesta `TRACE` y `TRACK` con 501 (no implementado). Un 405 exigiría listar en `Allow` los métodos de feruga, y esos los decide feruga.
 - **Pruebas:**
-  - `probar-caddy.sh` simula el orden de las rutas de Caddy en cada nombre: a `TRACE` le contesta Caddy (405 con `Allow`, o 501), GET y POST siguen a la aplicación o a la redirección, y ningún servidor anuncia HTTP/3;
-  - `probar-produccion.sh`, con un nombre alterno: HEAD y POST llegan a la aplicación, `TRACE` y `PUT` reciben 405 con HSTS, sin `Server` y con `Allow` (también en el alterno, que redirige GET), y ninguna respuesta trae `Alt-Svc`.
+  - `probar-caddy.sh` simula el orden de las rutas de Caddy con diez métodos (GET, HEAD, POST, TRACE, TRACK, PUT, DELETE, PATCH, OPTIONS y CONNECT) en cinco rutas, y exige en cada nombre la respuesta y su destino exactos:
+    - en el principal, GET, HEAD y POST van a `web:3000`, y los demás reciben 405 con `Allow: GET, HEAD, POST`;
+    - en el alterno, esos tres métodos reciben 301 a `https://` del principal con la misma ruta, y los demás el mismo 405;
+    - en `gestion.feruga.tech`, `TRACE` y `TRACK` reciben 501 y lo demás va a `feruga-proxy:80`.
+
+    También exige que ningún servidor anuncie HTTP/3;
+  - `probar-produccion.sh`, en marcha y con un nombre alterno:
+    - en el principal, HEAD y POST llegan a la aplicación, y `TRACE` y `PUT` reciben 405 con HSTS, sin `Server` y con `Allow`;
+    - en el alterno, GET recibe 301 a `https://localhost/entrar` y `TRACE`, el mismo 405;
+    - ninguna respuesta trae `Alt-Svc`.
 - **Revisión de Codex del 9ce0b5e** (no aprobado):
   - el alterno respondía 301 a `TRACE`, y la primera versión de `probar-caddy.sh` daba un falso verde, porque solo buscaba que existiera un 405 en la configuración;
   - feruga y los ejemplos del modo B respondían 405 sin `Allow`, que el RFC 9110 exige;
   - quitar el MX no basta (abajo).
 
   Corregido, con controles negativos: el Caddyfile de 9ce0b5e, el de `main` y un 405 sin `Allow` en feruga hacen fallar `probar-caddy.sh`.
+- **Revisiones de Codex del 9d0e296 y del f726bbe** (no aprobados): la prueba estática solo simulaba `TRACE` en `/entrar`, aceptaba 405 o 501 en cualquier nombre y cualquier destino de proxy o redirección; y la imagen propia de Postgres debía retirarse solo cuando la oficial trajera las tres correcciones, no solo zlib. Corregido; controles negativos que hacen fallar `probar-caddy.sh`:
+  - feruga con 405 (con o sin `Allow`) en vez de 501, o sin cortar `TRACK`;
+  - `Allow` con otro valor;
+  - Recycling que solo corta `TRACE` y `TRACK`;
+  - el alterno redirigiendo a otro dominio;
+  - el principal o feruga con otro destino.
 
 Para el dueño, fuera del repositorio:
 
