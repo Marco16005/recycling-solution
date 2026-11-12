@@ -243,7 +243,7 @@ Las encontró `scripts/seguridad.sh` en el servidor, ya desplegado. Se corrigen 
 | Postgres (2026-11-12) | `libxslt` 1.1.43-r3 (CVE-2026-125350, en la lista KEV: se explota activamente; CVE-2026-87636 y CVE-2026-9947) | Alta | `libxslt=1.1.43-r4` (versión fija) en `infra/db/Dockerfile` |
 | Postgres (2026-11-12) | `krb5-libs` 1.22.2-r1 (nueve altas, entre ellas CVE-2026-112314 y CVE-2026-40355, y doce más) | Alta | `krb5-libs=1.22.3-r0` (versión fija) en `infra/db/Dockerfile` |
 
-No se registró como excepción en `grype.yaml`, porque esa configuración aplica a las cuatro imágenes y ocultaría el mismo CVE en las demás. `seguridad.sh` construye Caddy y Postgres con `--pull`, para escanear sobre la imagen base vigente. Cuando la imagen oficial de Postgres traiga zlib 1.4, se vuelve a usar directo y se borra `infra/db/Dockerfile`.
+No se registró como excepción en `grype.yaml`, porque esa configuración aplica a las cuatro imágenes y ocultaría el mismo CVE en las demás. `seguridad.sh` construye Caddy y Postgres con `--pull`, para escanear sobre la imagen base vigente. Cuando la imagen oficial de Postgres traiga zlib 1.4-r0, libxslt 1.1.43-r4 y krb5-libs 1.22.3-r0 (o versiones posteriores), se vuelve a usar directo y se borra `infra/db/Dockerfile`; con solo una de ellas, volverían las demás vulnerabilidades (revisión de Codex del 9d0e296).
 
 Dos ajustes del escaneo:
 

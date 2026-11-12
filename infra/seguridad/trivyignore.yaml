@@ -8,6 +8,6 @@ misconfigurations:
   - id: DS-0002
     paths: ["infra/db/Dockerfile"]
     statement: >-
-      Postgres oficial más zlib 1.4 (2026-11-07). Igual que la imagen oficial: el entrypoint arranca como root solo para
-      ajustar permisos del volumen y baja al usuario postgres con su-exec antes de iniciar el servidor. Postgres no
-      publica puertos. El archivo se borra cuando la oficial traiga zlib 1.4.
+      Postgres oficial más paquetes de Alpine corregidos (zlib, libxslt y krb5-libs). Igual que la imagen oficial: el
+      entrypoint arranca como root solo para ajustar permisos del volumen y baja al usuario postgres con su-exec antes de
+      iniciar el servidor. Postgres no publica puertos. El archivo se borra cuando la oficial traiga las tres correcciones.

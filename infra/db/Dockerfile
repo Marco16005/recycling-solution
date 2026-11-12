@@ -3,7 +3,8 @@
 # - 2026-11-07: zlib 1.4 (CVE-2026-4738, crítica).
 # - 2026-11-12: libxslt 1.1.43-r4 (CVE-2026-125350, alta y en la lista KEV: se explota activamente; CVE-2026-87636 y
 #   CVE-2026-9947) y krb5-libs 1.22.3-r0 (nueve altas, entre ellas CVE-2026-112314 y CVE-2026-40355, y doce más).
-# Cuando la oficial los traiga, compose.yaml vuelve a usarla directo y se borra este archivo.
+# Cuando la oficial traiga los tres (o versiones posteriores), compose.yaml vuelve a usarla directo y se borra este
+# archivo; con solo uno, volverían las vulnerabilidades de los otros.
 FROM postgres:17.11-alpine
 # checkov:skip=CKV_DOCKER_2: la salud de db la revisa Compose con pg_isready (healthcheck en compose.yaml).
 # checkov:skip=CKV_DOCKER_3: igual que la imagen oficial: el entrypoint arranca como root solo para ajustar permisos del

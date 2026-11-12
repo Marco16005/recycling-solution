@@ -4,8 +4,8 @@
 #   caso atiende gestion.feruga.tech;
 # - sin compose.feruga.yaml, proxy no está en feruga-entrada ni monta los vecinos; con él, sí, y la red es externa;
 # - los errores de cada sitio llevan HSTS y quitan Server, y cada servicio corre sin privilegios (2026-11-10);
-# - Caddy contesta TRACE en cada nombre, antes que la aplicación o una redirección, y ningún servidor anuncia HTTP/3
-#   (prueba externa del 2026-11-11).
+# - cada nombre contesta cada método como dice la invariante 40 de la guía de auditoría (405 con Allow, 301 o 501 en
+#   Caddy, antes que la aplicación), y ningún servidor anuncia HTTP/3 (prueba externa del 2026-11-11).
 # Usa la imagen oficial de Caddy de la misma versión que la base de infra/caddy/Dockerfile: el binario propio solo
 # cambia versiones de dependencias, no cómo se lee el Caddyfile.
 set -eu
@@ -58,12 +58,16 @@ ERRORES='let t = ""; process.stdin.on("data", (d) => (t += d)).on("end", () => {
   console.log([...nombres].sort().join(" "));
 });'
 
-# Prueba externa del 2026-11-11: simula el orden de las rutas de Caddy con una petición a /entrar para cada nombre. Pasa si
-# a TRACE le contesta Caddy (405 con Allow, o 501) y GET y POST siguen a la aplicación (proxy) o a la redirección del
-# nombre alterno (301). Revisar solo que «exista» un 405 dio un falso verde: la redirección del alterno contestaba antes
-# (revisión de Codex). También falla si algún servidor no va solo con HTTP/1.1 y HTTP/2 (el 443 se publica solo por TCP).
-# Imprime los nombres que pasan, o «FALLA …» con el detalle.
+# Invariante 40 (prueba externa del 2026-11-11): simula el orden de las rutas de Caddy con cada método y varias rutas, en
+# cada nombre, y exige exactamente:
+# - DOMINIO: GET, HEAD y POST a la aplicación; cualquier otro método, 405 con «Allow: GET, HEAD, POST»;
+# - DOMINIO_ALTERNO: GET, HEAD y POST, 301 al principal; los demás, el mismo 405 (redir va antes que respond);
+# - vecinos: TRACE y TRACK, 501; lo demás pasa al vecino, que decide sus métodos.
+# También falla si algún servidor no va solo con HTTP/1.1 y HTTP/2 (el 443 se publica solo por TCP). Revisar solo que
+# «existiera» un 405 dio un falso verde (revisión de Codex). Recibe DOMINIO y DOMINIO_ALTERNO; imprime los nombres que
+# cumplen, o «FALLA …» con el detalle.
 METODOS='let t = ""; process.stdin.on("data", (d) => (t += d)).on("end", () => {
+  const [principal, alterno] = process.argv.slice(1);
   const coincide = (conjunto, p) => Object.entries(conjunto).every(([tipo, valor]) => {
     if (tipo === "host") return valor.includes(p.host);
     if (tipo === "method") return valor.includes(p.metodo);
@@ -92,21 +96,35 @@ METODOS='let t = ""; process.stdin.on("data", (d) => (t += d)).on("end", () => {
     }
     return null;
   };
-  const problemas = [], nombres = [];
+  const USADOS = ["GET", "HEAD", "POST"], OTROS = ["TRACE", "TRACK", "PUT", "DELETE", "PATCH", "OPTIONS", "CONNECT"];
+  const RUTAS = ["/", "/entrar", "/_next/static/chunks/a.js", "/favicon.ico", "/api/auth/sign-in/email"];
+  const PROHIBIDO = "405 Allow=GET, HEAD, POST";
+  const esperado = (host, metodo) => {
+    if (host === principal || host === alterno) {
+      if (!USADOS.includes(metodo)) return PROHIBIDO;
+      return host === principal ? "proxy" : "301";
+    }
+    return ["TRACE", "TRACK"].includes(metodo) ? "501" : "proxy";
+  };
+  const problemas = [], nombres = new Set();
   for (const [id, s] of Object.entries(JSON.parse(t).apps.http.servers)) {
     if (JSON.stringify(s.protocols) !== JSON.stringify(["h1", "h2"])) problemas.push(id + " con protocolos " + JSON.stringify(s.protocols ?? "por omisión (h1 h2 h3)"));
     for (const r of s.routes ?? []) for (const m of r.match ?? []) for (const host of m.host ?? []) {
-      const pedir = (metodo) => {
-        const encabezados = {}, x = contesta(s.routes, { host, metodo, ruta: "/entrar" }, encabezados);
-        return x === "405" && encabezados.Allow ? "405 con Allow" : x;
-      };
-      const [traza, get, post] = ["TRACE", "GET", "POST"].map(pedir);
-      if (!["405 con Allow", "501"].includes(traza)) problemas.push(host + ": a TRACE le contesta «" + traza + "»");
-      else if (!["proxy", "301"].includes(get) || !["proxy", "301"].includes(post)) problemas.push(host + ": GET «" + get + "», POST «" + post + "»");
-      else nombres.push(host);
+      let cumple = true;
+      for (const metodo of [...USADOS, ...OTROS]) for (const ruta of RUTAS) {
+        const encabezados = {}, x = contesta(s.routes, { host, metodo, ruta }, encabezados);
+        const obtenido = x === "405" ? "405 Allow=" + [].concat(encabezados.Allow ?? "(sin Allow)").join(", ") : x;
+        const debe = esperado(host, metodo);
+        if (obtenido !== debe) {
+          cumple = false;
+          problemas.push(host + ": " + metodo + " " + ruta + " contestado con «" + obtenido + "», se esperaba «" + debe + "»");
+        }
+      }
+      if (cumple) nombres.add(host);
     }
   }
-  console.log(problemas.length ? "FALLA " + problemas.join("; ") : nombres.sort().join(" "));
+  if (problemas.length) console.log("FALLA " + problemas.slice(0, 4).join("; ") + (problemas.length > 4 ? "; y " + (problemas.length - 4) + " más" : ""));
+  else console.log([...nombres].sort().join(" "));
 });'
 
 # $1: descripción; $2: carpeta de vecinos ("" = sin montar); $3: nombres esperados.
@@ -120,7 +138,7 @@ caso() {
   caddy_con "$2" adapt > "$TEMP/adaptado.json" 2>/dev/null
   nombres=$(docker run --rm -i "$NODE" node -e "$NOMBRES" < "$TEMP/adaptado.json")
   errores=$(docker run --rm -i "$NODE" node -e "$ERRORES" < "$TEMP/adaptado.json")
-  metodos=$(docker run --rm -i "$NODE" node -e "$METODOS" < "$TEMP/adaptado.json")
+  metodos=$(docker run --rm -i "$NODE" node -e "$METODOS" "$DOMINIO" "$ALTERNO" < "$TEMP/adaptado.json")
   if [ "$nombres" != "$3" ]; then
     echo "   FALLA: $1: atiende «${nombres}», se esperaba «${3}»"
     fallas=1
@@ -130,11 +148,11 @@ caso() {
   elif [ "$metodos" != "$3" ]; then
     case "$metodos" in
       FALLA*) echo "   FALLA: $1: ${metodos#FALLA }" ;;
-      *) echo "   FALLA: $1: Caddy contesta TRACE (y deja pasar GET y POST) solo en «${metodos}», se esperaba «${3}»" ;;
+      *) echo "   FALLA: $1: los métodos cumplen la invariante 40 solo en «${metodos}», se esperaba «${3}»" ;;
     esac
     fallas=1
   else
-    echo "   ok: $1 ($nombres; errores con HSTS; TRACE contestado por Caddy; sin HTTP/3)"
+    echo "   ok: $1 ($nombres; errores con HSTS; métodos según la invariante 40; sin HTTP/3)"
   fi
 }
 
