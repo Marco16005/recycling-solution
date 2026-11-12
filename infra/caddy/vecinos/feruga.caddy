@@ -6,6 +6,10 @@
 gestion.feruga.tech {
 	header -Server
 	header ?Strict-Transport-Security "max-age=31536000"
+	# TRACE y TRACK hacían fallar a feruga con 500, como a Recycling (prueba externa del 2026-11-11). Se responde 501 (no
+	# implementado) y no 405, que exigiría listar en Allow los métodos de feruga; esos los decide feruga.
+	@metodo_no_implementado method TRACE TRACK
+	respond @metodo_no_implementado 501
 	reverse_proxy feruga-proxy:80
 	# Mientras feruga no responde (502), también con HSTS y sin Server (fragmento del Caddyfile principal).
 	import errores

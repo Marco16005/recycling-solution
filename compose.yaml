@@ -13,7 +13,7 @@ services:
     # El arranque oficial corre como root: recorre y ajusta la carpeta de datos (de postgres, 0700) y baja a postgres con
     # su-exec. Ya en marcha, Postgres no tiene ninguna capacidad.
     cap_add: [CHOWN, DAC_READ_SEARCH, FOWNER, SETUID, SETGID]
-    # Postgres oficial con zlib 1.4 (infra/db/Dockerfile, plan de seguridad del 2026-11-07).
+    # Postgres oficial con zlib, libxslt y krb5-libs corregidos (infra/db/Dockerfile, plan de seguridad).
     build: { context: ./infra/db }
     image: rs-postgres:17.11
     environment:
@@ -68,7 +68,7 @@ services:
     <<: *endurecido
     # Corre como root y escribe en ./respaldos, que en el servidor es de otro usuario.
     cap_add: [DAC_OVERRIDE]
-    # Postgres oficial con zlib 1.4 (infra/db/Dockerfile, plan de seguridad del 2026-11-07).
+    # Postgres oficial con zlib, libxslt y krb5-libs corregidos (infra/db/Dockerfile, plan de seguridad).
     build: { context: ./infra/db }
     image: rs-postgres:17.11
     profiles: ["respaldo"]

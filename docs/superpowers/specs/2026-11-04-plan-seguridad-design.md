@@ -124,10 +124,86 @@ Aceptado, con motivo:
 
 Para el dueño, fuera del repositorio:
 
-- **Registro CAA en el DNS:** testssl lo marca como bajo. Limita qué autoridades pueden emitir certificados del dominio; ver `docs/pendientes.md`.
+- **Registro CAA en el DNS:** testssl lo marca como bajo. Limita qué autoridades pueden emitir certificados del dominio. Ya está puesto (prueba del 2026-11-11).
 - **SSH, opcional:** todavía permite `hmac-sha1` y `umac-64`, como OpenSSH por omisión. Se pueden quitar en `sshd_config` (`MACs`).
 
 Reportes en `reportes-seguridad/*-vps/` (no se versionan).
+
+### Resultados del 2026-11-11 (con contenedores sin privilegios y feruga publicado)
+
+El dueño la pidió por escrito: «hagamos las pruebas externas… todo lo que nos falte». Se corrió con las mismas condiciones que la del 2026-11-07: desde la computadora de desarrollo, con imágenes fijas por digest, a baja velocidad y solo contra la IP del VPS. Además de repetir esa prueba, cubre:
+
+- `gestion.feruga.tech`;
+- los 65 535 puertos TCP, UDP y HTTP/3;
+- los métodos HTTP y las rutas de Better Auth;
+- archivos expuestos y el límite de entrada desde fuera;
+- el DNS y el HTTP Observatory de Mozilla.
+
+| Prueba | Resultado |
+|---|---|
+| nmap `-sT -sV`, los 65 535 puertos TCP, 50 paquetes/s | Ningún puerto abierto fuera de 22, 80 y 443. Durante los cortes de red de la computadora de desarrollo, Docker dio rechazos falsos (`conn-refused`), incluso en el 443. Se repitió con reintentos sobre una muestra (3000, 3001, 5432, 6379, 8080, 8443, 27017 y otros) y desde fuera de Docker: 22, 80 y 443 abiertos, los demás filtrados, como el 2026-11-07 |
+| nmap UDP, 20 puertos principales | Ninguno responde, ni a las sondas de DNS, NTP o SNMP |
+| QUIC (HTTP/3), con aioquic 1.2.0 | Sin respuesta en UDP 443, aunque Caddy anunciaba `Alt-Svc: h3` |
+| nmap `ssh-auth-methods` y `ssh2-enum-algos` | Solo `publickey`. Sigue ofreciendo `hmac-sha1` y `umac-64` (opcional, ver arriba) |
+| testssl.sh 3.2, `feruga.tech` | **A+ (96)**, sin avisos: BREACH ya sale «not vulnerable» y el CAA está puesto |
+| testssl.sh 3.2, `gestion.feruga.tech` | Mismo TLS que `feruga.tech`. BREACH: feruga comprime sus páginas. La primera corrida dio B porque se cortó la conexión a la mitad; repetida, sí ofrece cifrados con *forward secrecy* |
+| ZAP baseline, `feruga.tech`, 2 minutos | 0 fallas y 0 avisos en 28 URL |
+| ZAP baseline, `gestion.feruga.tech` | 3 avisos, todos de feruga: `style-src 'unsafe-inline'`, sin `Permissions-Policy` y sin `Cross-Origin-Resource-Policy` |
+| Mozilla HTTP Observatory | `feruga.tech`, B+ (80): solo le resta `script-src 'unsafe-inline'`, aceptado en §5. `gestion.feruga.tech`, A+ (105) |
+| Pruebas HTTP a mano | Ver detalle abajo. `TRACE` respondía 500 |
+| DNS | CAA puesto, y `gestion` lo hereda. Sin SPF ni DMARC, y el MX apunta al propio servidor, que no recibe correo (el puerto 25 está cerrado) |
+
+**Pruebas HTTP a mano:**
+
+- No se ve ningún archivo interno: `.env`, `.git`, `package.json`, Dockerfile, mapas de código ni respaldos.
+- De Better Auth solo responden las tres rutas permitidas; las demás, incluidas las variantes con mayúsculas, dan 404.
+- Una petición desde un origen ajeno recibe 403 y ningún encabezado CORS.
+- Las páginas y los CSV protegidos no se abren sin sesión.
+- Un `Host` ajeno no llega a la aplicación, y un `X-Forwarded-Host` falso no cambia las redirecciones.
+- Un `X-Forwarded-For` falso no salta el límite de entrada: 429 al sexto intento.
+
+Atendido:
+
+- **HTTP/3 anunciado sin poder usarse.** Caddy queda solo con HTTP/1.1 y HTTP/2 (`servers { protocols h1 h2 }`). Usar HTTP/3 exigiría publicar 443/udp y abrirlo en el firewall; el piloto no lo necesita.
+- **`TRACE`.** Next falla antes de `src/proxy.ts` (`'TRACE' HTTP method is unsupported`): responde 500 y deja un error en el log por cada petición. Ahora:
+  - a Recycling, Caddy solo le deja pasar GET, HEAD y POST, los métodos que usa; a lo demás responde 405, con `Allow`. El nombre alterno (`www`) solo redirige esos tres métodos, porque Caddy ejecuta `redir` antes que `respond`; los demás reciben el mismo 405;
+  - a feruga le contesta `TRACE` y `TRACK` con 501 (no implementado). Un 405 exigiría listar en `Allow` los métodos de feruga, y esos los decide feruga.
+- **Pruebas:**
+  - `probar-caddy.sh` simula el orden de las rutas de Caddy con diez métodos (GET, HEAD, POST, TRACE, TRACK, PUT, DELETE, PATCH, OPTIONS y CONNECT) en cinco rutas, y exige en cada nombre la respuesta y su destino exactos:
+    - en el principal, GET, HEAD y POST van a `web:3000`, y los demás reciben 405 con `Allow: GET, HEAD, POST`;
+    - en el alterno, esos tres métodos reciben 301 a `https://` del principal con la misma ruta, y los demás el mismo 405;
+    - en `gestion.feruga.tech`, `TRACE` y `TRACK` reciben 501 y lo demás va a `feruga-proxy:80`.
+
+    También exige que ningún servidor anuncie HTTP/3;
+  - `probar-produccion.sh`, en marcha y con un nombre alterno:
+    - en el principal, HEAD y POST llegan a la aplicación, y `TRACE` y `PUT` reciben 405 con HSTS, sin `Server` y con `Allow`;
+    - en el alterno, GET recibe 301 a `https://localhost/entrar` y `TRACE`, el mismo 405;
+    - ninguna respuesta trae `Alt-Svc`.
+- **Revisión de Codex del 9ce0b5e** (no aprobado):
+  - el alterno respondía 301 a `TRACE`, y la primera versión de `probar-caddy.sh` daba un falso verde, porque solo buscaba que existiera un 405 en la configuración;
+  - feruga y los ejemplos del modo B respondían 405 sin `Allow`, que el RFC 9110 exige;
+  - quitar el MX no basta (abajo).
+
+  Corregido, con controles negativos: el Caddyfile de 9ce0b5e, el de `main` y un 405 sin `Allow` en feruga hacen fallar `probar-caddy.sh`.
+- **Revisiones de Codex del 9d0e296 y del f726bbe** (no aprobados): la prueba estática solo simulaba `TRACE` en `/entrar`, aceptaba 405 o 501 en cualquier nombre y cualquier destino de proxy o redirección; y la imagen propia de Postgres debía retirarse solo cuando la oficial trajera las tres correcciones, no solo zlib. Corregido; controles negativos que hacen fallar `probar-caddy.sh`:
+  - feruga con 405 (con o sin `Allow`) en vez de 501, o sin cortar `TRACK`;
+  - `Allow` con otro valor;
+  - Recycling que solo corta `TRACE` y `TRACK`;
+  - el alterno redirigiendo a otro dominio;
+  - el principal o feruga con otro destino.
+
+Para el dueño, fuera del repositorio:
+
+- **Correo del dominio.** Si `feruga.tech` no manda ni recibe correo:
+  - un TXT `v=spf1 -all` en `feruga.tech`;
+  - un TXT `v=DMARC1; p=reject` en `_dmarc.feruga.tech`;
+  - cambiar el MX por un MX nulo: prioridad `0` y destino `.` (RFC 7505). Sin MX, los remitentes intentarían entregar en la IP del dominio.
+
+  Sin esos registros, cualquiera puede mandar correos que parezcan de `@feruga.tech`. Si el dominio sí usa correo, los registros los da el proveedor.
+- **Feruga, en su repositorio:** `Permissions-Policy`, `Cross-Origin-Resource-Policy` y BREACH (no comprimir páginas con datos de la sesión).
+- **DNSSEC, opcional:** no está activo y Hostinger lo ofrece.
+
+Reportes en `reportes-seguridad/20261111-235437-vps-3/`.
 
 ## 8. SonarQube y Burp Suite
 
@@ -178,8 +254,10 @@ Las encontró `scripts/seguridad.sh` en el servidor, ya desplegado. Se corrigen 
 | Postgres | zlib 1.3.2 (CVE-2026-4738) | Crítica | Imagen propia mínima `rs-postgres:17.11` (`infra/db/Dockerfile`): la oficial más zlib 1.4-r0. La usan `db` y `respaldo`, porque `pg_dump -Fc` comprime con zlib |
 | Postgres | `moby/sys/user` | Media | No hace fallar el escaneo; llega con la siguiente imagen oficial |
 | Aplicación (2026-11-09) | `zlib1g` 1.3.1-1+b1 de Debian (CVE-2026-76844 y CVE-2026-85091, altas; CVE-2026-27171, media) | Alta | `apt-get install --only-upgrade zlib1g=…+deb13u1` (versión fija) en la etapa `runner`; se quita cuando la imagen de Node la traiga |
+| Postgres (2026-11-12) | `libxslt` 1.1.43-r3 (CVE-2026-125350, en la lista KEV: se explota activamente; CVE-2026-87636 y CVE-2026-9947) | Alta | `libxslt=1.1.43-r4` (versión fija) en `infra/db/Dockerfile` |
+| Postgres (2026-11-12) | `krb5-libs` 1.22.2-r1 (nueve altas, entre ellas CVE-2026-112314 y CVE-2026-40355, y doce más) | Alta | `krb5-libs=1.22.3-r0` (versión fija) en `infra/db/Dockerfile` |
 
-No se registró como excepción en `grype.yaml`, porque esa configuración aplica a las cuatro imágenes y ocultaría el mismo CVE en las demás. `seguridad.sh` construye Caddy y Postgres con `--pull`, para escanear sobre la imagen base vigente. Cuando la imagen oficial de Postgres traiga zlib 1.4, se vuelve a usar directo y se borra `infra/db/Dockerfile`.
+No se registró como excepción en `grype.yaml`, porque esa configuración aplica a las cuatro imágenes y ocultaría el mismo CVE en las demás. `seguridad.sh` construye Caddy y Postgres con `--pull`, para escanear sobre la imagen base vigente. Cuando la imagen oficial de Postgres traiga zlib 1.4-r0, libxslt 1.1.43-r4 y krb5-libs 1.22.3-r0 (o versiones posteriores), se vuelve a usar directo y se borra `infra/db/Dockerfile`; con solo una de ellas, volverían las demás vulnerabilidades (revisión de Codex del 9d0e296).
 
 Dos ajustes del escaneo:
 

@@ -5,6 +5,12 @@
 	# Caddy corre sin privilegios (infra/caddy/Dockerfile): no intenta instalar su autoridad local en el sistema del
 	# contenedor, que no le sirve a ningún teléfono. Con DOMINIO público el certificado es de Let's Encrypt.
 	skip_install_trust
+	# Solo HTTP/1.1 y HTTP/2 (prueba externa del 2026-11-11). compose.prod.yaml publica el 443 solo por TCP, así que el
+	# HTTP/3 que Caddy anunciaba (Alt-Svc: h3, que viaja por UDP) no llegaba: los navegadores lo intentaban y volvían a
+	# HTTP/2. Para usarlo habría que publicar también 443/udp y abrirlo en el firewall del servidor.
+	servers {
+		protocols h1 h2
+	}
 }
 
 # Errores que genera el propio Caddy (por ejemplo, 502 si el destino no responde): ahí no se aplican los «header» del
@@ -32,8 +38,18 @@
 	# HSTS también en lo que no pasa por src/proxy.ts (archivos de /_next/static y favicon.ico), sin pisar el de la
 	# aplicación («?»: solo si la respuesta no lo trae). ZAP contra el VPS lo marcó el 2026-11-07.
 	header ?Strict-Transport-Security "max-age=31536000"
-	@alterno not host {$DOMINIO}
+	# Solo GET, HEAD y POST, los métodos que usa la aplicación (prueba externa del 2026-11-11). Con TRACE, Next fallaba
+	# antes de llegar a src/proxy.ts («'TRACE' HTTP method is unsupported»): un 500 y un error en el log por petición.
+	# Caddy ejecuta «redir» antes que «respond», así que el nombre alterno solo redirige esos tres métodos; los demás
+	# reciben el mismo 405 que el principal (revisión de Codex).
+	@alterno {
+		not host {$DOMINIO}
+		method GET HEAD POST
+	}
 	redir @alterno https://{$DOMINIO}{uri} permanent
+	@metodo_no_permitido not method GET HEAD POST
+	header @metodo_no_permitido Allow "GET, HEAD, POST"
+	respond @metodo_no_permitido 405
 	reverse_proxy web:3000
 	import errores
 }

@@ -3,7 +3,9 @@
 # - el Caddyfile es válido sin la carpeta de vecinos, con la carpeta vacía y con la del repositorio, y solo en el último
 #   caso atiende gestion.feruga.tech;
 # - sin compose.feruga.yaml, proxy no está en feruga-entrada ni monta los vecinos; con él, sí, y la red es externa;
-# - los errores de cada sitio llevan HSTS y quitan Server, y cada servicio corre sin privilegios (2026-11-10).
+# - los errores de cada sitio llevan HSTS y quitan Server, y cada servicio corre sin privilegios (2026-11-10);
+# - cada nombre contesta cada método como dice la invariante 40 de la guía de auditoría (405 con Allow, 301 o 501 en
+#   Caddy, antes que la aplicación), y ningún servidor anuncia HTTP/3 (prueba externa del 2026-11-11).
 # Usa la imagen oficial de Caddy de la misma versión que la base de infra/caddy/Dockerfile: el binario propio solo
 # cambia versiones de dependencias, no cómo se lee el Caddyfile.
 set -eu
@@ -56,6 +58,81 @@ ERRORES='let t = ""; process.stdin.on("data", (d) => (t += d)).on("end", () => {
   console.log([...nombres].sort().join(" "));
 });'
 
+# Invariante 40 (prueba externa del 2026-11-11): simula el orden de las rutas de Caddy con cada método y varias rutas, en
+# cada nombre, y exige exactamente:
+# - DOMINIO: GET, HEAD y POST a la aplicación (web:3000); cualquier otro método, 405 con «Allow: GET, HEAD, POST»;
+# - DOMINIO_ALTERNO: GET, HEAD y POST, 301 a https://DOMINIO con la misma ruta; los demás, el mismo 405 (redir va
+#   antes que respond);
+# - vecinos: TRACE y TRACK, 501; lo demás pasa a su proxy (gestion.feruga.tech, feruga-proxy:80), que decide sus métodos.
+#   Un vecino nuevo hace fallar la prueba hasta que se agregue aquí con su destino.
+# También falla si algún servidor no va solo con HTTP/1.1 y HTTP/2 (el 443 se publica solo por TCP). Revisar solo que
+# «existiera» un 405 dio un falso verde (revisión de Codex). Recibe DOMINIO y DOMINIO_ALTERNO; imprime los nombres que
+# cumplen, o «FALLA …» con el detalle.
+METODOS='let t = ""; process.stdin.on("data", (d) => (t += d)).on("end", () => {
+  const [principal, alterno] = process.argv.slice(1);
+  const coincide = (conjunto, p) => Object.entries(conjunto).every(([tipo, valor]) => {
+    if (tipo === "host") return valor.includes(p.host);
+    if (tipo === "method") return valor.includes(p.metodo);
+    if (tipo === "path") return valor.some((x) => (x.endsWith("*") ? p.ruta.startsWith(x.slice(0, -1)) : x === p.ruta));
+    if (tipo === "not") return !valor.some((c) => coincide(c, p));
+    throw new Error("la prueba no sabe simular el matcher de Caddy «" + tipo + "»");
+  });
+  // Quién contesta, en el orden de Caddy, con su destino: «405», «301 <Location>», «proxy <destino>» o «vacía». Los
+  // «headers» no contestan, pero se anotan sus encabezados (Allow).
+  const contesta = (rutas, p, encabezados) => {
+    const grupos = new Set();
+    for (const r of rutas ?? []) {
+      if (r.group && grupos.has(r.group)) continue;
+      if (r.match && !r.match.some((c) => coincide(c, p))) continue;
+      if (r.group) grupos.add(r.group);
+      for (const h of r.handle ?? []) {
+        if (h.handler === "headers") Object.assign(encabezados, h.response?.set ?? {});
+        else if (h.handler === "static_response") {
+          const destino = h.headers?.Location;
+          return String(h.status_code ?? 200) + (destino ? " " + [].concat(destino).join(", ") : "");
+        }
+        else if (h.handler === "reverse_proxy") return "proxy " + (h.upstreams ?? []).map((u) => u.dial).join(", ");
+        else if (h.handler === "subroute") {
+          const x = contesta(h.routes, p, encabezados);
+          if (x) return x;
+        }
+      }
+      if (r.terminal) return "vacía";
+    }
+    return null;
+  };
+  const USADOS = ["GET", "HEAD", "POST"], OTROS = ["TRACE", "TRACK", "PUT", "DELETE", "PATCH", "OPTIONS", "CONNECT"];
+  const RUTAS = ["/", "/entrar", "/_next/static/chunks/a.js", "/favicon.ico", "/api/auth/sign-in/email"];
+  const PROHIBIDO = "405 Allow=GET, HEAD, POST", VECINOS = { "gestion.feruga.tech": "feruga-proxy:80" };
+  const esperado = (host, metodo) => {
+    if (host === principal || host === alterno) {
+      if (!USADOS.includes(metodo)) return PROHIBIDO;
+      return host === principal ? "proxy web:3000" : "301 https://" + principal + "{http.request.uri}";
+    }
+    if (["TRACE", "TRACK"].includes(metodo)) return "501";
+    return "proxy " + (VECINOS[host] ?? "(vecino sin destino en esta prueba)");
+  };
+  const problemas = [], nombres = new Set();
+  for (const [id, s] of Object.entries(JSON.parse(t).apps.http.servers)) {
+    if (JSON.stringify(s.protocols) !== JSON.stringify(["h1", "h2"])) problemas.push(id + " con protocolos " + JSON.stringify(s.protocols ?? "por omisión (h1 h2 h3)"));
+    for (const r of s.routes ?? []) for (const m of r.match ?? []) for (const host of m.host ?? []) {
+      let cumple = true;
+      for (const metodo of [...USADOS, ...OTROS]) for (const ruta of RUTAS) {
+        const encabezados = {}, x = contesta(s.routes, { host, metodo, ruta }, encabezados);
+        const obtenido = x === "405" ? "405 Allow=" + [].concat(encabezados.Allow ?? "(sin Allow)").join(", ") : x;
+        const debe = esperado(host, metodo);
+        if (obtenido !== debe) {
+          cumple = false;
+          problemas.push(host + ": " + metodo + " " + ruta + " contestado con «" + obtenido + "», se esperaba «" + debe + "»");
+        }
+      }
+      if (cumple) nombres.add(host);
+    }
+  }
+  if (problemas.length) console.log("FALLA " + problemas.slice(0, 4).join("; ") + (problemas.length > 4 ? "; y " + (problemas.length - 4) + " más" : ""));
+  else console.log([...nombres].sort().join(" "));
+});'
+
 # $1: descripción; $2: carpeta de vecinos ("" = sin montar); $3: nombres esperados.
 caso() {
   if ! caddy_con "$2" validate > "$TEMP/validar.log" 2>&1; then
@@ -67,14 +144,21 @@ caso() {
   caddy_con "$2" adapt > "$TEMP/adaptado.json" 2>/dev/null
   nombres=$(docker run --rm -i "$NODE" node -e "$NOMBRES" < "$TEMP/adaptado.json")
   errores=$(docker run --rm -i "$NODE" node -e "$ERRORES" < "$TEMP/adaptado.json")
+  metodos=$(docker run --rm -i "$NODE" node -e "$METODOS" "$DOMINIO" "$ALTERNO" < "$TEMP/adaptado.json")
   if [ "$nombres" != "$3" ]; then
     echo "   FALLA: $1: atiende «${nombres}», se esperaba «${3}»"
     fallas=1
   elif [ "$errores" != "$3" ]; then
     echo "   FALLA: $1: sus errores llevan HSTS y quitan Server solo en «${errores}», se esperaba «${3}»"
     fallas=1
+  elif [ "$metodos" != "$3" ]; then
+    case "$metodos" in
+      FALLA*) echo "   FALLA: $1: ${metodos#FALLA }" ;;
+      *) echo "   FALLA: $1: los métodos cumplen la invariante 40 solo en «${metodos}», se esperaba «${3}»" ;;
+    esac
+    fallas=1
   else
-    echo "   ok: $1 ($nombres; errores con HSTS)"
+    echo "   ok: $1 ($nombres; errores con HSTS; métodos según la invariante 40; sin HTTP/3)"
   fi
 }
 
