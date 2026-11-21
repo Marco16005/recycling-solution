@@ -13,7 +13,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 PROYECTO="rs-prod-local-$(date +%s)"
-NODE=node:24.22.2-trixie-slim
+NODE=node:24.22.3-trixie-slim
 TEMP=$(mktemp -d)
 fallas=0
 

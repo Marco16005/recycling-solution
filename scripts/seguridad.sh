@@ -23,7 +23,7 @@ CHECKOV=bridgecrew/checkov:3.4.3@sha256:bfe9d70bb7f044aba49bd99675813445f106dee6
 HADOLINT=hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d
 ZAP=zaproxy/zap-stable:2.17.0@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
 # La misma imagen de Node que el Dockerfile.
-NODE=node:24.22.2-trixie-slim
+NODE=node:24.22.3-trixie-slim
 # Los mismos nombres que compose.yaml y compose.prod.yaml.
 IMAGEN_DB=rs-postgres:17.11
 IMAGEN_PROXY=rs-caddy:2.11.9

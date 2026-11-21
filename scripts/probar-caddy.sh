@@ -12,7 +12,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 CADDY=$(sed -n 's/^FROM \(caddy:[0-9.]*-alpine\)$/\1/p' infra/caddy/Dockerfile)
-NODE=node:24.22.2-trixie-slim
+NODE=node:24.22.3-trixie-slim
 if [ -z "$CADDY" ]; then
   echo "   FALLA: no se encontró la imagen base de Caddy en infra/caddy/Dockerfile"
   exit 1

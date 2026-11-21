@@ -9,6 +9,8 @@ test("despachador genera, ajusta y valida el plan; gerencia lo consulta en solo 
   await entrarComo(page, "despachador");
   await page.goto(ruta);
   const plan = page.getByRole("region", { name: "Plan del día", exact: true });
+  // Lista "Antes de generar" (2026-11-21): solo sin plan o con una propuesta sin rutas; con el plan validado, no.
+  const antes = plan.getByRole("region", { name: "Antes de generar", exact: true });
   // Una propuesta previa de otra prueba también debe incorporar estas solicitudes nuevas.
   await plan.getByRole("button", { name: /^(Generar plan|Regenerar)$/ }).click();
   const unidad = plan.getByRole("region", { name: `Unidad ${placa}`, exact: true });
@@ -57,9 +59,21 @@ test("despachador genera, ajusta y valida el plan; gerencia lo consulta en solo 
   }
   await validar.click();
   await expect(plan.getByText("Validado", { exact: true })).toBeVisible();
+  await expect(antes).toHaveCount(0);
   for (const folio of folios) {
     expect(await estadoDeSolicitud(folio)).toMatchObject({ estado: "programada" });
   }
+
+  // Una fecha lejana sin jornadas ni solicitudes: la lista dice qué falta y a dónde ir, y el patio está bien.
+  const lejana = new Date(`${fecha}T12:00:00Z`);
+  lejana.setUTCDate(lejana.getUTCDate() + 400);
+  await page.goto(`/despacho/plan?fecha=${lejana.toISOString().slice(0, 10)}`);
+  const vacia = page.getByRole("region", { name: "Antes de generar", exact: true });
+  await expect(vacia.getByRole("status")).toHaveText(/^Antes de generar, resuelve/);
+  await expect(vacia.locator('li[data-estado="falta"]').filter({ hasText: "No hay camiones asignados a este día." })).toBeVisible();
+  await expect(vacia.locator('li[data-estado="falta"]').filter({ hasText: "No hay solicitudes pendientes para este día." })).toBeVisible();
+  await expect(vacia.locator('li[data-estado="bien"]').filter({ hasText: "Está marcada en el mapa." })).toBeVisible();
+  await expect(vacia.getByRole("link", { name: "Ir a Jornada" })).toHaveAttribute("href", `/despacho/jornada?fecha=${lejana.toISOString().slice(0, 10)}`);
 
   await page.goto(`/despacho/solicitudes?fecha=${fecha}`);
   const cola = page.getByRole("region", { name: "Cola de solicitudes", exact: true });
