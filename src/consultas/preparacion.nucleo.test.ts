@@ -175,6 +175,17 @@ describe("lista Antes de generar: con datos guardados (2026-11-21)", () => {
     expect(valor(await obtenerPlan(ctx(despachador), FECHA_PLAN)).resumen).toMatchObject({ ruteadas: 0, bloqueadas: 1 });
   });
 
+  it("carga de 0 kg sin camión de su tipo en la flota: saldrá pospuesta, porque el motor solo bloquea si la carga supera", async () => {
+    await ponerPatio(bd);
+    const cliente = await clienteHabilitado(bd, "Cartonera Ligera", 0.01, { tiposUnidadAdmitidos: ["trailer"], cargaEstimadaKg: 0 });
+    await jornadaDisponible(bd, FECHA_PLAN, "LIG001");
+    await solicitudPendiente(bd, cliente.id, despachador.id, FECHA_PLAN);
+    const p = valor(await obtenerPreparacion(ctx(despachador), FECHA_PLAN));
+    expect(punto(p, "atencion").pendientes.map((x) => x.texto)).toEqual(["Cartonera Ligera: admite Tráiler y ese día salen Doble rodada; saldrá pospuesta"]);
+    valor(await generarPlanDelDia(ctx(despachador), FECHA_PLAN));
+    expect(valor(await obtenerPlan(ctx(despachador), FECHA_PLAN)).resumen).toMatchObject({ ruteadas: 0, pospuestas: 1, bloqueadas: 0 });
+  });
+
   it("un horario que cierra antes de que salga el camión falta, y el motor tampoco lo rutea", async () => {
     await ponerPatio(bd);
     const temprano = [0, 1, 2, 3, 4, 5, 6].map((diaSemana) => ({ diaSemana, horaInicio: "06:00", horaFin: "07:30" }));

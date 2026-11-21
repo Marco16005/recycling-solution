@@ -290,8 +290,9 @@ function puntoAtencion(
     const abierta = ventanasDelDia(cliente, d.fecha).some((v) => v.finMin >= primeraSalida && v.inicioMin < finTurno);
     const admitidos = cliente.tiposUnidadAdmitidos.map((t) => ETIQUETA_UNIDAD[t]).join(", ") || "ningún tipo";
     let motivo: string | null = null;
-    // Primero la flota completa: el motor bloquea por capacidad antes de buscar camión en el día (revisión de Codex).
-    if (maximoFlota === 0) {
+    // Primero la flota completa: el motor bloquea si la carga supera la capacidad máxima de sus tipos (carga > máximo, así
+    // que una carga de 0 kg nunca se bloquea), antes de buscar camión en el día (revisiones de Codex).
+    if (maximoFlota === 0 && carga > 0) {
       motivo = `no hay ningún camión activo de los tipos que admite (${admitidos}); quedará bloqueada`;
     } else if (carga > maximoFlota) {
       motivo = `su carga (${kg(carga)}) supera la capacidad de todos los camiones de su tipo (hasta ${kg(maximoFlota)}); quedará bloqueada`;
