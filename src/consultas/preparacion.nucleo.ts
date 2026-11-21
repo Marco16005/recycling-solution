@@ -1,4 +1,5 @@
 import { permitir } from "@/acciones/autorizacion";
+import { MAXIMO_SOLICITUDES_MOTOR, MAXIMO_UNIDADES_MOTOR } from "@/acciones/plan-comun";
 import type { Contexto, Resultado } from "@/acciones/tipos";
 import { fechaSchema } from "@/acciones/validacion";
 import { leerCartera } from "@/datos/clientes";
@@ -11,20 +12,25 @@ import { ETIQUETA_BLOQUEO, ETIQUETA_NO_DISPONIBLE, ETIQUETA_UNIDAD } from "@/dom
 import type { ClienteGuardado } from "@/dominio/clientes/tipos";
 import { motivosNoDisponibleOperador, motivosNoDisponibleUnidad } from "@/dominio/flota/disponibilidad";
 import type { MotivoNoDisponible, OperadorGuardado, TipoDocumento, UnidadGuardada } from "@/dominio/flota/tipos";
-import { MARGEN_REVISION_MIN, minutoEnMexico, minutosDeHora } from "@/dominio/plan/entrada";
-import { colaDelDia, siguienteDiaOperacion } from "@/dominio/solicitudes/cola";
+import { MARGEN_REVISION_MIN, minutoEnMexico, minutosDeHora, ventanasDelDia } from "@/dominio/plan/entrada";
+import { cargaEfectivaKg, colaDelDia, siguienteDiaOperacion } from "@/dominio/solicitudes/cola";
 import type { SolicitudGuardada } from "@/dominio/solicitudes/tipos";
 import { fechaEnMexico } from "@/dominio/tiempo";
+import { puede } from "@/seguridad/permisos";
 import { leerInstantanea } from "./instantanea";
 
 /**
  * Lista "Antes de generar" del plan del día (diseño del 2026-11-21). Revisa la fecha con las mismas funciones que usa el
  * motor al generar (colaDelDia, disponibilidad de unidades y operadores, patio, días de operación y turno) y dice en
  * lenguaje simple qué falta y dónde se corrige. Solo lectura; orienta, no bloquea: el motor y la validación deciden.
+ *
+ * "falta": sin resolverlo, el plan no se puede generar o saldría sin rutas. "aviso": se puede generar, pero algo
+ * quedará fuera. Revisión de Codex del c0a26f9: además de patio, día, turno y jornadas, revisa por solicitud el tipo de
+ * camión, la capacidad y el horario del cliente contra los camiones del día, y el tope de entrada del motor.
  */
 
 export type EstadoPunto = "bien" | "aviso" | "falta";
-export type ClavePunto = "patio" | "dia" | "turno" | "camiones" | "solicitudes" | "tipos";
+export type ClavePunto = "patio" | "dia" | "turno" | "camiones" | "solicitudes" | "atencion";
 
 export interface Enlace { href: string; texto: string }
 export interface Pendiente { texto: string; enlace: Enlace | null }
@@ -40,7 +46,7 @@ export interface PuntoPreparacion {
 
 export interface Preparacion {
   fecha: string;
-  /** Sin puntos en "falta": se puede generar (el motor aún puede posponer solicitudes). */
+  /** Sin puntos en "falta": se puede generar y al menos una solicitud tiene con qué atenderse (el motor aún decide). */
   listo: boolean;
   faltan: number;
   avisos: number;
@@ -52,7 +58,10 @@ export interface DatosPreparacion {
   hoy: string;
   /** Minuto del día en Ciudad de México. */
   minutoActual: number;
-  config: Pick<ConfiguracionCompleta, "patioLat" | "patioLng" | "diasOperacion" | "turnoFin" | "versionAvisoPrivacidad" | "diasParaAtrasada">;
+  config: Pick<ConfiguracionCompleta,
+    "patioLat" | "patioLng" | "diasOperacion" | "turnoInicio" | "turnoFin" | "versionAvisoPrivacidad" | "diasParaAtrasada" | "cargaPorOmisionKg">;
+  /** Solo el administrador puede abrir Configuración (configuracion.editar). */
+  puedeConfigurar: boolean;
   solicitudes: SolicitudGuardada[];
   clientes: ClienteGuardado[];
   jornadas: JornadaGuardada[];
@@ -80,6 +89,8 @@ const duracion = (min: number) => {
   return h === 0 ? `${m} min` : m === 0 ? `${h} h` : `${h} h ${m} min`;
 };
 const textoBloqueo = (m: MotivoBloqueo) => ETIQUETA_BLOQUEO[m.codigo] + (m.detalle ? ` (${m.detalle})` : "");
+const hora = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+const kg = (n: number) => `${n.toLocaleString("es-MX")} kg`;
 const textoNoDisponible = (m: MotivoNoDisponible) => ETIQUETA_NO_DISPONIBLE[m.codigo] + (m.detalle ? ` (${m.detalle})` : "");
 const planDe = (fecha: string): Enlace => ({ href: `/despacho/plan?fecha=${fecha}`, texto: `Planear el ${fechaLegible(fecha)}` });
 
@@ -88,11 +99,10 @@ function puntoPatio(d: DatosPreparacion): PuntoPreparacion {
   if (d.config.patioLat !== null && d.config.patioLng !== null) {
     return { ...base, estado: "bien", detalle: "Está marcada en el mapa.", enlace: null };
   }
-  return {
-    ...base, estado: "falta",
-    detalle: "Falta marcar el patio en el mapa. Sin él no se puede generar el plan, porque las rutas salen y regresan ahí. Lo marca el administrador.",
-    enlace: { href: "/admin/configuracion", texto: "Ir a Configuración" },
-  };
+  const detalle = "Falta marcar el patio en el mapa. Sin él no se puede generar el plan, porque las rutas salen y regresan ahí.";
+  return d.puedeConfigurar
+    ? { ...base, estado: "falta", detalle, enlace: { href: "/admin/configuracion", texto: "Ir a Configuración" } }
+    : { ...base, estado: "falta", detalle: `${detalle} Pídele al administrador que lo marque en Configuración.`, enlace: null };
 }
 
 function puntoDia(d: DatosPreparacion): PuntoPreparacion {
@@ -111,11 +121,17 @@ function puntoDia(d: DatosPreparacion): PuntoPreparacion {
   return { ...base, estado: "bien", detalle: `El ${fechaLegible(d.fecha)} es día de operación.`, enlace: null };
 }
 
-/** Solo hoy: el motor empieza a contar desde ahora más el margen de revisión hasta el fin del turno. */
+/** Primer minuto que el motor usa ese día: hoy, ahora más el margen de revisión, nunca antes del turno (construirEntrada). */
+function inicioDelPlan(d: DatosPreparacion): number {
+  const inicio = minutosDeHora(d.config.turnoInicio);
+  return d.fecha === d.hoy ? Math.max(inicio, d.minutoActual + MARGEN_REVISION_MIN) : inicio;
+}
+
+/** Solo hoy: tiempo desde el inicio del plan hasta el fin del turno. */
 function puntoTurno(d: DatosPreparacion): PuntoPreparacion | null {
   if (d.fecha !== d.hoy || !d.config.diasOperacion.includes(diaSemanaDeFecha(d.fecha))) return null;
   const fin = d.config.turnoFin.slice(0, 5);
-  const restante = minutosDeHora(d.config.turnoFin) - (d.minutoActual + MARGEN_REVISION_MIN);
+  const restante = minutosDeHora(d.config.turnoFin) - inicioDelPlan(d);
   const siguiente = siguienteDiaOperacion(d.fecha, d.config.diasOperacion);
   const base = { clave: "turno" as const, titulo: "Tiempo de turno que queda hoy", pendientes: [] };
   if (restante <= 0) {
@@ -134,7 +150,7 @@ function puntoTurno(d: DatosPreparacion): PuntoPreparacion | null {
 function evaluarJornadas(d: DatosPreparacion) {
   const unidades = new Map(d.unidades.map((u) => [u.id, u]));
   const operadores = new Map(d.operadores.map((o) => [o.id, o]));
-  const disponibles: UnidadGuardada[] = [];
+  const disponibles: { unidad: UnidadGuardada; desdeMin: number }[] = [];
   const pendientes: Pendiente[] = [];
   for (const j of d.jornadas) {
     const unidad = unidades.get(j.unidadId);
@@ -142,7 +158,7 @@ function evaluarJornadas(d: DatosPreparacion) {
     const motivosUnidad = unidad ? motivosNoDisponibleUnidad(unidad, d.catalogoUnidad, d.fecha) : [];
     const motivosOperador = operador ? motivosNoDisponibleOperador(operador, d.catalogoOperador, d.fecha) : [];
     if (unidad && operador && motivosUnidad.length === 0 && motivosOperador.length === 0) {
-      disponibles.push(unidad);
+      disponibles.push({ unidad, desdeMin: minutosDeHora(j.disponibleDesde) });
       continue;
     }
     if (unidad && motivosUnidad.length > 0) {
@@ -161,7 +177,7 @@ function evaluarJornadas(d: DatosPreparacion) {
   return { disponibles, pendientes };
 }
 
-function puntoCamiones(d: DatosPreparacion, disponibles: UnidadGuardada[], pendientes: Pendiente[]): PuntoPreparacion {
+function puntoCamiones(d: DatosPreparacion, disponibles: unknown[], pendientes: Pendiente[]): PuntoPreparacion {
   const base = { clave: "camiones" as const, titulo: "Camiones del día", pendientes };
   const enJornada = { href: `/despacho/jornada?fecha=${d.fecha}`, texto: "Ir a Jornada" };
   const total = d.jornadas.length;
@@ -172,6 +188,13 @@ function puntoCamiones(d: DatosPreparacion, disponibles: UnidadGuardada[], pendi
     return {
       ...base, estado: "falta",
       detalle: `Hay ${plural(total, "jornada", "jornadas")}, pero ninguna se puede usar. Corrige lo que falta en la ficha de cada uno:`,
+      enlace: enJornada,
+    };
+  }
+  if (disponibles.length > MAXIMO_UNIDADES_MOTOR) {
+    return {
+      ...base, estado: "falta",
+      detalle: `Hay ${disponibles.length} camiones disponibles y el plan acepta hasta ${MAXIMO_UNIDADES_MOTOR}. Quita jornadas antes de generar.`,
       enlace: enJornada,
     };
   }
@@ -222,6 +245,12 @@ function puntoSolicitudes(d: DatosPreparacion, clientes: Map<string, ClienteGuar
         : "Ninguna solicitud está lista para planear este día:",
       enlace: enSolicitudes,
     };
+  } else if (listas.length > MAXIMO_SOLICITUDES_MOTOR) {
+    punto = {
+      ...base, estado: "falta",
+      detalle: `Hay ${listas.length} solicitudes listas y el plan acepta hasta ${MAXIMO_SOLICITUDES_MOTOR}. Reprograma o cancela solicitudes antes de generar.`,
+      enlace: enSolicitudes,
+    };
   } else if (bloqueadas.length > 0) {
     punto = {
       ...base, estado: "aviso",
@@ -234,28 +263,61 @@ function puntoSolicitudes(d: DatosPreparacion, clientes: Map<string, ClienteGuar
   return { punto, listas };
 }
 
-/** Clientes con solicitud lista que no admiten ningún tipo de los camiones que se pueden usar: el motor los pospondrá. */
-function puntoTipos(listas: { solicitud: SolicitudGuardada }[], clientes: Map<string, ClienteGuardado>, disponibles: UnidadGuardada[]): PuntoPreparacion | null {
+/**
+ * Por solicitud lista: ¿algún camión del día es de un tipo que el cliente admite, le cabe la carga y está disponible antes
+ * de que cierre su horario? Es la misma condición mínima que necesita el motor para insertarla (sin contar traslados,
+ * que solo la hacen más difícil). Si ninguna la cumple, el plan saldría sin rutas.
+ */
+function puntoAtencion(
+  d: DatosPreparacion, listas: { solicitud: SolicitudGuardada }[], clientes: Map<string, ClienteGuardado>,
+  disponibles: { unidad: UnidadGuardada; desdeMin: number }[],
+): PuntoPreparacion | null {
   if (listas.length === 0 || disponibles.length === 0) return null;
-  const tipos = new Set(disponibles.map((u) => u.tipo));
-  const nombresTipos = [...tipos].map((t) => ETIQUETA_UNIDAD[t]).join(", ");
-  const incompatibles = new Map<string, ClienteGuardado>();
+  const inicioPlan = inicioDelPlan(d);
+  const finTurno = minutosDeHora(d.config.turnoFin);
+  const tiposDelDia = [...new Set(disponibles.map((x) => ETIQUETA_UNIDAD[x.unidad.tipo]))].join(", ");
+  const problemas = new Map<string, Pendiente>();
+  let atendibles = 0;
   for (const { solicitud } of listas) {
     const cliente = clientes.get(solicitud.clienteId);
-    if (cliente && !cliente.tiposUnidadAdmitidos.some((t) => tipos.has(t))) incompatibles.set(cliente.id, cliente);
+    if (!cliente) continue;
+    const carga = cargaEfectivaKg(solicitud, cliente, d.config.cargaPorOmisionKg);
+    const compatibles = disponibles.filter((x) => cliente.tiposUnidadAdmitidos.includes(x.unidad.tipo));
+    const conCupo = compatibles.filter((x) => x.unidad.capacidadKg >= carga);
+    const primeraSalida = Math.min(...conCupo.map((x) => Math.max(inicioPlan, x.desdeMin)));
+    const abierta = ventanasDelDia(cliente, d.fecha).some((v) => v.finMin >= primeraSalida && v.inicioMin < finTurno);
+    let motivo: string | null = null;
+    if (compatibles.length === 0) {
+      motivo = `admite ${cliente.tiposUnidadAdmitidos.map((t) => ETIQUETA_UNIDAD[t]).join(", ") || "ningún tipo"} y ese día salen ${tiposDelDia}`;
+    } else if (conCupo.length === 0) {
+      motivo = `su carga (${kg(carga)}) no cabe en los camiones de su tipo de ese día (hasta ${kg(Math.max(...compatibles.map((x) => x.unidad.capacidadKg)))})`;
+    } else if (!abierta) {
+      const cierre = Math.max(...ventanasDelDia(cliente, d.fecha).map((v) => v.finMin));
+      motivo = primeraSalida >= finTurno
+        ? "no queda turno para atenderlo"
+        : `su horario cierra a las ${hora(cierre)} y el primer camión que le sirve está disponible a las ${hora(primeraSalida)}`;
+    }
+    if (motivo === null) {
+      atendibles++;
+    } else if (!problemas.has(cliente.id)) {
+      problemas.set(cliente.id, { texto: `${cliente.nombre}: ${motivo}`, enlace: { href: `/despacho/clientes/${cliente.id}`, texto: "Abrir ficha del cliente" } });
+    }
   }
-  const base = { clave: "tipos" as const, titulo: "Tipo de camión" };
-  if (incompatibles.size === 0) {
-    return { ...base, estado: "bien", detalle: "Cada cliente admite al menos uno de los camiones del día.", enlace: null, pendientes: [] };
+  const base = { clave: "atencion" as const, titulo: "Camión y horario", pendientes: [...problemas.values()] };
+  if (problemas.size === 0) {
+    return { ...base, estado: "bien", detalle: "Cada solicitud lista tiene un camión del tipo correcto, con cupo para su carga y dentro de su horario.", enlace: null };
+  }
+  if (atendibles === 0) {
+    return {
+      ...base, estado: "falta",
+      detalle: "Ninguna solicitud lista se puede atender con los camiones de ese día; el plan saldría sin rutas. Ajusta las jornadas o la ficha del cliente:",
+      enlace: { href: `/despacho/jornada?fecha=${d.fecha}`, texto: "Ir a Jornada" },
+    };
   }
   return {
     ...base, estado: "aviso",
-    detalle: `Estos clientes no admiten ninguno de los camiones del día (${nombresTipos}); sus solicitudes saldrán pospuestas:`,
-    enlace: null,
-    pendientes: [...incompatibles.values()].map((c) => ({
-      texto: `${c.nombre}: admite ${c.tiposUnidadAdmitidos.map((t) => ETIQUETA_UNIDAD[t]).join(", ") || "ningún tipo"}`,
-      enlace: { href: `/despacho/clientes/${c.id}`, texto: "Abrir ficha del cliente" },
-    })),
+    detalle: "Estas solicitudes saldrán pospuestas porque ningún camión de ese día les sirve:",
+    enlace: { href: `/despacho/jornada?fecha=${d.fecha}`, texto: "Ir a Jornada" },
   };
 }
 
@@ -269,7 +331,7 @@ export function evaluarPreparacion(d: DatosPreparacion): Preparacion {
     puntoTurno(d),
     puntoCamiones(d, disponibles, pendientes),
     solicitudes,
-    puntoTipos(listas, clientes, disponibles),
+    puntoAtencion(d, listas, clientes, disponibles),
   ].filter((p): p is PuntoPreparacion => p !== null);
   const faltan = puntos.filter((p) => p.estado === "falta").length;
   return { fecha: d.fecha, listo: faltan === 0, faltan, avisos: puntos.filter((p) => p.estado === "aviso").length, puntos };
@@ -293,5 +355,8 @@ export async function obtenerPreparacion(ctx: Contexto, fecha?: unknown): Promis
     catalogoUnidad: await leerCatalogo(tx, "unidad"),
     catalogoOperador: await leerCatalogo(tx, "operador"),
   }));
-  return { ok: true, valor: evaluarPreparacion({ ...datos, fecha: dia, hoy, minutoActual: minutoEnMexico(ctx.ahora) }) };
+  return {
+    ok: true,
+    valor: evaluarPreparacion({ ...datos, fecha: dia, hoy, minutoActual: minutoEnMexico(ctx.ahora), puedeConfigurar: puede(permiso.usuario, "configuracion.editar") }),
+  };
 }

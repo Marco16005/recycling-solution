@@ -14,9 +14,11 @@ async function Contenido({ searchParams }: Props) {
   const resultado = await obtenerPlanConsulta(typeof fecha === "string" ? fecha : undefined, typeof plan === "string" ? plan : undefined);
   if (!resultado.ok) return <ResultadoFallido resultado={resultado} />;
   const seguimiento = resultado.valor.estado === "validado" ? await seguimientoConsulta(resultado.valor.fecha) : null;
-  // Lista "Antes de generar" (diseño del 2026-11-21): mientras la fecha no tenga plan validado ni sea un re-ruteo.
-  const preparacion = resultado.valor.estado !== "validado" && resultado.valor.tipo !== "re_ruteo"
-    ? await obtenerPreparacionConsulta(resultado.valor.fecha) : null;
+  // Lista "Antes de generar" (diseño del 2026-11-21): sin plan, o con una propuesta sin rutas. Con rutas o validado no
+  // hace falta, y así no se repite la lectura de la cartera que ya hizo la propuesta (revisión de Codex).
+  const vista = resultado.valor;
+  const preparacion = vista.estado === "sin_plan" || (vista.estado === "propuesto" && vista.tipo !== "re_ruteo" && (vista.resumen?.ruteadas ?? 0) === 0)
+    ? await obtenerPreparacionConsulta(vista.fecha) : null;
   const antesDeGenerar = preparacion && (preparacion.ok ? <ListaPreparacion preparacion={preparacion.valor} /> : <ResultadoFallido resultado={preparacion} />);
   return <><PlanDelDia vista={resultado.valor} antesDeGenerar={antesDeGenerar} />{seguimiento && (seguimiento.ok
     ? <Seguimiento vista={seguimiento.valor} plan={resultado.valor} /> : <ResultadoFallido resultado={seguimiento} />)}</>;

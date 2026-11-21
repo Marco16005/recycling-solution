@@ -10,7 +10,7 @@ El plan solo toma las solicitudes **listas** de esa fecha y las jornadas con uni
 
 ## 2. Qué se agrega
 
-Una lista **"Antes de generar"** en `/despacho/plan`, visible mientras la fecha no tenga un plan validado. Revisa la fecha elegida con las **mismas funciones** que usa el motor al generar, así que no hay reglas nuevas ni copias. Cada punto dice en lenguaje simple si está bien o qué falta, y enlaza a la pantalla donde se corrige.
+Una lista **"Antes de generar"** en `/despacho/plan`, visible mientras la fecha no tenga plan o su propuesta no tenga rutas. Revisa la fecha elegida con las **mismas funciones** que usa el motor al generar, así que no hay reglas nuevas ni copias. Cada punto dice en lenguaje simple si está bien o qué falta, y enlaza a la pantalla donde se corrige.
 
 | Punto | Bien | Falta o aviso |
 |---|---|---|
@@ -18,10 +18,21 @@ Una lista **"Antes de generar"** en `/despacho/plan`, visible mientras la fecha 
 | Día | Es día de operación y no es pasado | **Falta:** ese día no se opera, o la fecha ya pasó; propone el siguiente día de operación |
 | Camiones del día | Al menos una jornada con unidad y operador disponibles | **Falta:** no hay jornadas, o ninguna está disponible. **Aviso:** alguna jornada no está disponible. Lista la unidad u operador con su motivo y su ficha |
 | Solicitudes | Al menos una lista para planear | **Falta:** ninguna lista. Lista los clientes con solicitudes bloqueadas, su motivo y su ficha; cuenta las que son para otra fecha |
-| Tipo de camión | Cada cliente con solicitud lista admite algún tipo de los camiones del día | **Aviso:** el cliente y los tipos que admite |
+| Camión y horario | Cada solicitud lista tiene un camión del día de un tipo que el cliente admite, con cupo para su carga y disponible antes de que cierre el horario del cliente | **Aviso:** algunas no; saldrán pospuestas. **Falta:** ninguna; el plan saldría sin rutas. Dice el motivo por cliente |
 | Turno (solo hoy) | Quedan 3 horas o más | **Aviso:** quedan menos de 3 horas. **Falta:** el turno ya terminó. Propone el siguiente día de operación |
 
-Arriba, un resumen: "Listo para generar" o "Antes de generar, revisa N puntos". El botón "Generar plan" no cambia: la lista orienta, no bloquea. El motor y la validación siguen siendo los que deciden.
+También revisa el tope de entrada del motor (300 solicitudes y 40 camiones): si se pasa, el plan se rechaza antes de correr el motor.
+
+**Qué significa cada estado:**
+
+- **Falta:** sin resolverlo, el plan no se puede generar o saldría sin rutas.
+- **Aviso:** se puede generar, pero algo quedará fuera.
+
+Arriba, un resumen: "Todo listo para generar el plan", "Se puede generar el plan. Revisa N avisos" o "Antes de generar, resuelve N puntos". El botón "Generar plan" no cambia: la lista orienta, no bloquea. El motor y la validación siguen siendo los que deciden.
+
+**Cuándo se muestra:** sin plan, o con una propuesta sin rutas. Con rutas o con el plan validado no hace falta, y así la página no repite la lectura de la cartera que ya hizo la propuesta.
+
+**Patio:** el enlace a Configuración solo aparece para quien puede abrirla (el administrador). A los demás, la lista les dice que se lo pidan.
 
 ## 3. Seguridad y privacidad
 
@@ -35,13 +46,26 @@ Arriba, un resumen: "Listo para generar" o "Antes de generar, revisa N puntos". 
 - `src/components/preparacion/lista-preparacion.tsx` (carpeta nueva): la lista. Responsable: Claude.
 - `src/app/despacho/plan/page.tsx` y `src/components/plan/plan-del-dia.tsx` (de Codex): un espacio para la lista debajo del encabezado. **Reasignado a Claude por la urgencia del usuario (2026-11-21); Codex lo revisa.**
 
-## 5. Pruebas
+## 5. Revisión de Codex del c0a26f9 (no aprobada)
 
-- **De unidad, con datos hechos a mano:** cada punto, bien y mal, incluidas las fechas pasadas, el domingo, el turno terminado y la incompatibilidad de tipos.
+1. "Todo listo" podía terminar en un plan vacío: no revisaba la capacidad ni el horario. Ahora lo hace el punto "Camión y horario", con la misma condición mínima que necesita el motor para insertar una solicitud.
+2. No revisaba el tope de entrada del motor (300 y 40). Ahora sí.
+3. "Falta" no siempre impedía generar. Ahora significa "no se puede generar o saldría sin rutas", y así lo dice el resumen.
+4. La página repetía la lectura de la cartera en una propuesta con rutas. Ahora la lista solo se calcula sin plan o con una propuesta sin rutas.
+5. El enlace a Configuración no servía al despachador. Ahora solo aparece para el administrador.
+6. Las pruebas no ligaban "listo" con el resultado real. Ahora generan el plan y comprueban las rutas: una con "todo listo", ninguna con una carga que no cabe o un horario cerrado. El e2e revisa los estados de una fecha vacía.
+
+Además, Claude corrigió el tiempo de turno de hoy antes de que empiece el turno: se cuenta desde el inicio del turno, como el motor.
+
+## 6. Pruebas
+
+- **De unidad, con datos hechos a mano:** cada punto, bien y mal, incluidas las fechas pasadas, el domingo, el turno terminado, el turno que todavía no empieza y el patio sin permiso para Configuración.
 - **De integración, con base PGlite y el escenario del plan:**
   - sin patio;
   - todo listo;
   - cliente sin aviso;
   - solicitud para otra fecha;
+  - carga que no cabe, horario cerrado y tipo de camión (falta y aviso), generando el plan de verdad para comprobar que coincide;
+  - más de 300 solicitudes listas;
   - el operador sin permiso.
-- **De punta a punta:** la pantalla muestra la lista y el punto que falta.
+- **De punta a punta:** una fecha vacía muestra qué falta, con sus estados y enlaces; con el plan validado, la lista no aparece.
