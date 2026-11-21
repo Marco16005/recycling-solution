@@ -9,6 +9,10 @@ test("despachador genera, ajusta y valida el plan; gerencia lo consulta en solo 
   await entrarComo(page, "despachador");
   await page.goto(ruta);
   const plan = page.getByRole("region", { name: "Plan del día", exact: true });
+  // Lista "Antes de generar" (2026-11-21): el escenario tiene patio y camiones del día.
+  const antes = plan.getByRole("region", { name: "Antes de generar", exact: true });
+  await expect(antes).toContainText("Está marcada en el mapa.");
+  await expect(antes).toContainText("Camiones del día");
   // Una propuesta previa de otra prueba también debe incorporar estas solicitudes nuevas.
   await plan.getByRole("button", { name: /^(Generar plan|Regenerar)$/ }).click();
   const unidad = plan.getByRole("region", { name: `Unidad ${placa}`, exact: true });
@@ -57,9 +61,16 @@ test("despachador genera, ajusta y valida el plan; gerencia lo consulta en solo 
   }
   await validar.click();
   await expect(plan.getByText("Validado", { exact: true })).toBeVisible();
+  await expect(antes).toHaveCount(0);
   for (const folio of folios) {
     expect(await estadoDeSolicitud(folio)).toMatchObject({ estado: "programada" });
   }
+
+  // Un domingo no se opera: la lista lo dice y propone el siguiente día de operación.
+  const domingo = new Date(`${fecha}T12:00:00Z`);
+  do domingo.setUTCDate(domingo.getUTCDate() + 1); while (domingo.getUTCDay() !== 0);
+  await page.goto(`/despacho/plan?fecha=${domingo.toISOString().slice(0, 10)}`);
+  await expect(page.getByRole("region", { name: "Antes de generar", exact: true })).toContainText("no es día de operación");
 
   await page.goto(`/despacho/solicitudes?fecha=${fecha}`);
   const cola = page.getByRole("region", { name: "Cola de solicitudes", exact: true });

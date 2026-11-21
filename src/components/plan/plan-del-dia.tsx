@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { VistaPlan } from "@/consultas/plan";
@@ -68,7 +68,8 @@ const instante = (fecha: Date) => new Date(fecha).toLocaleString("es-MX", {
   timeZone: "America/Mexico_City", dateStyle: "medium", timeStyle: "short",
 });
 
-export function PlanDelDia({ vista }: { vista: VistaPlan }) {
+/** antesDeGenerar: la lista "Antes de generar" (diseño del 2026-11-21), debajo del encabezado. */
+export function PlanDelDia({ vista, antesDeGenerar }: { vista: VistaPlan; antesDeGenerar?: ReactNode }) {
   const revisiones = useRef(new Set<string>());
   const [errorRevision, setErrorRevision] = useState<{ id: string; texto: string } | null>(null);
   useEffect(() => {
@@ -81,11 +82,11 @@ export function PlanDelDia({ vista }: { vista: VistaPlan }) {
   }, [vista.planId, vista.estado, vista.puedeGenerar, vista.revisionIniciada]);
   return <section aria-label="Plan del día" className="space-y-6">
     {errorRevision?.id === vista.planId && <p role="alert">{errorRevision?.texto}</p>}
-    <ContenidoPlan key={`${vista.fecha}-${vista.planId}-${vista.version}-${vista.estado}`} vista={vista} />
+    <ContenidoPlan key={`${vista.fecha}-${vista.planId}-${vista.version}-${vista.estado}`} vista={vista} antesDeGenerar={antesDeGenerar} />
   </section>;
 }
 
-function ContenidoPlan({ vista }: { vista: VistaPlan }) {
+function ContenidoPlan({ vista, antesDeGenerar }: { vista: VistaPlan; antesDeGenerar?: ReactNode }) {
   const router = useRouter();
   const [pendiente, iniciar] = useTransition();
   const [fallo, setFallo] = useState<Fallo | null>(null);
@@ -144,6 +145,7 @@ function ContenidoPlan({ vista }: { vista: VistaPlan }) {
         Hay {vista.nuevasDesdeGeneracion} solicitudes nuevas listas desde la generación. {vista.puedeGenerar ? "Regenera para incluirlas." : "El despachador puede regenerar para incluirlas."}
       </p>}
     </header>
+    {antesDeGenerar}
     {(fallo || incierto) && <div ref={errorRef} tabIndex={-1} role="alert" className="space-y-3 rounded-lg border border-destructive/40 p-4 text-sm">
       {incierto ? <p>No se pudo confirmar la operación. Consulta el estado antes de volver a enviarla.</p>
         : fallo?.error === "conflicto" ? <p>{fallo.motivo?.texto ?? "La versión del plan cambió. Consulta el estado actual antes de continuar."}</p>
