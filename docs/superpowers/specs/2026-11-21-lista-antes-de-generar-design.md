@@ -63,6 +63,8 @@ Además, Claude corrigió el tiempo de turno de hoy antes de que empiece el turn
 2. Una carga mayor que todo camión activo de sus tipos queda **bloqueada** en el motor, no pospuesta. Cada motivo dice ahora si saldrá pospuesta o quedará bloqueada.
 3. Los enlaces llevan el nombre del cliente, la placa o el operador, para distinguirlos con lector de pantalla.
 
+**Revisión de Codex del dc69afc** (no aprobada; confirmó atendidos el resumen y los enlaces): si el tipo no sale ese día y la carga supera todo camión activo de ese tipo, la lista decía "pospuesta" y el motor la bloquea. Ahora se revisa primero la capacidad de la flota completa, como el motor. Si no hay ningún camión activo de los tipos que admite, también queda bloqueada.
+
 ## 6. Pruebas
 
 - **De unidad, con datos hechos a mano:** cada punto, bien y mal, incluidas las fechas pasadas, el domingo, el turno terminado, el turno que todavía no empieza y el patio sin permiso para Configuración.

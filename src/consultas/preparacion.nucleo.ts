@@ -288,11 +288,15 @@ function puntoAtencion(
     const conCupo = compatibles.filter((x) => x.unidad.capacidadKg >= carga);
     const primeraSalida = Math.min(...conCupo.map((x) => Math.max(inicioPlan, x.desdeMin)));
     const abierta = ventanasDelDia(cliente, d.fecha).some((v) => v.finMin >= primeraSalida && v.inicioMin < finTurno);
+    const admitidos = cliente.tiposUnidadAdmitidos.map((t) => ETIQUETA_UNIDAD[t]).join(", ") || "ningún tipo";
     let motivo: string | null = null;
-    if (compatibles.length === 0) {
-      motivo = `admite ${cliente.tiposUnidadAdmitidos.map((t) => ETIQUETA_UNIDAD[t]).join(", ") || "ningún tipo"} y ese día salen ${tiposDelDia}; saldrá pospuesta`;
+    // Primero la flota completa: el motor bloquea por capacidad antes de buscar camión en el día (revisión de Codex).
+    if (maximoFlota === 0) {
+      motivo = `no hay ningún camión activo de los tipos que admite (${admitidos}); quedará bloqueada`;
     } else if (carga > maximoFlota) {
       motivo = `su carga (${kg(carga)}) supera la capacidad de todos los camiones de su tipo (hasta ${kg(maximoFlota)}); quedará bloqueada`;
+    } else if (compatibles.length === 0) {
+      motivo = `admite ${admitidos} y ese día salen ${tiposDelDia}; saldrá pospuesta`;
     } else if (conCupo.length === 0) {
       motivo = `su carga (${kg(carga)}) no cabe en los camiones de su tipo de ese día (hasta ${kg(Math.max(...compatibles.map((x) => x.unidad.capacidadKg)))}); saldrá pospuesta`;
     } else if (!abierta) {
