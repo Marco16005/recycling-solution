@@ -15,8 +15,8 @@ const icono: Record<EstadoPunto, { Icono: typeof CircleCheckIcon; clase: string;
 
 function resumen(p: Preparacion): string {
   if (p.faltan > 0) return `Antes de generar, resuelve ${p.faltan === 1 ? "1 punto" : `${p.faltan} puntos`}: sin eso el plan no se puede generar o saldría sin rutas.`;
-  if (p.avisos > 0) return `Se puede generar el plan. Revisa ${p.avisos === 1 ? "1 aviso" : `${p.avisos} avisos`}: algunas solicitudes quedarán fuera.`;
-  return "Todo listo para generar el plan.";
+  if (p.avisos > 0) return `Se puede generar el plan. Revisa ${p.avisos === 1 ? "1 aviso" : `${p.avisos} avisos`}: algunas solicitudes no se atenderán.`;
+  return "Nada impide generar el plan. El motor arma las rutas y pospone, con su motivo, lo que no alcance a atenderse.";
 }
 
 export function ListaPreparacion({ preparacion }: { preparacion: Preparacion }) {

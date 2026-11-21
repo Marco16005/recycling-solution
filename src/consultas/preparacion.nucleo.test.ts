@@ -140,9 +140,23 @@ describe("lista Antes de generar: con datos guardados (2026-11-21)", () => {
     const p = valor(await obtenerPreparacion(ctx(despachador), FECHA_PLAN));
     expect(punto(p, "atencion")).toMatchObject({
       estado: "falta",
-      pendientes: [{ texto: "Cartonera Pesada: su carga (9,000 kg) no cabe en los camiones de su tipo de ese día (hasta 8,000 kg)" }],
+      pendientes: [{ texto: "Cartonera Pesada: su carga (9,000 kg) supera la capacidad de todos los camiones de su tipo (hasta 8,000 kg); quedará bloqueada" }],
     });
     expect(p.listo).toBe(false);
+    expect(await ruteadasAlGenerar()).toBe(0);
+  });
+
+  it("una carga que cabe en la flota pero no en los camiones de ese día: saldrá pospuesta", async () => {
+    await ponerPatio(bd);
+    const cliente = await clienteHabilitado(bd, "Cartonera Media", 0.01, { cargaEstimadaKg: 9000 });
+    await jornadaDisponible(bd, FECHA_PLAN, "CHI001");
+    await jornadaDisponible(bd, "2026-10-16", "GRA001", { capacidadKg: 20000 });
+    await solicitudPendiente(bd, cliente.id, despachador.id, FECHA_PLAN);
+    const p = valor(await obtenerPreparacion(ctx(despachador), FECHA_PLAN));
+    expect(punto(p, "atencion")).toMatchObject({
+      estado: "falta",
+      pendientes: [{ texto: "Cartonera Media: su carga (9,000 kg) no cabe en los camiones de su tipo de ese día (hasta 8,000 kg); saldrá pospuesta" }],
+    });
     expect(await ruteadasAlGenerar()).toBe(0);
   });
 
@@ -155,7 +169,7 @@ describe("lista Antes de generar: con datos guardados (2026-11-21)", () => {
     const p = valor(await obtenerPreparacion(ctx(despachador), FECHA_PLAN));
     expect(punto(p, "atencion")).toMatchObject({
       estado: "falta",
-      pendientes: [{ texto: "Cartonera Temprana: su horario cierra a las 07:30 y el primer camión que le sirve está disponible a las 08:00" }],
+      pendientes: [{ texto: "Cartonera Temprana: su horario cierra a las 07:30 y el primer camión que le sirve está disponible a las 08:00; saldrá pospuesta" }],
     });
     expect(await ruteadasAlGenerar()).toBe(0);
   });
@@ -174,7 +188,7 @@ describe("lista Antes de generar: con datos guardados (2026-11-21)", () => {
     expect(solicitudes.estado).toBe("falta");
     expect(solicitudes.pendientes).toEqual([{
       texto: "Cartonera Sin Aviso (1 solicitud): Falta aviso vigente sin oposición del contacto",
-      enlace: { href: `/despacho/clientes/${cliente.id}`, texto: "Abrir ficha del cliente" },
+      enlace: { href: `/despacho/clientes/${cliente.id}`, texto: "Abrir ficha de Cartonera Sin Aviso" },
     }]);
     expect(p.listo).toBe(false);
   });
@@ -194,7 +208,7 @@ describe("lista Antes de generar: con datos guardados (2026-11-21)", () => {
     const { unidadId } = await jornadaDisponible(bd, FECHA_PLAN, "INA001", { activo: false });
     const camiones = punto(valor(await obtenerPreparacion(ctx(despachador), FECHA_PLAN)), "camiones");
     expect(camiones.estado).toBe("falta");
-    expect(camiones.pendientes).toEqual([{ texto: "Unidad INA001: Inactivo", enlace: { href: `/despacho/unidades/${unidadId}`, texto: "Abrir unidad" } }]);
+    expect(camiones.pendientes).toEqual([{ texto: "Unidad INA001: Inactivo", enlace: { href: `/despacho/unidades/${unidadId}`, texto: "Abrir unidad INA001" } }]);
   });
 
   it("tipo de camión: si nadie más puede atenderse falta; si otro cliente sí, es un aviso", async () => {
@@ -204,13 +218,13 @@ describe("lista Antes de generar: con datos guardados (2026-11-21)", () => {
     await solicitudPendiente(bd, soloTrailer.id, despachador.id, FECHA_PLAN);
     const sola = valor(await obtenerPreparacion(ctx(despachador), FECHA_PLAN));
     expect(punto(sola, "atencion")).toMatchObject({
-      estado: "falta", pendientes: [{ texto: "Cartonera Solo Tráiler: admite Tráiler y ese día salen Doble rodada" }],
+      estado: "falta", pendientes: [{ texto: "Cartonera Solo Tráiler: admite Tráiler y ese día salen Doble rodada; saldrá pospuesta" }],
     });
 
     const normal = await clienteHabilitado(bd, "Cartonera Normal", 0.02);
     await solicitudPendiente(bd, normal.id, despachador.id, FECHA_PLAN);
     const mezcla = valor(await obtenerPreparacion(ctx(despachador), FECHA_PLAN));
-    expect(punto(mezcla, "atencion")).toMatchObject({ estado: "aviso", pendientes: [{ texto: "Cartonera Solo Tráiler: admite Tráiler y ese día salen Doble rodada" }] });
+    expect(punto(mezcla, "atencion")).toMatchObject({ estado: "aviso", pendientes: [{ texto: "Cartonera Solo Tráiler: admite Tráiler y ese día salen Doble rodada; saldrá pospuesta" }] });
     expect(mezcla.listo).toBe(true);
     expect(await ruteadasAlGenerar()).toBe(1);
   });

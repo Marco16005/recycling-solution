@@ -28,7 +28,7 @@ También revisa el tope de entrada del motor (300 solicitudes y 40 camiones): si
 - **Falta:** sin resolverlo, el plan no se puede generar o saldría sin rutas.
 - **Aviso:** se puede generar, pero algo quedará fuera.
 
-Arriba, un resumen: "Todo listo para generar el plan", "Se puede generar el plan. Revisa N avisos" o "Antes de generar, resuelve N puntos". El botón "Generar plan" no cambia: la lista orienta, no bloquea. El motor y la validación siguen siendo los que deciden.
+Arriba, un resumen: "Nada impide generar el plan" (no promete rutas: los traslados, el servicio y el regreso los calcula el motor, que pospone con su motivo lo que no alcance), "Se puede generar el plan. Revisa N avisos" o "Antes de generar, resuelve N puntos". El botón "Generar plan" no cambia: la lista orienta, no bloquea. El motor y la validación siguen siendo los que deciden.
 
 **Cuándo se muestra:** sin plan, o con una propuesta sin rutas. Con rutas o con el plan validado no hace falta, y así la página no repite la lectura de la cartera que ya hizo la propuesta.
 
@@ -57,6 +57,12 @@ Arriba, un resumen: "Todo listo para generar el plan", "Se puede generar el plan
 
 Además, Claude corrigió el tiempo de turno de hoy antes de que empiece el turno: se cuenta desde el inicio del turno, como el motor.
 
+**Revisión de Codex del 0ef176f** (no aprobada; confirmó los 6 anteriores atendidos):
+
+1. "Todo listo" prometía rutas, pero la lista no calcula traslado, servicio ni regreso. El resumen ahora dice "Nada impide generar el plan" y que el motor pospone, con su motivo, lo que no alcance.
+2. Una carga mayor que todo camión activo de sus tipos queda **bloqueada** en el motor, no pospuesta. Cada motivo dice ahora si saldrá pospuesta o quedará bloqueada.
+3. Los enlaces llevan el nombre del cliente, la placa o el operador, para distinguirlos con lector de pantalla.
+
 ## 6. Pruebas
 
 - **De unidad, con datos hechos a mano:** cada punto, bien y mal, incluidas las fechas pasadas, el domingo, el turno terminado, el turno que todavía no empieza y el patio sin permiso para Configuración.
@@ -65,7 +71,7 @@ Además, Claude corrigió el tiempo de turno de hoy antes de que empiece el turn
   - todo listo;
   - cliente sin aviso;
   - solicitud para otra fecha;
-  - carga que no cabe, horario cerrado y tipo de camión (falta y aviso), generando el plan de verdad para comprobar que coincide;
+  - carga que no cabe en la flota (bloqueada) o solo en los camiones de ese día (pospuesta), horario cerrado y tipo de camión (falta y aviso), generando el plan de verdad para comprobar que coincide;
   - más de 300 solicitudes listas;
   - el operador sin permiso.
 - **De punta a punta:** una fecha vacía muestra qué falta, con sus estados y enlaces; con el plan validado, la lista no aparece.

@@ -25,7 +25,7 @@ import { leerInstantanea } from "./instantanea";
  * lenguaje simple qué falta y dónde se corrige. Solo lectura; orienta, no bloquea: el motor y la validación deciden.
  *
  * "falta": sin resolverlo, el plan no se puede generar o saldría sin rutas. "aviso": se puede generar, pero algo
- * quedará fuera. Revisión de Codex del c0a26f9: además de patio, día, turno y jornadas, revisa por solicitud el tipo de
+ * quedará fuera. "bien" no promete rutas: los traslados, el servicio y el regreso los calcula el motor. Revisión de Codex del c0a26f9: además de patio, día, turno y jornadas, revisa por solicitud el tipo de
  * camión, la capacidad y el horario del cliente contra los camiones del día, y el tope de entrada del motor.
  */
 
@@ -164,13 +164,13 @@ function evaluarJornadas(d: DatosPreparacion) {
     if (unidad && motivosUnidad.length > 0) {
       pendientes.push({
         texto: `Unidad ${unidad.placa}: ${motivosUnidad.map(textoNoDisponible).join("; ")}`,
-        enlace: { href: `/despacho/unidades/${unidad.id}`, texto: "Abrir unidad" },
+        enlace: { href: `/despacho/unidades/${unidad.id}`, texto: `Abrir unidad ${unidad.placa}` },
       });
     }
     if (operador && motivosOperador.length > 0) {
       pendientes.push({
         texto: `Operador ${operador.nombre}: ${motivosOperador.map(textoNoDisponible).join("; ")}`,
-        enlace: { href: `/despacho/operadores/${operador.id}`, texto: "Abrir operador" },
+        enlace: { href: `/despacho/operadores/${operador.id}`, texto: `Abrir operador ${operador.nombre}` },
       });
     }
   }
@@ -223,7 +223,7 @@ function puntoSolicitudes(d: DatosPreparacion, clientes: Map<string, ClienteGuar
   }
   const pendientes: Pendiente[] = [...porCliente].map(([id, { cuantas, motivos }]) => ({
     texto: `${clientes.get(id)?.nombre ?? "Cliente"} (${plural(cuantas, "solicitud", "solicitudes")}): ${motivos.map(textoBloqueo).join("; ")}`,
-    enlace: { href: `/despacho/clientes/${id}`, texto: "Abrir ficha del cliente" },
+    enlace: { href: `/despacho/clientes/${id}`, texto: `Abrir ficha de ${clientes.get(id)?.nombre ?? "el cliente"}` },
   }));
   if (futuras > 0) {
     pendientes.push({
@@ -283,29 +283,37 @@ function puntoAtencion(
     if (!cliente) continue;
     const carga = cargaEfectivaKg(solicitud, cliente, d.config.cargaPorOmisionKg);
     const compatibles = disponibles.filter((x) => cliente.tiposUnidadAdmitidos.includes(x.unidad.tipo));
+    // Como el motor: una carga mayor que todo camión activo de sus tipos queda bloqueada; si solo no cabe ese día, pospuesta.
+    const maximoFlota = Math.max(0, ...d.unidades.filter((u) => u.activo && cliente.tiposUnidadAdmitidos.includes(u.tipo)).map((u) => u.capacidadKg));
     const conCupo = compatibles.filter((x) => x.unidad.capacidadKg >= carga);
     const primeraSalida = Math.min(...conCupo.map((x) => Math.max(inicioPlan, x.desdeMin)));
     const abierta = ventanasDelDia(cliente, d.fecha).some((v) => v.finMin >= primeraSalida && v.inicioMin < finTurno);
     let motivo: string | null = null;
     if (compatibles.length === 0) {
-      motivo = `admite ${cliente.tiposUnidadAdmitidos.map((t) => ETIQUETA_UNIDAD[t]).join(", ") || "ningún tipo"} y ese día salen ${tiposDelDia}`;
+      motivo = `admite ${cliente.tiposUnidadAdmitidos.map((t) => ETIQUETA_UNIDAD[t]).join(", ") || "ningún tipo"} y ese día salen ${tiposDelDia}; saldrá pospuesta`;
+    } else if (carga > maximoFlota) {
+      motivo = `su carga (${kg(carga)}) supera la capacidad de todos los camiones de su tipo (hasta ${kg(maximoFlota)}); quedará bloqueada`;
     } else if (conCupo.length === 0) {
-      motivo = `su carga (${kg(carga)}) no cabe en los camiones de su tipo de ese día (hasta ${kg(Math.max(...compatibles.map((x) => x.unidad.capacidadKg)))})`;
+      motivo = `su carga (${kg(carga)}) no cabe en los camiones de su tipo de ese día (hasta ${kg(Math.max(...compatibles.map((x) => x.unidad.capacidadKg)))}); saldrá pospuesta`;
     } else if (!abierta) {
       const cierre = Math.max(...ventanasDelDia(cliente, d.fecha).map((v) => v.finMin));
       motivo = primeraSalida >= finTurno
-        ? "no queda turno para atenderlo"
-        : `su horario cierra a las ${hora(cierre)} y el primer camión que le sirve está disponible a las ${hora(primeraSalida)}`;
+        ? "no queda turno para atenderlo; saldrá pospuesta"
+        : `su horario cierra a las ${hora(cierre)} y el primer camión que le sirve está disponible a las ${hora(primeraSalida)}; saldrá pospuesta`;
     }
     if (motivo === null) {
       atendibles++;
     } else if (!problemas.has(cliente.id)) {
-      problemas.set(cliente.id, { texto: `${cliente.nombre}: ${motivo}`, enlace: { href: `/despacho/clientes/${cliente.id}`, texto: "Abrir ficha del cliente" } });
+      problemas.set(cliente.id, { texto: `${cliente.nombre}: ${motivo}`, enlace: { href: `/despacho/clientes/${cliente.id}`, texto: `Abrir ficha de ${cliente.nombre}` } });
     }
   }
   const base = { clave: "atencion" as const, titulo: "Camión y horario", pendientes: [...problemas.values()] };
   if (problemas.size === 0) {
-    return { ...base, estado: "bien", detalle: "Cada solicitud lista tiene un camión del tipo correcto, con cupo para su carga y dentro de su horario.", enlace: null };
+    return {
+      ...base, estado: "bien",
+      detalle: "Cada solicitud lista tiene un camión del tipo correcto, con cupo para su carga y disponible antes de que cierre su horario. Los traslados y el servicio los calcula el motor al generar.",
+      enlace: null,
+    };
   }
   if (atendibles === 0) {
     return {
@@ -316,7 +324,7 @@ function puntoAtencion(
   }
   return {
     ...base, estado: "aviso",
-    detalle: "Estas solicitudes saldrán pospuestas porque ningún camión de ese día les sirve:",
+    detalle: "Estas solicitudes no se podrán atender con los camiones de ese día:",
     enlace: { href: `/despacho/jornada?fecha=${d.fecha}`, texto: "Ir a Jornada" },
   };
 }
