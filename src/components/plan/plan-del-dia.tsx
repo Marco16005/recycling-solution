@@ -70,7 +70,7 @@ const instante = (fecha: Date) => new Date(fecha).toLocaleString("es-MX", {
 });
 
 /** antesDeGenerar: la lista "Antes de generar" (diseño del 2026-11-21), debajo del encabezado. */
-export function PlanDelDia({ vista, antesDeGenerar, seguimiento }: { vista: VistaPlan; antesDeGenerar?: ReactNode; seguimiento?: ReactNode }) {
+export function PlanDelDia({ vista, antesDeGenerar, seguimiento, recoleccionesConservadasEnCurso }: { vista: VistaPlan; antesDeGenerar?: ReactNode; seguimiento?: ReactNode; recoleccionesConservadasEnCurso: number }) {
   const revisiones = useRef(new Set<string>());
   const [errorRevision, setErrorRevision] = useState<{ id: string; texto: string } | null>(null);
   useEffect(() => {
@@ -83,11 +83,11 @@ export function PlanDelDia({ vista, antesDeGenerar, seguimiento }: { vista: Vist
   }, [vista.planId, vista.estado, vista.puedeGenerar, vista.revisionIniciada]);
   return <section aria-label="Plan del día" className="space-y-6">
     {errorRevision?.id === vista.planId && <p role="alert">{errorRevision?.texto}</p>}
-    <ContenidoPlan key={`${vista.fecha}-${vista.planId}-${vista.version}-${vista.estado}`} vista={vista} antesDeGenerar={antesDeGenerar} seguimiento={seguimiento} />
+    <ContenidoPlan key={`${vista.fecha}-${vista.planId}-${vista.version}-${vista.estado}`} vista={vista} antesDeGenerar={antesDeGenerar} seguimiento={seguimiento} recoleccionesConservadasEnCurso={recoleccionesConservadasEnCurso} />
   </section>;
 }
 
-function ContenidoPlan({ vista, antesDeGenerar, seguimiento }: { vista: VistaPlan; antesDeGenerar?: ReactNode; seguimiento?: ReactNode }) {
+function ContenidoPlan({ vista, antesDeGenerar, seguimiento, recoleccionesConservadasEnCurso }: { vista: VistaPlan; antesDeGenerar?: ReactNode; seguimiento?: ReactNode; recoleccionesConservadasEnCurso: number }) {
   const router = useRouter();
   const [pendiente, iniciar] = useTransition();
   const [fallo, setFallo] = useState<Fallo | null>(null);
@@ -233,7 +233,11 @@ function ContenidoPlan({ vista, antesDeGenerar, seguimiento }: { vista: VistaPla
         </Button>}
       </div>
       <PasosPlan vista={vista} />
-      {vista.tipo === "re_ruteo" && <p className="rounded-lg border p-3">Propuesta de re-ruteo · {vista.congeladas.length} solicitudes congeladas conservadas en sus rutas originales, sin ajustes. <Link className="underline" href={`/despacho/plan?fecha=${vista.fecha}`}>Volver al plan vigente</Link></p>}
+      {vista.tipo === "re_ruteo" && <p className="rounded-lg border p-3">{vista.estado === "validado" ? <>
+        Este plan es un re-ruteo validado: reemplazó al plan anterior.{recoleccionesConservadasEnCurso > 0 && ` ${recoleccionesConservadasEnCurso} ${recoleccionesConservadasEnCurso === 1 ? "recolección de viajes en curso se conservó" : "recolecciones de viajes en curso se conservaron"} sin cambios.`}
+      </> : <>
+        Propuesta de re-ruteo · {vista.congeladas.length} {vista.congeladas.length === 1 ? "solicitud congelada conservada" : "solicitudes congeladas conservadas"} en sus rutas originales, sin ajustes. <Link className="underline" href={`/despacho/plan?fecha=${vista.fecha}`}>Volver al plan vigente</Link>
+      </>}</p>}
       <SelectorFecha fecha={vista.fecha} ruta="/despacho/plan" />
       {vista.nuevasDesdeGeneracion > 0 && <p role="status" className="rounded-lg border p-4">
         Hay {vista.nuevasDesdeGeneracion} solicitudes nuevas listas desde la generación. {vista.puedeGenerar ? "Regenera para incluirlas." : "El despachador puede regenerar para incluirlas."}

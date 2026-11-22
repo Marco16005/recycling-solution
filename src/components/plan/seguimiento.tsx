@@ -168,7 +168,7 @@ export function Seguimiento({ vista, plan }: { vista: VistaSeguimiento; plan: Vi
     <div className="grid gap-4 xl:grid-cols-2">{vista.porJornada.map(j => <article key={j.jornadaId} aria-label={`Camión ${j.placa}`} className="min-w-0 rounded-xl border bg-card p-5 shadow-sm">
       <h3 className="text-lg font-semibold [overflow-wrap:anywhere]">{j.placa} · {j.operador}</h3>
       <p className="mt-3 text-2xl font-semibold leading-tight [overflow-wrap:anywhere]">{j.tablero.frase}</p>
-      <p className="mt-2 text-sm font-medium tabular-nums text-muted-foreground">{j.tablero.recolecciones.hechas} de {j.tablero.recolecciones.total} recolecciones</p>
+      {j.tablero.recolecciones.total > 0 && <p className="mt-2 text-sm font-medium tabular-nums text-muted-foreground">{j.tablero.recolecciones.hechas} de {j.tablero.recolecciones.total} recolecciones</p>}
       {j.proyeccion.aproximada && <p className="mt-2 text-sm text-muted-foreground">Proyección aproximada</p>}
       <div className="mt-5 space-y-4">{j.tablero.viajes.map(v => <section key={v.rutaId} className="min-w-0 rounded-lg border bg-background p-4">
         <h4 className="flex flex-wrap items-center gap-2 font-semibold">Viaje {v.numero} · <span className={`rounded-full border px-2 py-0.5 text-sm ${colorEstado(v.estado)}`}>{v.etiqueta}</span></h4>
@@ -203,7 +203,7 @@ export function Seguimiento({ vista, plan }: { vista: VistaSeguimiento; plan: Vi
           }}><label>Nota de conciliación<textarea name="nota" required maxLength={300} className="mb-3 block w-full rounded border bg-background p-3" /></label><Button type="submit">Conciliar</Button></form>}
         </article>)}
       </section>}
-      {plan.puedeGenerar && <details className="min-w-0 rounded-xl border p-4"><summary className="cursor-pointer font-semibold">¿Un camión ya no puede seguir? Re-rutear</summary>
+      {plan.puedeGenerar && <details open={Boolean(plan.reruteoPropuesto)} className="min-w-0 rounded-xl border p-4"><summary className="cursor-pointer font-semibold">¿Un camión ya no puede seguir? Re-rutear</summary>
         <section aria-label="Re-rutear" className="mt-4 space-y-3"><h3 className="text-xl font-semibold">Re-rutear</h3>
         {plan.reruteoPropuesto ? <Link className="underline" href={`/despacho/plan?fecha=${plan.fecha}&plan=${plan.reruteoPropuesto.planId}`}>Revisar re-ruteo propuesto</Link> : <>
           <p>Marca las jornadas que dejan de estar disponibles. Los viajes en curso de las demás unidades quedan congelados.</p>

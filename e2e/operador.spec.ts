@@ -184,11 +184,15 @@ test("operador: jornada, idempotencia, rechazo, cola sin señal e incidente con 
       }
       await d.getByRole("button", { name: "Generar re-ruteo", exact: true }).click();
       await expect(d).toHaveURL(/plan=/);
-      await expect(d.getByText(/solicitudes congeladas conservadas/)).toBeVisible();
+      await expect(d.getByText(/Propuesta de re-ruteo · (?:1 solicitud congelada conservada|\d+ solicitudes congeladas conservadas)/)).toBeVisible();
       for (const casilla of await d.getByRole("checkbox").all()) await casilla.check();
       await d.getByRole("button", { name: "Validar", exact: true }).click();
       await expect(validado.or(vencida)).toBeVisible();
-      if (await validado.isVisible()) break;
+      if (await validado.isVisible()) {
+        await expect(d.getByText(/Este plan es un re-ruteo validado: reemplazó al plan anterior\./)).toBeVisible();
+        await expect(d.getByRole("link", { name: "Volver al plan vigente", exact: true })).toHaveCount(0);
+        break;
+      }
       expect(intento, "la frontera venció en tres intentos seguidos").toBeLessThan(3);
     }
   } finally { await despacho.close(); }

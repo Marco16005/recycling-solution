@@ -17,10 +17,15 @@ async function Contenido({ searchParams }: Props) {
   // Lista "Antes de generar" (diseño del 2026-11-21): sin plan, o con una propuesta sin rutas. Con rutas o validado no
   // hace falta, y así no se repite la lectura de la cartera que ya hizo la propuesta (revisión de Codex).
   const vista = resultado.valor;
+  const congeladas = new Set(vista.congeladas);
+  const recoleccionesConservadasEnCurso = seguimiento?.ok
+    ? new Set(seguimiento.valor.porJornada.flatMap(j => j.proyeccion.paradas
+      .filter(p => p.enViajeEnCurso && congeladas.has(p.solicitudId)).map(p => p.solicitudId))).size
+    : 0;
   const preparacion = vista.estado === "sin_plan" || (vista.estado === "propuesto" && vista.tipo !== "re_ruteo" && (vista.resumen?.ruteadas ?? 0) === 0)
     ? await obtenerPreparacionConsulta(vista.fecha) : null;
   const antesDeGenerar = preparacion && (preparacion.ok ? <ListaPreparacion preparacion={preparacion.valor} /> : <ResultadoFallido resultado={preparacion} />);
-  return <PlanDelDia vista={vista} antesDeGenerar={antesDeGenerar}
+  return <PlanDelDia vista={vista} antesDeGenerar={antesDeGenerar} recoleccionesConservadasEnCurso={recoleccionesConservadasEnCurso}
     seguimiento={seguimiento && (seguimiento.ok
       ? <Seguimiento vista={seguimiento.valor} plan={vista} /> : <ResultadoFallido resultado={seguimiento} />)} />;
 }

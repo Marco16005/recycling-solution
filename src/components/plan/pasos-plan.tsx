@@ -13,9 +13,9 @@ export function PasosPlan({ vista }: { vista: VistaPlan }) {
         : vista.puedeGenerar ? "revisa las rutas. Si algo no te convence, mueve o pospone recolecciones. Cuando estén bien, confirma los requisitos al final y presiona «Validar»." : "el despacho está revisando el plan.";
 
   return <div className="space-y-3">
-    <ol aria-label="Pasos del plan del día" className="grid min-w-0 gap-2 sm:grid-cols-3">
+    <ol aria-label="Pasos del plan del día" className="grid min-w-0 grid-cols-3 gap-2">
       {pasos.map((paso, indice) => <li key={paso} aria-current={indice + 1 === actual ? "step" : undefined}
-        className={`min-w-0 rounded-lg border px-3 py-2 text-sm font-medium [overflow-wrap:anywhere] ${indice + 1 === actual ? "border-primary bg-primary/10 text-foreground" : "text-muted-foreground"}`}>
+        className={`min-w-0 rounded-lg border px-2 py-2 text-xs font-medium [overflow-wrap:anywhere] sm:px-3 sm:text-sm ${indice + 1 === actual ? "border-primary bg-primary/10 text-foreground" : "text-muted-foreground"}`}>
         {indice + 1}. {paso}
       </li>)}
     </ol>
