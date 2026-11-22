@@ -377,9 +377,10 @@ export async function motivosNoAtendidas(bd: Conexion, paradaIds: string[]): Pro
  * en la secuencia operativa porque se quedaron sin paradas antes de salir. Sin esto, el despacho no vería en el tablero
  * las recolecciones que ya no se harán ese día.
  */
-export async function omitidasFueraDeSecuencia(bd: Conexion, j: { id: string; fecha: string }): Promise<{ paradaId: string; solicitudId: string }[]> {
+export async function omitidasFueraDeSecuencia(bd: Conexion, j: { id: string; fecha: string }): Promise<{ paradaId: string; solicitudId: string; en: string }[]> {
   const todas = await rutasOperativas(bd, j.id, await planOperativo(bd, j.fecha));
   const dentro = new Set(secuenciaOperativa(todas).map((r) => r.ruta.id));
   return todas.filter((r) => !dentro.has(r.ruta.id))
-    .flatMap((r) => r.paradas.filter((p) => p.estado === "omitida").map((p) => ({ paradaId: p.id, solicitudId: p.solicitudId })));
+    // en: cuándo se pospuso (el re-ruteo la retira con su hora), para quedarse con la última si se pospuso en dos camiones.
+    .flatMap((r) => r.paradas.filter((p) => p.estado === "omitida").map((p) => ({ paradaId: p.id, solicitudId: p.solicitudId, en: p.actualizadoEn.toISOString() })));
 }

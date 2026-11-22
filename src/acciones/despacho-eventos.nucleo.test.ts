@@ -189,15 +189,20 @@ describe("tablero del día: el despacho marca el avance (2026-11-21)", () => {
   });
 });
 
-describe("pospuestas por re-ruteo en el tablero (revisión de Codex del cabd8e8)", () => {
-  it("una vez por solicitud y nunca si volvió a quedar activa hoy en algún camión", () => {
-    const omitidas = [
-      { paradaId: "p-viejo-1", solicitudId: "S1" }, // reprogramada para hoy y asignada otra vez
-      { paradaId: "p-viejo-2", solicitudId: "S2" }, // pospuesta en un re-ruteo…
-      { paradaId: "p-viejo-3", solicitudId: "S2" }, // …y otra vez en el siguiente
-      { paradaId: "p-viejo-4", solicitudId: "S3" },
+describe("pospuestas por re-ruteo en el tablero (revisiones de Codex del cabd8e8 y del ceab474)", () => {
+  const o = (paradaId: string, solicitudId: string, minuto: number) => ({ paradaId, solicitudId, en: a(minuto).toISOString() });
+
+  it("una vez en todo el día, en el camión donde se pospuso por última vez, y nunca si volvió a quedar activa", () => {
+    const porJornada = [
+      // Camión A: S1 se pospuso y luego volvió a un viaje (activa); S2 se pospuso a las 07:10; S3 dos veces en A.
+      { jornadaId: "A", omitidas: [o("a1", "S1", 5), o("a2", "S2", 10), o("a3", "S3", 15), o("a4", "S3", 20)] },
+      // Camión B: S2 se reprogramó, se asignó a B y se pospuso otra vez a las 07:40.
+      { jornadaId: "B", omitidas: [o("b1", "S2", 40)] },
     ];
-    expect(pospuestasDelDia(omitidas, new Set(["S1"])).map((o) => o.paradaId)).toEqual(["p-viejo-2", "p-viejo-4"]);
-    expect(pospuestasDelDia(omitidas, new Set())).toHaveLength(3);
+    const r = pospuestasDelDia(porJornada, new Set(["S1"]));
+    expect(r.get("A")!.map((x) => x.paradaId)).toEqual(["a4"]);
+    expect(r.get("B")!.map((x) => x.paradaId)).toEqual(["b1"]);
+    const todas = [...r.values()].flat().map((x) => x.solicitudId);
+    expect(new Set(todas).size).toBe(todas.length);
   });
 });
