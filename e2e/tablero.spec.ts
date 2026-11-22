@@ -1,19 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { and, eq } from "drizzle-orm";
-import { crearConexion } from "../src/datos/conexion-base";
-import { planes } from "../src/datos/esquema";
-import { fechaEnMexico } from "../src/dominio/tiempo";
 import { prepararDiaOperador } from "./ayudas/operador";
 import { entrarComo } from "./ayudas/sesion";
-
-async function yaHayPlanDeHoy() {
-  const { bd, cerrar } = crearConexion(process.env.DATABASE_URL ?? "", 1);
-  try {
-    const existentes = await bd.select({ id: planes.id }).from(planes)
-      .where(and(eq(planes.fecha, fechaEnMexico(new Date())), eq(planes.estado, "validado"))).limit(1);
-    return existentes.length > 0;
-  } finally { await cerrar(); }
-}
 
 async function marcar(camion: Locator, nombre: string) {
   await camion.getByRole("button", { name: `Marcar: ${nombre}`, exact: true }).click();
@@ -25,9 +12,9 @@ async function marcar(camion: Locator, nombre: string) {
 
 test("despacho marca un viaje completo sin odómetro y gerencia solo lo consulta", async ({ page, browser, baseURL }) => {
   test.setTimeout(120_000);
-  test.skip(await yaHayPlanDeHoy(), "La prueba necesita la base e2e sin otro plan validado de hoy");
-  // Este escenario prepara un plan validado de hoy; el de ayudas/plan es para el siguiente día operativo.
-  const dia = await prepararDiaOperador();
+  // El día de hoy lo comparte con la prueba del operador; el torton del tablero es solo de esta prueba (ayudas/operador).
+  const dia = { ...(await prepararDiaOperador()) };
+  dia.placa = dia.tableroPlaca;
   await entrarComo(page, "despachador");
   await page.goto(`/despacho/plan?fecha=${dia.fecha}`);
   const seguimiento = page.getByRole("region", { name: "Seguimiento de operación", exact: true });

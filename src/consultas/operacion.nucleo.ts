@@ -303,6 +303,8 @@ function siguientePaso(estado: EstadoJornada, viajes: ViajeTablero[], cliente: (
     tipo: accion.tipo, texto: textos[accion.tipo], rutaId: accion.rutaId, paradaId: accion.paradaId, versionRuta: accion.versionRuta,
     pideOdometro: accion.tipo === "salida_patio" || accion.tipo === "regreso_patio",
     permiteNoAtendida: accion.permiteNoAtendida,
-    desde: estado.ultimoOcurridoEn ? hhmm(estado.ultimoOcurridoEn) : null,
+    // Al minuto, hacia abajo: con hhmm (hacia arriba) una marca a las 08:00:30 dejaría el mínimo en 08:01 y la pantalla no
+    // permitiría marcar a las 08:00:50 (la pantalla manda la hora exacta si no se cambió; el servidor valida los segundos).
+    desde: estado.ultimoOcurridoEn ? hhmm(new Date(Math.floor(Date.parse(estado.ultimoOcurridoEn) / 60_000) * 60_000).toISOString()) : null,
   };
 }
