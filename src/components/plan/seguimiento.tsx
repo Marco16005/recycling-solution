@@ -102,7 +102,8 @@ function MarcaDespacho({ jornada, fecha }: { jornada: SeguimientoJornada; fecha:
 
   return <div className="mt-5 border-t pt-4">
     {!aplicado && <div className="flex flex-wrap gap-2">
-      <Button type="button" disabled={enviando || incierto} onClick={() => abrir("normal")}>Marcar: {paso.texto}</Button>
+      {/* Parte la línea: con nombres largos de cliente, un botón sin saltos desborda la pantalla del teléfono. */}
+      <Button type="button" className="h-auto min-h-9 whitespace-normal py-2 text-left" disabled={enviando || incierto} onClick={() => abrir("normal")}>Marcar: {paso.texto}</Button>
       {paso.permiteNoAtendida && <Button type="button" variant="outline" disabled={enviando || incierto} onClick={() => abrir("no_atendida")}>No se pudo atender</Button>}
     </div>}
     {modo && !aplicado && <form aria-label={`Marcar avance de ${jornada.placa}`} className="mt-4 space-y-3 rounded-lg border bg-background p-4" onSubmit={e => { e.preventDefault(); confirmar(); }}>
@@ -173,7 +174,8 @@ export function Seguimiento({ vista, plan }: { vista: VistaSeguimiento; plan: Vi
         <p className="mt-1 text-sm tabular-nums text-muted-foreground">Salió {v.salida ?? "—"} · Regresó {v.regreso ?? "—"}</p>
         <ul aria-label={`Recolecciones del viaje ${v.numero}`} className="mt-3 divide-y">{v.paradas.map(p => <li key={p.paradaId} className="py-3 text-sm first:pt-0 last:pb-0">
           <p className="break-words font-medium">{p.folio} · {p.cliente}</p>
-          <p className="mt-1 flex flex-wrap items-center gap-2"><span className={`rounded-full border px-2 py-0.5 ${colorEstado(p.estado)}`}>{p.etiqueta}</span><span className="tabular-nums">{p.hora ?? "Sin hora"} · Ventana {p.ventana.inicio}–{p.ventana.fin}</span></p>
+          <p className="mt-1 flex flex-wrap items-center gap-2"><span className={`rounded-full border px-2 py-0.5 ${colorEstado(p.estado)}`}>{p.etiqueta}</span><span className="tabular-nums">{p.horaPlan
+            ? `Llegada proyectada ${p.hora ?? "—"} · Llegada estimada ${p.horaPlan}` : p.hora ?? "Sin hora"} · Ventana {p.ventana.inicio}–{p.ventana.fin}</span></p>
           {p.motivo && <p className="mt-1 break-words text-amber-800 dark:text-amber-300">Motivo: {p.motivo}</p>}
         </li>)}</ul>
       </section>)}</div>

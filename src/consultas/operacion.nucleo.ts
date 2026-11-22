@@ -35,6 +35,8 @@ export interface ParadaTablero {
   paradaId: string; folio: string; cliente: string; estado: EstadoParadaTablero; etiqueta: string;
   /** La hora en que se recolectó o se cerró; la llegada proyectada si está pendiente; null si no aplica. */
   hora: string | null;
+  /** Pendiente o en camino: la llegada que estimó el plan, para ver el retraso contra la proyectada; si no, null. */
+  horaPlan: string | null;
   ventana: { inicio: string; fin: string };
   motivo: string | null;
 }
@@ -203,6 +205,9 @@ function paradasEnSeguimiento(
   return salida;
 }
 
+/** HH:MM al minuto hacia abajo. hhmm redondea hacia arriba (lo usa la proyección del Plan 7, que no debe adelantar). */
+const hhmmAbajo = (instante: string) => hhmm(new Date(Math.floor(Date.parse(instante) / 60_000) * 60_000).toISOString());
+
 const ETIQUETA_VIAJE: Record<EstadoViajeTablero, string> = {
   en_espera: "En espera", en_camino: "En camino", descargando: "Descargando", terminado: "Terminado",
 };
@@ -228,7 +233,8 @@ export function tableroDeJornada(
   datos: { folio: (solicitudId: string) => string; cliente: (solicitudId: string) => string; motivo: (paradaId: string) => string | null; puedeRegistrar: boolean },
 ): TableroJornada {
   const proyectadas = new Map(proyeccion.viajes.flatMap((v) => v.paradas.map((p) => [p.paradaId, p.llegada])));
-  const hora = (iso: string | null) => (iso ? hhmm(iso) : null);
+  // Al minuto, hacia abajo (revisión de Codex): una marca a las 08:00:30 se ve 08:00, nunca 08:01 ni 24:00.
+  const hora = (iso: string | null) => (iso ? hhmmAbajo(iso) : null);
   const viajes: ViajeTablero[] = estado.viajes.map((v, i) => {
     const estadoViaje = estadoDeViaje(v);
     const enOrden = [...v.paradas].sort((a, b) => a.secuencia - b.secuencia);
@@ -250,7 +256,9 @@ export function tableroDeJornada(
         : null;
       return {
         paradaId: p.paradaId, folio: datos.folio(p.solicitudId), cliente: datos.cliente(p.solicitudId), estado: e,
-        etiqueta: ETIQUETA_PARADA[e], hora: horaParada, ventana: { inicio: p.ventanaInicio, fin: p.ventanaFin },
+        etiqueta: ETIQUETA_PARADA[e], hora: horaParada,
+        horaPlan: e === "pendiente" || e === "en_camino" ? hora(p.llegadaEstimada) : null,
+        ventana: { inicio: p.ventanaInicio, fin: p.ventanaFin },
         motivo: e === "no_atendida" ? datos.motivo(p.paradaId) : null,
       };
     });
@@ -305,6 +313,6 @@ function siguientePaso(estado: EstadoJornada, viajes: ViajeTablero[], cliente: (
     permiteNoAtendida: accion.permiteNoAtendida,
     // Al minuto, hacia abajo: con hhmm (hacia arriba) una marca a las 08:00:30 dejaría el mínimo en 08:01 y la pantalla no
     // permitiría marcar a las 08:00:50 (la pantalla manda la hora exacta si no se cambió; el servidor valida los segundos).
-    desde: estado.ultimoOcurridoEn ? hhmm(new Date(Math.floor(Date.parse(estado.ultimoOcurridoEn) / 60_000) * 60_000).toISOString()) : null,
+    desde: estado.ultimoOcurridoEn ? hhmmAbajo(estado.ultimoOcurridoEn) : null,
   };
 }

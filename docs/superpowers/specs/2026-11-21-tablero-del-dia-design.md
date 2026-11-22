@@ -46,6 +46,11 @@ En "Seguimiento", cada camión (jornada) muestra:
   - **No se pudo atender:** con su motivo.
   - **Reasignada** u **omitida.**
 
+- **Hora proyectada y del plan.** Una parada pendiente o en camino muestra las dos llegadas, la proyectada y la estimada por el plan, para ver el retraso, como el seguimiento del Plan 7.
+- **Horas al minuto hacia abajo:** una marca a las 08:00:30 se ve 08:00.
+- **Viajes que se quedan sin paradas.** Si un re-ruteo pasa a otro camión todas las paradas de un viaje que todavía no sale, ese viaje deja de aparecer, como en el teléfono del operador, y sus paradas aparecen en el camión que las recibió. Dentro de un viaje que sigue, las reasignadas y las omitidas se muestran con su estado (revisión de Codex del 60e4cdf).
+- **Botones que parten la línea:** con nombres largos de cliente, un botón sin saltos desbordaba la pantalla del teléfono.
+
 Las alertas, los incidentes, los eventos por conciliar y el re-ruteo siguen igual.
 
 ### 2.2 Marcar el avance desde el despacho
@@ -92,6 +97,8 @@ export interface ParadaTablero {
   paradaId: string; folio: string; cliente: string; estado: EstadoParadaTablero; etiqueta: string;
   /** HH:MM: la hora en que se recolectó o se cerró; la llegada proyectada si está pendiente; null si no aplica. */
   hora: string | null;
+  /** HH:MM: la llegada estimada por el plan si está pendiente o en camino; si no, null. */
+  horaPlan: string | null;
   ventana: { inicio: string; fin: string };
   motivo: string | null;
 }
@@ -102,7 +109,7 @@ export interface ViajeTablero {
 export interface SiguientePaso {
   tipo: TipoEvento; texto: string; rutaId: string | null; paradaId: string | null; versionRuta: number | null;
   pideOdometro: boolean; permiteNoAtendida: boolean;
-  /** HH:MM: la hora mínima que se puede marcar (la del último evento), o null. */
+  /** HH:MM al minuto hacia abajo: la hora mínima que se puede marcar (la del último evento), o null. */
   desde: string | null;
 }
 export interface TableroJornada {

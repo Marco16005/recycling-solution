@@ -103,10 +103,14 @@ describe("tablero del día: el despacho marca el avance (2026-11-21)", () => {
     valor(await marcar(await siguiente(a(70))));
     const paso = (await tablero(despachador, a(75))).siguiente!;
     expect(paso.permiteNoAtendida).toBe(true);
-    valor(await marcar(await siguiente(a(75), { tipo: "no_atendida", motivo: "Cliente cerrado" })));
+    // A las 08:15:30: el tablero muestra 08:15 (al minuto hacia abajo), no 08:16.
+    const cierre = new Date(a(75).getTime() + 30_000);
+    valor(await marcar(await siguiente(cierre, { tipo: "no_atendida", motivo: "Cliente cerrado" })));
     const t = await tablero(despachador, a(76));
     expect(t.viajes[0].paradas[0]).toMatchObject({ estado: "no_atendida", etiqueta: "No se pudo atender", motivo: "Cliente cerrado", hora: "08:15" });
-    expect(t.viajes[0].paradas[1].estado).toBe("en_camino");
+    expect(t.viajes[0].paradas[1]).toMatchObject({ estado: "en_camino" });
+    expect(t.viajes[0].paradas[1].horaPlan).toMatch(/^\d{2}:\d{2}$/);
+    expect(t.viajes[0].paradas[0].horaPlan).toBeNull();
   });
 
   it("deja rastro: el evento es del despachador y la bitácora dice por_despacho", async () => {
