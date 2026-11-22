@@ -363,3 +363,11 @@ export async function incidentesAbiertos(bd: Conexion, fecha: string) {
     .orderBy(asc(incidentes.reportadoEn));
 }
 
+
+/** Tablero del día (2026-11-21): el motivo de cada parada no atendida, por id de parada. */
+export async function motivosNoAtendidas(bd: Conexion, paradaIds: string[]): Promise<Map<string, string>> {
+  if (paradaIds.length === 0) return new Map();
+  const filas = await bd.select({ id: paradas.id, motivo: paradas.motivoNoAtendida }).from(paradas)
+    .where(and(inArray(paradas.id, paradaIds), eq(paradas.estado, "no_atendida")));
+  return new Map(filas.filter((f) => f.motivo !== null).map((f) => [f.id, f.motivo!]));
+}
