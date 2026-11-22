@@ -2,14 +2,133 @@
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { VistaSeguimiento } from "@/consultas/operacion.nucleo";
+import type { SeguimientoJornada, VistaSeguimiento } from "@/consultas/operacion.nucleo";
 import type { VistaPlan } from "@/consultas/plan";
 import type { Resultado } from "@/acciones/tipos";
-import { conciliarEventoAccion, generarReruteoAccion, resolverIncidenteAccion } from "@/acciones/operacion";
+import type { EventoEntrada } from "@/dominio/operacion/tipos";
+import { instanteDeMinutos } from "@/dominio/plan/entrada";
+import { fechaEnMexico } from "@/dominio/tiempo";
+import { conciliarEventoAccion, generarReruteoAccion, registrarEventoPorDespachoAccion, resolverIncidenteAccion } from "@/acciones/operacion";
 import { ResultadoFallido, type Fallo } from "@/components/clientes/resultado-fallido";
 import { Button } from "@/components/ui/button";
 
 const nombresAlerta = { ventana_en_riesgo: "En riesgo", fuera_de_turno: "Fuera de turno", atraso: "Atraso" };
+const relojMexico = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Mexico_City", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const horaActualMexico = () => relojMexico.format(new Date());
+
+/** Conserva el desfase de Ciudad de México para la fecha elegida, incluso si cambia estacionalmente. */
+function horaConDesfase(fecha: string, hora: string): string {
+  const [h, m] = hora.split(":").map(Number);
+  const instante = instanteDeMinutos(fecha, h * 60 + m);
+  const desfaseMin = (Date.parse(`${fecha}T${hora}:00Z`) - instante.getTime()) / 60_000;
+  const signo = desfaseMin < 0 ? "-" : "+";
+  const absoluto = Math.abs(desfaseMin);
+  return `${fecha}T${hora}:00${signo}${String(Math.floor(absoluto / 60)).padStart(2, "0")}:${String(absoluto % 60).padStart(2, "0")}`;
+}
+
+function colorEstado(estado: string): string {
+  if (["terminado", "recolectada"].includes(estado)) return "border-emerald-600/30 bg-emerald-600/10 text-emerald-800 dark:text-emerald-300";
+  if (["en_camino", "en_cliente", "recolectando", "descargando"].includes(estado)) return "border-sky-600/30 bg-sky-600/10 text-sky-800 dark:text-sky-300";
+  if (estado === "no_atendida") return "border-amber-600/30 bg-amber-600/10 text-amber-800 dark:text-amber-300";
+  return "border-border bg-muted text-muted-foreground";
+}
+
+function MarcaDespacho({ jornada, fecha }: { jornada: SeguimientoJornada; fecha: string }) {
+  const router = useRouter();
+  const paso = jornada.tablero.siguiente!;
+  const [modo, setModo] = useState<"normal" | "no_atendida" | null>(null);
+  const [hora, setHora] = useState(horaActualMexico);
+  const [odometro, setOdometro] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const [entradaPendiente, setEntradaPendiente] = useState<EventoEntrada | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const [incierto, setIncierto] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [aplicado, setAplicado] = useState(false);
+
+  function abrir(siguienteModo: "normal" | "no_atendida") {
+    setModo(siguienteModo); setHora(horaActualMexico()); setOdometro(""); setMotivo("");
+    setEntradaPendiente(null); setIncierto(false); setError(null);
+  }
+
+  async function enviar(entrada: EventoEntrada) {
+    setEnviando(true); setError(null); setIncierto(false);
+    try {
+      const resultado = await registrarEventoPorDespachoAccion(entrada);
+      if (!resultado.ok) {
+        setEntradaPendiente(null);
+        setError(resultado.error === "invalido"
+          ? Object.values(resultado.campos).flat().join(" ")
+          : resultado.error === "conflicto" ? resultado.motivo?.texto ?? "El estado cambió; consulta el tablero."
+            : "No se pudo guardar la marca. Consulta el tablero.");
+        router.refresh();
+      } else if (resultado.valor.resultado === "rechazado") {
+        setEntradaPendiente(null);
+        setError(resultado.valor.motivo ?? "La marca fue rechazada; consulta el tablero.");
+        router.refresh();
+      } else {
+        setEntradaPendiente(null); setAplicado(true); setModo(null); router.refresh();
+      }
+    } catch {
+      // La respuesta puede perderse después de guardar: el mismo id hace seguro el reintento.
+      setEntradaPendiente(entrada); setIncierto(true);
+    } finally { setEnviando(false); }
+  }
+
+  function confirmar() {
+    const ahora = new Date();
+    const hoy = fechaEnMexico(ahora);
+    if (!/^\d{2}:\d{2}$/.test(hora) || (paso.desde && hora < paso.desde) || (fecha === hoy && hora > relojMexico.format(ahora))) {
+      setError("Elige una hora del día que no sea anterior a la última marca ni futura."); return;
+    }
+    if (modo === "no_atendida" && (!motivo.trim() || motivo.length > 200)) {
+      setError("Escribe un motivo de hasta 200 caracteres."); return;
+    }
+    const km = odometro.trim() === "" ? null : Number(odometro);
+    if (km !== null && (!Number.isFinite(km) || km < 0 || km > 9_999_999)) { setError("El odómetro debe estar entre 0 y 9 999 999 km."); return; }
+    try {
+      // La hora actual conserva sus segundos para no quedar antes de una marca del mismo minuto.
+      const ocurridoEn = fecha === hoy && hora === relojMexico.format(ahora)
+        ? ahora.toISOString() : horaConDesfase(fecha, hora);
+      const entrada: EventoEntrada = { eventoId: crypto.randomUUID(), jornadaId: jornada.jornadaId,
+        tipo: modo === "no_atendida" ? "no_atendida" : paso.tipo, ocurridoEn,
+        rutaId: paso.rutaId, paradaId: paso.paradaId, versionRuta: paso.versionRuta,
+        odometroKm: modo === "normal" && paso.pideOdometro ? km : null,
+        motivo: modo === "no_atendida" ? motivo.trim() : null };
+      setEntradaPendiente(entrada);
+      void enviar(entrada);
+    } catch { setError("Esa hora no existe en Ciudad de México para la fecha del plan."); }
+  }
+
+  return <div className="mt-5 border-t pt-4">
+    {!aplicado && <div className="flex flex-wrap gap-2">
+      <Button type="button" disabled={enviando || incierto} onClick={() => abrir("normal")}>Marcar: {paso.texto}</Button>
+      {paso.permiteNoAtendida && <Button type="button" variant="outline" disabled={enviando || incierto} onClick={() => abrir("no_atendida")}>No se pudo atender</Button>}
+    </div>}
+    {modo && !aplicado && <form aria-label={`Marcar avance de ${jornada.placa}`} className="mt-4 space-y-3 rounded-lg border bg-background p-4" onSubmit={e => { e.preventDefault(); confirmar(); }}>
+      <p className="font-medium">{modo === "no_atendida" ? "No se pudo atender" : paso.texto}</p>
+      <label className="block text-sm">Hora en Ciudad de México
+        <input type="time" name="hora" required min={paso.desde ?? undefined} max={fecha === fechaEnMexico(new Date()) ? horaActualMexico() : undefined} disabled={incierto || enviando}
+          value={hora} onChange={e => { setHora(e.target.value); setEntradaPendiente(null); setIncierto(false); }} className="mt-1 block rounded border bg-background px-3 py-2" />
+      </label>
+      {modo === "normal" && paso.pideOdometro && <label className="block text-sm">Odómetro (km, opcional)
+        <input type="number" min="0" max="9999999" step="any" value={odometro} disabled={incierto || enviando} onChange={e => { setOdometro(e.target.value); setEntradaPendiente(null); }} className="mt-1 block w-40 rounded border bg-background px-3 py-2" />
+      </label>}
+      {modo === "no_atendida" && <label className="block text-sm">Motivo
+        <textarea required maxLength={200} value={motivo} disabled={incierto || enviando} onChange={e => { setMotivo(e.target.value); setEntradaPendiente(null); }} className="mt-1 block w-full rounded border bg-background px-3 py-2" />
+      </label>}
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" disabled={enviando || incierto}>Confirmar marca</Button>
+        <Button type="button" variant="outline" disabled={enviando || incierto} onClick={() => { setModo(null); setEntradaPendiente(null); setError(null); }}>Cancelar</Button>
+      </div>
+    </form>}
+    {incierto && entradaPendiente && <div role="alert" className="mt-3 space-y-2 text-sm">
+      <p>No se pudo confirmar la marca. Puedes reintentar el mismo envío sin duplicarlo.</p>
+      <Button type="button" variant="outline" disabled={enviando} onClick={() => void enviar(entradaPendiente)}>Reintentar envío</Button>
+    </div>}
+    {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
+  </div>;
+}
 
 export function Seguimiento({ vista, plan }: { vista: VistaSeguimiento; plan: VistaPlan }) {
   const router = useRouter();
@@ -31,7 +150,7 @@ export function Seguimiento({ vista, plan }: { vista: VistaSeguimiento; plan: Vi
   }
   return <section aria-label="Seguimiento de operación" className="space-y-5 border-t pt-6">
     <h2 className="text-2xl font-semibold">Seguimiento</h2>
-    <p className="text-sm text-muted-foreground">Se actualiza cada 30 segundos.</p>
+    <p className="text-sm text-muted-foreground">Cada camión avanza cuando su operador marca en el teléfono o cuando lo marcas aquí. Se actualiza cada 30 segundos.</p>
     <section aria-label="Alertas" className="space-y-3 rounded-xl border p-4">
       <h3 className="text-xl font-semibold">Alertas</h3>
       <p>{vista.resumenAlertas.ventana_en_riesgo} paradas en riesgo · {vista.resumenAlertas.fuera_de_turno} fuera de turno · {vista.resumenAlertas.atraso} con atraso</p>
@@ -44,18 +163,21 @@ export function Seguimiento({ vista, plan }: { vista: VistaSeguimiento; plan: Vi
     </section>
     {fallo && (fallo.error === "conflicto" ? <p role="alert">{fallo.motivo?.texto ?? "El plan cambió; consulta el estado actual."}</p> : <ResultadoFallido resultado={fallo} />)}
     {incierto && <p role="alert">No se pudo confirmar la operación. Actualiza el estado antes de reintentar.</p>}
-    <div className="grid gap-3 sm:grid-cols-2">{vista.porJornada.map(j => <article key={j.jornadaId} className="rounded-xl border p-4">
-      <h3 className="font-semibold">{j.placa} · {j.operador}</h3>
-      <p>{j.checkOut ? "Jornada terminada" : j.checkIn ? "En jornada" : "Sin llegar al patio"}</p>
-      <p>{j.avance.completadas} completadas · {j.avance.noAtendidas} no atendidas · {j.avance.pendientes} pendientes · {j.avance.enSitio} en sitio</p>
-      {j.ultimoEvento && <p className="text-sm">Último evento: {j.ultimoEvento.tipo.replaceAll("_", " ")} · {new Date(j.ultimoEvento.en).toLocaleTimeString("es-MX", { timeZone: "America/Mexico_City" })}</p>}
-      {j.proyeccion.aproximada && <p className="mt-3 text-sm text-muted-foreground">proyección aproximada</p>}
-      <ul className="mt-3 space-y-3 text-sm">{j.proyeccion.paradas.map(p => <li key={p.paradaId} className="space-y-1 border-t pt-3">
-        <p className="break-words font-medium">{p.folio} · {p.cliente}</p>
-        <p>{p.enViajeEnCurso ? "viaje en curso" : "viaje futuro"} · Ventana {p.ventana.inicio}–{p.ventana.fin}</p>
-        <p className="tabular-nums">Llegada estimada {p.llegadaEstimada} · Llegada proyectada {p.llegadaProyectada}</p>
-        {p.ubicacionSupuesta && <p className="text-muted-foreground">ubicación supuesta</p>}
-      </li>)}</ul>
+    <div className="grid gap-4 xl:grid-cols-2">{vista.porJornada.map(j => <article key={j.jornadaId} aria-label={`Camión ${j.placa}`} className="min-w-0 rounded-xl border bg-card p-5 shadow-sm">
+      <h3 className="text-lg font-semibold">{j.placa} · {j.operador}</h3>
+      <p className="mt-3 text-2xl font-semibold leading-tight">{j.tablero.frase}</p>
+      <p className="mt-2 text-sm font-medium tabular-nums text-muted-foreground">{j.tablero.recolecciones.hechas} de {j.tablero.recolecciones.total} recolecciones</p>
+      {j.proyeccion.aproximada && <p className="mt-2 text-sm text-muted-foreground">Proyección aproximada</p>}
+      <div className="mt-5 space-y-4">{j.tablero.viajes.map(v => <section key={v.rutaId} className="rounded-lg border bg-background p-4">
+        <h4 className="flex flex-wrap items-center gap-2 font-semibold">Viaje {v.numero} · <span className={`rounded-full border px-2 py-0.5 text-sm ${colorEstado(v.estado)}`}>{v.etiqueta}</span></h4>
+        <p className="mt-1 text-sm tabular-nums text-muted-foreground">Salió {v.salida ?? "—"} · Regresó {v.regreso ?? "—"}</p>
+        <ul aria-label={`Recolecciones del viaje ${v.numero}`} className="mt-3 divide-y">{v.paradas.map(p => <li key={p.paradaId} className="py-3 text-sm first:pt-0 last:pb-0">
+          <p className="break-words font-medium">{p.folio} · {p.cliente}</p>
+          <p className="mt-1 flex flex-wrap items-center gap-2"><span className={`rounded-full border px-2 py-0.5 ${colorEstado(p.estado)}`}>{p.etiqueta}</span><span className="tabular-nums">{p.hora ?? "Sin hora"} · Ventana {p.ventana.inicio}–{p.ventana.fin}</span></p>
+          {p.motivo && <p className="mt-1 break-words text-amber-800 dark:text-amber-300">Motivo: {p.motivo}</p>}
+        </li>)}</ul>
+      </section>)}</div>
+      {vista.puedeRegistrar && j.tablero.siguiente && <MarcaDespacho key={`${j.jornadaId}-${j.tablero.siguiente.tipo}-${j.ultimoEvento?.en ?? ""}`} jornada={j} fecha={plan.fecha} />}
     </article>)}</div>
     <fieldset disabled={pendiente || incierto} className="space-y-5">
       <section aria-label="Incidentes abiertos" className="space-y-3"><h3 className="text-xl font-semibold">Incidentes abiertos</h3>

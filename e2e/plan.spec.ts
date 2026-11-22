@@ -60,6 +60,12 @@ test("despachador genera, ajusta y valida el plan; gerencia lo consulta en solo 
   await validar.click();
   await expect(plan.getByText("Validado", { exact: true })).toBeVisible();
   await expect(antes).toHaveCount(0);
+  const seguimiento = page.getByRole("region", { name: "Seguimiento de operación", exact: true });
+  const camion = seguimiento.getByRole("article", { name: `Camión ${placa}`, exact: true });
+  await expect(camion.getByText("Sin llegar al patio", { exact: true })).toBeVisible();
+  await expect(camion.getByText(/^0 de \d+ recolecciones$/)).toBeVisible();
+  await expect(camion.getByRole("list", { name: "Recolecciones del viaje 1", exact: true })).toBeVisible();
+  await expect(camion.getByRole("button", { name: "Marcar: Llegó al patio", exact: true })).toBeVisible();
   for (const folio of folios) {
     expect(await estadoDeSolicitud(folio)).toMatchObject({ estado: "programada" });
   }
@@ -97,6 +103,9 @@ test("despachador genera, ajusta y valida el plan; gerencia lo consulta en solo 
     for (const nombre of ["Generar plan", "Regenerar", "Validar", "Posponer"]) {
       await expect(lectura.getByRole("button", { name: nombre, exact: true })).toHaveCount(0);
     }
+    const camionLeido = gerencia.getByRole("article", { name: `Camión ${placa}`, exact: true });
+    await expect(camionLeido.getByText("Sin llegar al patio", { exact: true })).toBeVisible();
+    await expect(camionLeido.getByRole("button", { name: /^Marcar:/ })).toHaveCount(0);
   } finally {
     await contexto.close();
   }

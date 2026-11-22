@@ -153,7 +153,7 @@ test("operador: jornada, idempotencia, rechazo, cola sin señal e incidente con 
       const otraJornada = seguimiento.getByRole("article").filter({
         has: d.getByRole("heading", { name: new RegExp(`^${dia.otraPlaca} ·`) }),
       });
-      const futuras = otraJornada.getByRole("listitem").filter({ hasText: "viaje futuro" });
+      const futuras = otraJornada.getByRole("list", { name: /^Recolecciones del viaje / }).getByRole("listitem").filter({ hasText: "Pendiente" });
       await expect(futuras.first()).toBeVisible();
       const reruteo = d.getByRole("region", { name: "Re-rutear", exact: true });
       const foliosFuturos: string[] = [];

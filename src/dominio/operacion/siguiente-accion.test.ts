@@ -47,6 +47,22 @@ describe("siguiente acción del operador", () => {
     const s = inicial(); s.viajes = [];
     expect(siguienteAccion(avanzar(s))?.tipo).toBe("check_out");
   });
+  it("mantiene el siguiente paso tras salida y regreso sin odómetro", () => {
+    let s = avanzar(inicial());
+    const salida = siguienteAccion(s)!;
+    expect(salida.tipo).toBe("salida_patio");
+    s = proyectarEvento(s, { eventoId: "sin-km", jornadaId: s.jornadaId, ocurridoEn: hora,
+      tipo: salida.tipo, rutaId: salida.rutaId, paradaId: salida.paradaId, versionRuta: salida.versionRuta,
+      odometroKm: null, motivo: null });
+    expect(siguienteAccion(s)).toMatchObject({ tipo: "llegada", paradaId: "1-1" });
+    s.viajes[0].paradas.forEach(p => { p.estado = "completada"; });
+    const regreso = siguienteAccion(s)!;
+    expect(regreso.tipo).toBe("regreso_patio");
+    s = proyectarEvento(s, { eventoId: "sin-km-2", jornadaId: s.jornadaId, ocurridoEn: hora,
+      tipo: regreso.tipo, rutaId: regreso.rutaId, paradaId: regreso.paradaId, versionRuta: regreso.versionRuta,
+      odometroKm: null, motivo: null });
+    expect(siguienteAccion(s)?.tipo).toBe("fin_descarga");
+  });
   it("ordena las paradas por secuencia y omite las retiradas por re-ruteo", () => {
     let s = avanzar(avanzar(inicial()));
     s.viajes[0].paradas.reverse();

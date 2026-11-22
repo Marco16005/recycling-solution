@@ -34,7 +34,7 @@ function avanzar(s: EstadoJornada, e: EventoEntrada) {
       else s.checkOutEn = e.ocurridoEn;
     } else if (efecto.tipo === "ruta") {
       const v = s.viajes.find(v => v.rutaId === efecto.rutaId)!;
-      if (efecto.campo === "salida_patio_en") { v.salidaPatioEn = e.ocurridoEn; v.odometroInicioKm = efecto.odometroKm!; }
+      if (efecto.campo === "salida_patio_en") { v.salidaPatioEn = e.ocurridoEn; v.odometroInicioKm = efecto.odometroKm ?? null; }
       if (efecto.campo === "regreso_patio_en") v.regresoPatioEn = e.ocurridoEn;
       if (efecto.campo === "descarga_fin_en") v.descargaFinEn = e.ocurridoEn;
       if (efecto.odometroKm !== undefined) s.ultimoOdometroKm = efecto.odometroKm;
@@ -141,6 +141,34 @@ describe("máquina de operación", () => {
     expect(aplicarEvento(estado(), evento("check_in"), hora(1920)).ok).toBe(true);
     const s = estado(); s.ultimoOcurridoEn = hora();
     expect(aplicarEvento(s, evento("check_in"), hora()).ok).toBe(true);
+  });
+  it("admite odómetro desconocido sin escribirlo y conserva la comparación cuando se informa", () => {
+    const s = estado();
+    expect(avanzar(s, evento("check_in"))).toBe(true);
+    const salida = evento("salida_patio", { odometroKm: null });
+    expect(aplicarEvento(s, salida, hora())).toEqual({ ok: true, efectos: [
+      { tipo: "ruta", rutaId: "r0", campo: "salida_patio_en" },
+      { tipo: "solicitudes", rutaId: "r0", estado: "en_ruta" },
+    ] });
+    expect(avanzar(s, salida)).toBe(true);
+    expect(s.ultimoOdometroKm).toBeNull();
+    expect(s.viajes[0].odometroInicioKm).toBeNull();
+    s.viajes[0].paradas.forEach(p => { p.estado = "completada"; });
+    const regreso = evento("regreso_patio", { odometroKm: null });
+    expect(aplicarEvento(s, regreso, hora())).toEqual({ ok: true, efectos: [
+      { tipo: "ruta", rutaId: "r0", campo: "regreso_patio_en" },
+    ] });
+    expect(avanzar(s, regreso)).toBe(true);
+    expect(s.ultimoOdometroKm).toBeNull();
+
+    const conUltimo = estado(); conUltimo.checkInEn = hora(); conUltimo.ultimoOdometroKm = 250;
+    expect(aplicarEvento(conUltimo, evento("salida_patio", { odometroKm: 249 }), hora()).ok).toBe(false);
+    expect(aplicarEvento(conUltimo, evento("salida_patio", { odometroKm: null }), hora()).ok).toBe(true);
+    conUltimo.viajes[0].salidaPatioEn = hora();
+    conUltimo.viajes[0].odometroInicioKm = 260;
+    conUltimo.viajes[0].paradas.forEach(p => { p.estado = "completada"; });
+    expect(aplicarEvento(conUltimo, evento("regreso_patio", { odometroKm: 259 }), hora()).ok).toBe(false);
+    expect(aplicarEvento(conUltimo, evento("regreso_patio", { odometroKm: null }), hora()).ok).toBe(true);
   });
   it("no atendida en sitio libera sin inventar horas de servicio", () => {
     const s = estado(); s.checkInEn = hora(); s.viajes[0].salidaPatioEn = hora(); s.viajes[0].paradas[0].estado = "en_sitio";
