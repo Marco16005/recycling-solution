@@ -149,33 +149,34 @@ export function Seguimiento({ vista, plan }: { vista: VistaSeguimiento; plan: Vi
       catch { setIncierto(true); }
     });
   }
-  return <section aria-label="Seguimiento de operación" className="space-y-5 border-t pt-6">
-    <h2 className="text-2xl font-semibold">Seguimiento</h2>
+  const sinAlertas = Object.values(vista.resumenAlertas).every(cuenta => cuenta === 0);
+  return <section aria-label="Cómo va el día" className="min-w-0 space-y-5">
+    <h2 className="text-2xl font-semibold">Cómo va el día</h2>
     <p className="text-sm text-muted-foreground">Cada camión avanza cuando su operador marca en el teléfono o cuando lo marcas aquí. Se actualiza cada 30 segundos.</p>
     <section aria-label="Alertas" className="space-y-3 rounded-xl border p-4">
       <h3 className="text-xl font-semibold">Alertas</h3>
-      <p>{vista.resumenAlertas.ventana_en_riesgo} paradas en riesgo · {vista.resumenAlertas.fuera_de_turno} fuera de turno · {vista.resumenAlertas.atraso} con atraso</p>
-      <ul className="space-y-2 text-sm">{vista.porJornada.flatMap(j => j.proyeccion.alertas.map(a => {
+      <p>{sinAlertas ? "Sin alertas" : `${vista.resumenAlertas.ventana_en_riesgo} paradas en riesgo · ${vista.resumenAlertas.fuera_de_turno} fuera de turno · ${vista.resumenAlertas.atraso} con atraso`}</p>
+      {!sinAlertas && <ul className="space-y-2 text-sm">{vista.porJornada.flatMap(j => j.proyeccion.alertas.map(a => {
         const parada = j.proyeccion.paradas.find(p => p.paradaId === a.paradaId);
-        return <li key={`${j.jornadaId}-${a.rutaId}-${a.paradaId}-${a.tipo}`} className="rounded-lg border p-3">
+        return <li key={`${j.jornadaId}-${a.rutaId}-${a.paradaId}-${a.tipo}`} className="min-w-0 rounded-lg border p-3 [overflow-wrap:anywhere]">
           <strong>{nombresAlerta[a.tipo]}</strong> · {j.placa}{parada && ` · ${parada.folio} · ${parada.cliente}`} · {a.minutos} min · {a.enViajeEnCurso ? "viaje en curso" : "viaje futuro"}
         </li>;
-      }))}</ul>
+      }))}</ul>}
     </section>
     {fallo && (fallo.error === "conflicto" ? <p role="alert">{fallo.motivo?.texto ?? "El plan cambió; consulta el estado actual."}</p> : <ResultadoFallido resultado={fallo} />)}
     {incierto && <p role="alert">No se pudo confirmar la operación. Actualiza el estado antes de reintentar.</p>}
     <div className="grid gap-4 xl:grid-cols-2">{vista.porJornada.map(j => <article key={j.jornadaId} aria-label={`Camión ${j.placa}`} className="min-w-0 rounded-xl border bg-card p-5 shadow-sm">
       <h3 className="text-lg font-semibold [overflow-wrap:anywhere]">{j.placa} · {j.operador}</h3>
       <p className="mt-3 text-2xl font-semibold leading-tight [overflow-wrap:anywhere]">{j.tablero.frase}</p>
-      <p className="mt-2 text-sm font-medium tabular-nums text-muted-foreground">{j.tablero.recolecciones.hechas} de {j.tablero.recolecciones.total} recolecciones</p>
+      {j.tablero.recolecciones.total > 0 && <p className="mt-2 text-sm font-medium tabular-nums text-muted-foreground">{j.tablero.recolecciones.hechas} de {j.tablero.recolecciones.total} recolecciones</p>}
       {j.proyeccion.aproximada && <p className="mt-2 text-sm text-muted-foreground">Proyección aproximada</p>}
-      <div className="mt-5 space-y-4">{j.tablero.viajes.map(v => <section key={v.rutaId} className="rounded-lg border bg-background p-4">
+      <div className="mt-5 space-y-4">{j.tablero.viajes.map(v => <section key={v.rutaId} className="min-w-0 rounded-lg border bg-background p-4">
         <h4 className="flex flex-wrap items-center gap-2 font-semibold">Viaje {v.numero} · <span className={`rounded-full border px-2 py-0.5 text-sm ${colorEstado(v.estado)}`}>{v.etiqueta}</span></h4>
-        <p className="mt-1 text-sm tabular-nums text-muted-foreground">Salió {v.salida ?? "—"} · Regresó {v.regreso ?? "—"}</p>
+        {(v.salida || v.regreso) && <p className="mt-1 text-sm tabular-nums text-muted-foreground">{[v.salida && `Salió ${v.salida}`, v.regreso && `Regresó ${v.regreso}`].filter(Boolean).join(" · ")}</p>}
         <ul aria-label={`Recolecciones del viaje ${v.numero}`} className="mt-3 divide-y">{v.paradas.map(p => <li key={p.paradaId} className="py-3 text-sm first:pt-0 last:pb-0">
-          <p className="break-words font-medium">{p.folio} · {p.cliente}</p>
-          <p className="mt-1 flex flex-wrap items-center gap-2"><span className={`rounded-full border px-2 py-0.5 ${colorEstado(p.estado)}`}>{p.etiqueta}</span><span className="tabular-nums">{p.horaPlan
-            ? `Llegada proyectada ${p.hora ?? "—"} · Llegada estimada ${p.horaPlan}` : p.hora ?? "Sin hora"} · Ventana {p.ventana.inicio}–{p.ventana.fin}</span></p>
+          <p className="min-w-0 font-medium [overflow-wrap:anywhere]">{p.folio} · {p.cliente}</p>
+          <p className="mt-1 flex min-w-0 flex-wrap items-center gap-2"><span className={`rounded-full border px-2 py-0.5 ${colorEstado(p.estado)}`}>{p.etiqueta}</span><span className="min-w-0 tabular-nums [overflow-wrap:anywhere]">{p.horaPlan
+            ? `Llegada prevista ${p.hora ?? "—"}${p.hora !== p.horaPlan ? ` (plan: ${p.horaPlan})` : ""}` : p.hora ?? "Sin hora"} · Horario del cliente {p.ventana.inicio}–{p.ventana.fin}</span></p>
           {p.motivo && <p className="mt-1 break-words text-amber-800 dark:text-amber-300">Motivo: {p.motivo}</p>}
         </li>)}</ul>
       </section>)}</div>
@@ -186,8 +187,7 @@ export function Seguimiento({ vista, plan }: { vista: VistaSeguimiento; plan: Vi
       {vista.puedeRegistrar && j.tablero.siguiente && <MarcaDespacho key={`${j.jornadaId}-${j.tablero.siguiente.tipo}-${j.ultimoEvento?.en ?? ""}`} jornada={j} fecha={plan.fecha} />}
     </article>)}</div>
     <fieldset disabled={pendiente || incierto} className="space-y-5">
-      <section aria-label="Incidentes abiertos" className="space-y-3"><h3 className="text-xl font-semibold">Incidentes abiertos</h3>
-        {!vista.incidentesAbiertos.length && <p>Sin incidentes abiertos.</p>}
+      {vista.incidentesAbiertos.length > 0 && <section aria-label="Incidentes abiertos" className="space-y-3"><h3 className="text-xl font-semibold">Incidentes abiertos</h3>
         {vista.incidentesAbiertos.map(i => <article key={i.id} className="space-y-3 rounded-xl border p-4">
           <h4 className="font-semibold">{vista.porJornada.find(j => j.jornadaId === i.jornadaId)?.placa} · {i.tipo.replaceAll("_", " ")}</h4><p>{i.descripcion}</p>
           {vista.puedeResolver && <form aria-label={`Resolver ${i.descripcion}`} className="flex flex-wrap gap-3" onSubmit={e => {
@@ -195,16 +195,16 @@ export function Seguimiento({ vista, plan }: { vista: VistaSeguimiento; plan: Vi
             ejecutar(() => resolverIncidenteAccion(i.id, i.version, { accion }));
           }}><label>Acción<select name="accion" className="ml-2 rounded border bg-background p-2"><option value="continuar">Continuar</option>{i.paradaId && <option value="cancelar">Cancelar solicitud pendiente</option>}<option value="re_ruteo">Re-ruteo</option></select></label><Button type="submit">Resolver incidente</Button></form>}
         </article>)}
-      </section>
-      <section aria-label="Eventos rechazados" className="space-y-3"><h3 className="text-xl font-semibold">Eventos rechazados</h3>
-        {!vista.eventosRechazados.length && <p>Sin eventos por conciliar.</p>}
+      </section>}
+      {vista.eventosRechazados.length > 0 && <section aria-label="Eventos rechazados" className="space-y-3"><h3 className="text-xl font-semibold">Eventos rechazados</h3>
         {vista.eventosRechazados.map(e => <article key={e.eventoId} className="space-y-3 rounded-xl border p-4"><p>{vista.porJornada.find(j => j.jornadaId === e.jornadaId)?.placa} · {e.tipo.replaceAll("_", " ")}</p><p>{e.motivoRechazo}</p>
           {vista.puedeConciliar && <form aria-label={`Conciliar ${e.eventoId}`} onSubmit={f => {
             f.preventDefault(); const nota = String(new FormData(f.currentTarget).get("nota")).trim(); ejecutar(() => conciliarEventoAccion(e.eventoId, { nota }));
           }}><label>Nota de conciliación<textarea name="nota" required maxLength={300} className="mb-3 block w-full rounded border bg-background p-3" /></label><Button type="submit">Conciliar</Button></form>}
         </article>)}
-      </section>
-      {plan.puedeGenerar && <section aria-label="Re-rutear" className="space-y-3 rounded-xl border p-4"><h3 className="text-xl font-semibold">Re-rutear</h3>
+      </section>}
+      {plan.puedeGenerar && <details open={Boolean(plan.reruteoPropuesto)} className="min-w-0 rounded-xl border p-4"><summary className="cursor-pointer font-semibold">¿Un camión ya no puede seguir? Re-rutear</summary>
+        <section aria-label="Re-rutear" className="mt-4 space-y-3"><h3 className="text-xl font-semibold">Re-rutear</h3>
         {plan.reruteoPropuesto ? <Link className="underline" href={`/despacho/plan?fecha=${plan.fecha}&plan=${plan.reruteoPropuesto.planId}`}>Revisar re-ruteo propuesto</Link> : <>
           <p>Marca las jornadas que dejan de estar disponibles. Los viajes en curso de las demás unidades quedan congelados.</p>
           <p className="text-sm text-muted-foreground">Liberar permite volver a asignar una parada de un viaje futuro; puede quedar en la misma unidad.</p>
@@ -225,7 +225,7 @@ export function Seguimiento({ vista, plan }: { vista: VistaSeguimiento; plan: Vi
                   const marcada = e.target.checked;
                   setLiberadas(ids => marcada ? [...ids.filter(id => liberables.has(id)), p.solicitudId] : ids.filter(id => id !== p.solicitudId));
                 }} />Liberar {p.folio}</label>
-              <p className="break-words text-sm text-muted-foreground">{p.cliente}</p>
+              <p className="min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">{p.cliente}</p>
             </div>)}
           </div>)}
           <Button onClick={() => {
@@ -233,7 +233,8 @@ export function Seguimiento({ vista, plan }: { vista: VistaSeguimiento; plan: Vi
             ejecutar(() => generarReruteoAccion(plan.planId!, plan.version!, entrada), r => router.push(`/despacho/plan?fecha=${plan.fecha}&plan=${r.planId}`));
           }}>Generar re-ruteo</Button>
         </>}
-      </section>}
+        </section>
+      </details>}
     </fieldset>
     {incierto && <Button variant="outline" onClick={() => { setIncierto(false); router.refresh(); }}>Consultar estado actual</Button>}
   </section>;

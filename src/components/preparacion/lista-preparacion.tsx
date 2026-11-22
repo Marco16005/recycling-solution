@@ -28,8 +28,8 @@ export function ListaPreparacion({ preparacion }: { preparacion: Preparacion }) 
       <ol className="mt-2 list-decimal space-y-1 pl-5">
         <li>En <strong>Jornada</strong> asignas qué camión sale con qué operador, y en <strong>Solicitudes</strong> registras las recolecciones.</li>
         <li>Aquí pulsas <strong>Generar plan</strong>: el sistema arma los viajes de cada camión. Los revisas, los ajustas si hace falta y pulsas <strong>Validar</strong>.</li>
-        <li>Cada operador marca su avance en su teléfono (salió, llegó, terminó). Si no puede, tú lo marcas aquí mismo, en el tablero de cada camión.</li>
-        <li>Debajo del plan validado, en <strong>Seguimiento</strong>, ves cada camión con sus viajes y qué recolecciones van hechas, en camino o pendientes.</li>
+        <li>Cada operador marca su avance en su teléfono (salió, llegó, terminó). Si no puede, tú lo marcas aquí mismo con el botón <strong>Marcar</strong> de cada camión.</li>
+        <li>Con el plan validado, en <strong>Cómo va el día</strong> ves cada camión con sus viajes y qué recolecciones van hechas, en camino o pendientes.</li>
       </ol>
     </details>
     <div className="space-y-1">

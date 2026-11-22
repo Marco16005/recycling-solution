@@ -91,8 +91,13 @@ describe("lista Antes de generar: reglas (2026-11-21)", () => {
 
   it("sin jornadas ni solicitudes: faltan las dos, con su pantalla", () => {
     const p = evaluarPreparacion(datos());
-    expect(punto(p, "camiones")).toMatchObject({ estado: "falta", enlace: { href: "/despacho/jornada?fecha=2026-11-21" } });
-    expect(punto(p, "solicitudes")).toMatchObject({ estado: "falta", enlace: { href: "/despacho/solicitudes?fecha=2026-11-21" } });
+    // El texto exacto también: e2e/plan.spec.ts no puede exigirlo en una fecha lejana porque la base es compartida.
+    expect(punto(p, "camiones")).toMatchObject({
+      estado: "falta", detalle: expect.stringMatching(/^No hay camiones asignados a este día\./), enlace: { href: "/despacho/jornada?fecha=2026-11-21" },
+    });
+    expect(punto(p, "solicitudes")).toMatchObject({
+      estado: "falta", detalle: expect.stringMatching(/^No hay solicitudes pendientes para este día\./), enlace: { href: "/despacho/solicitudes?fecha=2026-11-21" },
+    });
     expect(p.puntos.some((x) => x.clave === "atencion")).toBe(false);
     expect(p).toMatchObject({ listo: false, faltan: 2 });
   });

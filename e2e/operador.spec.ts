@@ -35,6 +35,13 @@ async function odometro(page: Page, boton: string, km: number) {
   await sinPendientes(page);
 }
 
+test("admin sin ruta ve el enlace al avance del plan", async ({ page }) => {
+  await entrarComo(page, "admin");
+  await page.goto("/operador");
+  await expect(page.getByText("Esta pantalla es la del teléfono de cada operador y tu cuenta no es de operador. Para ver y marcar el avance de los camiones, entra a «Plan del día».", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "«Plan del día»", exact: true })).toHaveAttribute("href", "/despacho/plan");
+});
+
 test("operador: jornada, idempotencia, rechazo, cola sin señal e incidente con re-ruteo", async ({ page, context, browser, baseURL }) => {
   test.setTimeout(180_000);
   const dia = await prepararDiaOperador(); // Una sola preparación para todo el archivo.
@@ -138,7 +145,7 @@ test("operador: jornada, idempotencia, rechazo, cola sin señal e incidente con 
     const rechazados = d.getByRole("region", { name: "Eventos rechazados", exact: true });
     await rechazados.getByLabel("Nota de conciliación").fill("Revisado con operador: prueba de rechazo");
     await rechazados.getByRole("button", { name: "Conciliar", exact: true }).click();
-    await expect(rechazados).toContainText("Sin eventos por conciliar");
+    await expect(rechazados).toHaveCount(0);
     const resolver = d.getByRole("form", { name: "Resolver Cierre sintético de acceso E2E" });
     await resolver.getByLabel("Acción").selectOption("re_ruteo");
     await resolver.getByRole("button", { name: "Resolver incidente" }).click();
@@ -149,12 +156,13 @@ test("operador: jornada, idempotencia, rechazo, cola sin señal e incidente con 
     const vencida = d.getByRole("alert").filter({ hasText: "terminará su viaje más tarde de lo previsto" });
     for (let intento = 1; ; intento++) {
       if (intento > 1) await d.goto(`/despacho/plan?fecha=${dia.fecha}`);
-      const seguimiento = d.getByRole("region", { name: "Seguimiento de operación", exact: true });
+      const seguimiento = d.getByRole("region", { name: "Cómo va el día", exact: true });
       const otraJornada = seguimiento.getByRole("article").filter({
         has: d.getByRole("heading", { name: new RegExp(`^${dia.otraPlaca} ·`) }),
       });
       const futuras = otraJornada.getByRole("list", { name: /^Recolecciones del viaje / }).getByRole("listitem").filter({ hasText: "Pendiente" });
       await expect(futuras.first()).toBeVisible();
+      await d.getByText("¿Un camión ya no puede seguir? Re-rutear", { exact: true }).click();
       const reruteo = d.getByRole("region", { name: "Re-rutear", exact: true });
       const foliosFuturos: string[] = [];
       for (const futura of await futuras.all()) {
@@ -176,11 +184,15 @@ test("operador: jornada, idempotencia, rechazo, cola sin señal e incidente con 
       }
       await d.getByRole("button", { name: "Generar re-ruteo", exact: true }).click();
       await expect(d).toHaveURL(/plan=/);
-      await expect(d.getByText(/solicitudes congeladas conservadas/)).toBeVisible();
+      await expect(d.getByText(/Propuesta de re-ruteo · (?:1 solicitud congelada conservada|\d+ solicitudes congeladas conservadas)/)).toBeVisible();
       for (const casilla of await d.getByRole("checkbox").all()) await casilla.check();
       await d.getByRole("button", { name: "Validar", exact: true }).click();
       await expect(validado.or(vencida)).toBeVisible();
-      if (await validado.isVisible()) break;
+      if (await validado.isVisible()) {
+        await expect(d.getByText(/Este plan es un re-ruteo validado: reemplazó al plan anterior\./)).toBeVisible();
+        await expect(d.getByRole("link", { name: "Volver al plan vigente", exact: true })).toHaveCount(0);
+        break;
+      }
       expect(intento, "la frontera venció en tres intentos seguidos").toBeLessThan(3);
     }
   } finally { await despacho.close(); }

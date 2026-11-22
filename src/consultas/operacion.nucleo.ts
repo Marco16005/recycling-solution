@@ -318,6 +318,9 @@ export function pospuestasDelDia<T extends { paradaId: string; solicitudId: stri
 
 function fraseDeJornada(estado: EstadoJornada, viajes: ViajeTablero[]): string {
   if (estado.checkOutEn) return "Jornada terminada";
+  // Plan del día claro (2026-11-21): un camión al que el plan no le dio viajes, o al que un re-ruteo se los quitó, no
+  // dice «Sin llegar al patio · 0 de 0», que parece un retraso.
+  if (viajes.length === 0) return estado.checkInEn ? "En el patio, sin recolecciones asignadas" : "Sin recolecciones asignadas hoy";
   if (!estado.checkInEn) return "Sin llegar al patio";
   const enCurso = viajes.find((v) => v.estado === "en_camino" || v.estado === "descargando");
   if (enCurso) {
