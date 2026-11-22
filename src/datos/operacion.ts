@@ -371,3 +371,15 @@ export async function motivosNoAtendidas(bd: Conexion, paradaIds: string[]): Pro
     .where(and(inArray(paradas.id, paradaIds), eq(paradas.estado, "no_atendida")));
   return new Map(filas.filter((f) => f.motivo !== null).map((f) => [f.id, f.motivo!]));
 }
+
+/**
+ * Tablero del día (2026-11-21, revisión de Codex): paradas que un re-ruteo pospuso (omitidas) en viajes que ya no están
+ * en la secuencia operativa porque se quedaron sin paradas antes de salir. Sin esto, el despacho no vería en el tablero
+ * las recolecciones que ya no se harán ese día.
+ */
+export async function omitidasFueraDeSecuencia(bd: Conexion, j: { id: string; fecha: string }): Promise<{ paradaId: string; solicitudId: string }[]> {
+  const todas = await rutasOperativas(bd, j.id, await planOperativo(bd, j.fecha));
+  const dentro = new Set(secuenciaOperativa(todas).map((r) => r.ruta.id));
+  return todas.filter((r) => !dentro.has(r.ruta.id))
+    .flatMap((r) => r.paradas.filter((p) => p.estado === "omitida").map((p) => ({ paradaId: p.id, solicitudId: p.solicitudId })));
+}

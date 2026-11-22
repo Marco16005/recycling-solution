@@ -102,7 +102,8 @@ export async function prepararDiaOperador(): Promise<DiaOperador> {
       const operadorTablero = await insertarOperador(tx, { nombre: `Operador tablero ${sufijo}`, telefono: null, activo: true, documentos: [vigente("licencia_conducir")] }, ahora);
       await registrarEntregaAvisoSiVersion(tx, operadorTablero.id, operadorTablero.version, versionAvisoPrivacidad, ahora);
       const tableroJornadaId = await insertarJornada(tx, { fecha, unidadId: torton.id, operadorId: operadorTablero.id, disponibleDesde: "00:00", notas: null }, ahora);
-      for (const [i, prefijo] of ["Tablero Poniente", "Tablero Bajío"].entries()) {
+      // Un nombre largo a propósito: tablero.spec comprueba que la tarjeta del camión no se sale del teléfono.
+      for (const [i, prefijo] of ["Tablero Poniente", "Tablero Bajío Comercializadora de Cartón y Papel Reciclado del Centro de Querétaro"].entries()) {
         const c = await insertarCliente(tx, {
           nombre: nombreUnico(prefijo), contactoNombre: null, contactoTelefono: null, direccion: `Calle ${i + 10}, El Marqués, Qro.`,
           lat: PATIO.lat - 0.01 * (i + 1), lng: PATIO.lng - 0.01 * (i + 1), tipoResiduo: "RME", material: "Cartón",

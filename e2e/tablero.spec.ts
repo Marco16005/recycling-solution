@@ -2,6 +2,11 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { prepararDiaOperador } from "./ayudas/operador";
 import { entrarComo } from "./ayudas/sesion";
 
+/** A 412 px (teléfono), la tarjeta del camión no se sale de la pantalla aunque el cliente tenga un nombre muy largo. */
+async function sinDesborde(camion: Locator) {
+  await expect.poll(() => camion.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().right <= window.innerWidth + 1)).toBe(true);
+}
+
 async function marcar(camion: Locator, nombre: string) {
   await camion.getByRole("button", { name: `Marcar: ${nombre}`, exact: true }).click();
   const formulario = camion.getByRole("form", { name: /Marcar avance de / });
@@ -16,6 +21,7 @@ test("despacho marca un viaje completo sin odómetro y gerencia solo lo consulta
   const dia = { ...(await prepararDiaOperador()) };
   dia.placa = dia.tableroPlaca;
   await entrarComo(page, "despachador");
+  await page.setViewportSize({ width: 412, height: 915 });
   await page.goto(`/despacho/plan?fecha=${dia.fecha}`);
   const seguimiento = page.getByRole("region", { name: "Seguimiento de operación", exact: true });
   const camion = seguimiento.getByRole("article", { name: `Camión ${dia.placa}`, exact: true });
@@ -35,7 +41,9 @@ test("despacho marca un viaje completo sin odómetro y gerencia solo lo consulta
   for (let i = 0; i < paradas; i++) {
     const llegada = camion.getByRole("button", { name: /^Marcar: Llegó a / });
     const cliente = (await llegada.innerText()).replace(/^Marcar: Llegó a /, "");
+    await sinDesborde(camion);
     await marcar(camion, `Llegó a ${cliente}`);
+    await sinDesborde(camion);
     await expect(camion.getByText(`Viaje 1: en ${cliente}, esperando`, { exact: true })).toBeVisible();
     await marcar(camion, `Empezó a recolectar en ${cliente}`);
     await expect(camion.getByText(`Viaje 1: recolectando en ${cliente}`, { exact: true })).toBeVisible();

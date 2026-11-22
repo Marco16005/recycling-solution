@@ -103,11 +103,11 @@ function MarcaDespacho({ jornada, fecha }: { jornada: SeguimientoJornada; fecha:
   return <div className="mt-5 border-t pt-4">
     {!aplicado && <div className="flex flex-wrap gap-2">
       {/* Parte la línea: con nombres largos de cliente, un botón sin saltos desborda la pantalla del teléfono. */}
-      <Button type="button" className="h-auto min-h-9 whitespace-normal py-2 text-left" disabled={enviando || incierto} onClick={() => abrir("normal")}>Marcar: {paso.texto}</Button>
+      <Button type="button" className="h-auto min-h-9 max-w-full shrink whitespace-normal py-2 text-left [overflow-wrap:anywhere]" disabled={enviando || incierto} onClick={() => abrir("normal")}>Marcar: {paso.texto}</Button>
       {paso.permiteNoAtendida && <Button type="button" variant="outline" disabled={enviando || incierto} onClick={() => abrir("no_atendida")}>No se pudo atender</Button>}
     </div>}
     {modo && !aplicado && <form aria-label={`Marcar avance de ${jornada.placa}`} className="mt-4 space-y-3 rounded-lg border bg-background p-4" onSubmit={e => { e.preventDefault(); confirmar(); }}>
-      <p className="font-medium">{modo === "no_atendida" ? "No se pudo atender" : paso.texto}</p>
+      <p className="font-medium [overflow-wrap:anywhere]">{modo === "no_atendida" ? "No se pudo atender" : paso.texto}</p>
       <label className="block text-sm">Hora en Ciudad de México
         <input type="time" name="hora" required min={paso.desde ?? undefined} max={fecha === fechaEnMexico(new Date()) ? horaActualMexico() : undefined} disabled={incierto || enviando}
           value={hora} onChange={e => { setHora(e.target.value); setEntradaPendiente(null); setIncierto(false); }} className="mt-1 block rounded border bg-background px-3 py-2" />
@@ -165,8 +165,8 @@ export function Seguimiento({ vista, plan }: { vista: VistaSeguimiento; plan: Vi
     {fallo && (fallo.error === "conflicto" ? <p role="alert">{fallo.motivo?.texto ?? "El plan cambió; consulta el estado actual."}</p> : <ResultadoFallido resultado={fallo} />)}
     {incierto && <p role="alert">No se pudo confirmar la operación. Actualiza el estado antes de reintentar.</p>}
     <div className="grid gap-4 xl:grid-cols-2">{vista.porJornada.map(j => <article key={j.jornadaId} aria-label={`Camión ${j.placa}`} className="min-w-0 rounded-xl border bg-card p-5 shadow-sm">
-      <h3 className="text-lg font-semibold">{j.placa} · {j.operador}</h3>
-      <p className="mt-3 text-2xl font-semibold leading-tight">{j.tablero.frase}</p>
+      <h3 className="text-lg font-semibold [overflow-wrap:anywhere]">{j.placa} · {j.operador}</h3>
+      <p className="mt-3 text-2xl font-semibold leading-tight [overflow-wrap:anywhere]">{j.tablero.frase}</p>
       <p className="mt-2 text-sm font-medium tabular-nums text-muted-foreground">{j.tablero.recolecciones.hechas} de {j.tablero.recolecciones.total} recolecciones</p>
       {j.proyeccion.aproximada && <p className="mt-2 text-sm text-muted-foreground">Proyección aproximada</p>}
       <div className="mt-5 space-y-4">{j.tablero.viajes.map(v => <section key={v.rutaId} className="rounded-lg border bg-background p-4">
@@ -179,6 +179,10 @@ export function Seguimiento({ vista, plan }: { vista: VistaSeguimiento; plan: Vi
           {p.motivo && <p className="mt-1 break-words text-amber-800 dark:text-amber-300">Motivo: {p.motivo}</p>}
         </li>)}</ul>
       </section>)}</div>
+      {j.tablero.omitidas.length > 0 && <section aria-label={`Pospuestas por re-ruteo de ${j.placa}`} className="mt-4 rounded-lg border border-amber-600/30 bg-amber-600/10 p-4 text-sm">
+        <p className="font-semibold">Pospuestas por re-ruteo: ya no se harán hoy</p>
+        <ul className="mt-2 space-y-1">{j.tablero.omitidas.map(o => <li key={o.paradaId} className="[overflow-wrap:anywhere]">{o.folio} · {o.cliente}</li>)}</ul>
+      </section>}
       {vista.puedeRegistrar && j.tablero.siguiente && <MarcaDespacho key={`${j.jornadaId}-${j.tablero.siguiente.tipo}-${j.ultimoEvento?.en ?? ""}`} jornada={j} fecha={plan.fecha} />}
     </article>)}</div>
     <fieldset disabled={pendiente || incierto} className="space-y-5">

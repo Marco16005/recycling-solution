@@ -8,7 +8,9 @@ import { solicitudesPorId } from "@/datos/solicitudes";
 import { disponibleOperador, disponibleUnidad } from "@/acciones/plan-comun";
 import { minutoEnMexico, minutosDeHora } from "@/dominio/plan/entrada";
 import { leerJornadas } from "@/datos/jornadas";
-import { estadoDeJornada, eventosRechazadosSinConciliar, incidentesAbiertos, leerJornadaOperacion, motivosNoAtendidas, ultimoEventoAplicado } from "@/datos/operacion";
+import {
+  estadoDeJornada, eventosRechazadosSinConciliar, incidentesAbiertos, leerJornadaOperacion, motivosNoAtendidas, omitidasFueraDeSecuencia, ultimoEventoAplicado,
+} from "@/datos/operacion";
 import {
   proyectarJornada, siguienteAccion, type AlertaOperacion, type EstadoJornada, type ProyeccionJornada, type TipoAlerta, type TipoEvento,
 } from "@/dominio/operacion";
@@ -56,6 +58,8 @@ export interface TableroJornada {
   viajes: ViajeTablero[];
   /** null si la jornada terminó o si quien consulta no puede registrar. */
   siguiente: SiguientePaso | null;
+  /** Pospuestas por un re-ruteo en viajes que se quedaron sin paradas antes de salir: ya no se harán ese día. */
+  omitidas: { paradaId: string; folio: string; cliente: string }[];
 }
 /** Plan 7, §2.5. Horas HH:MM en Ciudad de México. */
 export interface ParadaEnSeguimiento {
@@ -92,15 +96,17 @@ export async function seguimiento(ctx: Contexto, fecha?: unknown): Promise<Resul
     const catalogoUnidad = await leerCatalogo(tx, "unidad");
     const catalogoOperador = await leerCatalogo(tx, "operador");
     const opciones = { ahora: ctx.ahora.toISOString(), umbralAtrasoMin: config.umbralAtrasoMin, turnoFinMin: minutosDeHora(config.turnoFin), descargaMin: config.descargaMin };
-    const leidos: { j: (typeof jornadas)[number]; estado: EstadoJornada; proyeccion: ProyeccionJornada }[] = [];
+    const leidos: { j: (typeof jornadas)[number]; estado: EstadoJornada; proyeccion: ProyeccionJornada; omitidas: { paradaId: string; solicitudId: string }[] }[] = [];
     for (const j of jornadas) {
       const operacion = await leerJornadaOperacion(tx, j.id);
       if (!operacion) continue;
       const estado = await estadoDeJornada(tx, operacion);
-      leidos.push({ j, estado, proyeccion: proyectarConRespaldo(estado, opciones) });
+      leidos.push({ j, estado, proyeccion: proyectarConRespaldo(estado, opciones), omitidas: await omitidasFueraDeSecuencia(tx, operacion) });
     }
     // Folio y cliente de las paradas proyectadas, en una sola lectura.
-    const ids = [...new Set(leidos.flatMap(({ estado }) => estado.viajes.flatMap((v) => v.paradas.map((p) => p.solicitudId))))];
+    const ids = [...new Set(leidos.flatMap(({ estado, omitidas }) => [
+      ...estado.viajes.flatMap((v) => v.paradas.map((p) => p.solicitudId)), ...omitidas.map((o) => o.solicitudId),
+    ]))];
     const solicitudes = new Map((await solicitudesPorId(tx, ids)).map((s) => [s.id, s]));
     const clientes = new Map((await leerClientesPorId(tx, [...new Set([...solicitudes.values()].map((s) => s.clienteId))])).map((c) => [c.id, c]));
     const resumenAlertas: Record<TipoAlerta, number> = { ventana_en_riesgo: 0, fuera_de_turno: 0, atraso: 0 };
@@ -108,7 +114,7 @@ export async function seguimiento(ctx: Contexto, fecha?: unknown): Promise<Resul
     const motivos = await motivosNoAtendidas(tx, leidos.flatMap(({ estado }) => estado.viajes.flatMap((v) => v.paradas.map((p) => p.paradaId))));
 
     const porJornada: SeguimientoJornada[] = [];
-    for (const { j, estado, proyeccion } of leidos) {
+    for (const { j, estado, proyeccion, omitidas } of leidos) {
       const paradas = estado.viajes.flatMap((v) => v.paradas);
       const ultimo = await ultimoEventoAplicado(tx, j.id);
       porJornada.push({
@@ -141,7 +147,7 @@ export async function seguimiento(ctx: Contexto, fecha?: unknown): Promise<Resul
           cliente: (id) => clientes.get(solicitudes.get(id)?.clienteId ?? "")?.nombre ?? "",
           motivo: (paradaId) => motivos.get(paradaId) ?? null,
           puedeRegistrar,
-        }),
+        }, omitidas),
       });
       for (const alerta of proyeccion.alertas) resumenAlertas[alerta.tipo] += 1;
     }
@@ -231,6 +237,7 @@ export function tableroDeJornada(
   estado: EstadoJornada,
   proyeccion: ProyeccionJornada,
   datos: { folio: (solicitudId: string) => string; cliente: (solicitudId: string) => string; motivo: (paradaId: string) => string | null; puedeRegistrar: boolean },
+  omitidas: { paradaId: string; solicitudId: string }[] = [],
 ): TableroJornada {
   const proyectadas = new Map(proyeccion.viajes.flatMap((v) => v.paradas.map((p) => [p.paradaId, p.llegada])));
   // Al minuto, hacia abajo (revisión de Codex): una marca a las 08:00:30 se ve 08:00, nunca 08:01 ni 24:00.
@@ -270,7 +277,11 @@ export function tableroDeJornada(
 
   const todas = viajes.flatMap((v) => v.paradas).filter((p) => p.estado !== "reasignada" && p.estado !== "omitida");
   const recolecciones = { hechas: todas.filter((p) => p.estado === "recolectada").length, total: todas.length };
-  return { frase: fraseDeJornada(estado, viajes), recolecciones, viajes, siguiente: datos.puedeRegistrar ? siguientePaso(estado, viajes, datos.cliente) : null };
+  return {
+    frase: fraseDeJornada(estado, viajes), recolecciones, viajes,
+    siguiente: datos.puedeRegistrar ? siguientePaso(estado, viajes, datos.cliente) : null,
+    omitidas: omitidas.map((o) => ({ paradaId: o.paradaId, folio: datos.folio(o.solicitudId), cliente: datos.cliente(o.solicitudId) })),
+  };
 }
 
 function fraseDeJornada(estado: EstadoJornada, viajes: ViajeTablero[]): string {

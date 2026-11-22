@@ -13,6 +13,7 @@ import type { EventoEntrada, TipoEvento } from "@/dominio/operacion/tipos";
 import type { UsuarioSesion } from "@/seguridad/permisos";
 import { registrarEventoOperador, registrarEventoPorDespacho } from "./operador.nucleo";
 import { generarPlanDelDia, iniciarRevision, validarPlanDelDia } from "./plan.nucleo";
+import { generarReruteo } from "./reruteo.nucleo";
 import type { Contexto, Resultado } from "./tipos";
 
 function valor<T>(r: Resultado<T>): T {
@@ -149,6 +150,20 @@ describe("tablero del día: el despacho marca el avance (2026-11-21)", () => {
     valor(await marcar(e));
     expect(valor(await marcar(e))).toMatchObject({ resultado: "aplicado", repetido: true });
     expect(await bd.select().from(eventosOperador).where(eq(eventosOperador.jornadaId, jornada.jornadaId))).toHaveLength(1);
+  });
+
+  it("un re-ruteo que pospone todo un viaje que no salió: el tablero lista las pospuestas (revisión de Codex)", async () => {
+    const [base] = await bd.select().from(planes).where(eq(planes.estado, "validado"));
+    // Sin otro camión, las recolecciones del único quedan pospuestas para otro día.
+    const { planId } = valor(await generarReruteo(ctx(despachador, a(30)), base.id, base.version, { jornadasNoDisponibles: [jornada.jornadaId] }));
+    valor(await iniciarRevision(ctx(despachador, a(31)), planId));
+    const [p] = await bd.select().from(planes).where(eq(planes.id, planId));
+    valor(await validarPlanDelDia(ctx(despachador, a(32)), planId, p.version, { requisitosConfirmados: true }));
+    const t = await tablero(despachador, a(33));
+    expect(t.viajes).toHaveLength(0);
+    expect(t.recolecciones).toEqual({ hechas: 0, total: 0 });
+    expect(t.omitidas.map((o) => o.cliente).sort()).toEqual(["Cartonera Norte", "Cartonera Sur"]);
+    expect(t.omitidas.every((o) => /^S-/.test(o.folio))).toBe(true);
   });
 
   it("permisos: gerencia ve el tablero sin siguiente paso y no marca; el operador tampoco marca por despacho", async () => {
