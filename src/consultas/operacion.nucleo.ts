@@ -111,6 +111,9 @@ export async function seguimiento(ctx: Contexto, fecha?: unknown): Promise<Resul
     const clientes = new Map((await leerClientesPorId(tx, [...new Set([...solicitudes.values()].map((s) => s.clienteId))])).map((c) => [c.id, c]));
     const resumenAlertas: Record<TipoAlerta, number> = { ventana_en_riesgo: 0, fuera_de_turno: 0, atraso: 0 };
     const puedeRegistrar = puede(permiso.usuario, "operacion.registrar");
+    // Solicitudes activas hoy en cualquier camión: una pospuesta que se reprogramó y volvió a un viaje no es «pospuesta».
+    const activasHoy = new Set(leidos.flatMap(({ estado }) => estado.viajes.flatMap((v) =>
+      v.paradas.filter((p) => p.estado !== "reasignada" && p.estado !== "omitida").map((p) => p.solicitudId))));
     const motivos = await motivosNoAtendidas(tx, leidos.flatMap(({ estado }) => estado.viajes.flatMap((v) => v.paradas.map((p) => p.paradaId))));
 
     const porJornada: SeguimientoJornada[] = [];
@@ -147,7 +150,7 @@ export async function seguimiento(ctx: Contexto, fecha?: unknown): Promise<Resul
           cliente: (id) => clientes.get(solicitudes.get(id)?.clienteId ?? "")?.nombre ?? "",
           motivo: (paradaId) => motivos.get(paradaId) ?? null,
           puedeRegistrar,
-        }, omitidas),
+        }, omitidas, activasHoy),
       });
       for (const alerta of proyeccion.alertas) resumenAlertas[alerta.tipo] += 1;
     }
@@ -238,6 +241,7 @@ export function tableroDeJornada(
   proyeccion: ProyeccionJornada,
   datos: { folio: (solicitudId: string) => string; cliente: (solicitudId: string) => string; motivo: (paradaId: string) => string | null; puedeRegistrar: boolean },
   omitidas: { paradaId: string; solicitudId: string }[] = [],
+  activasHoy: ReadonlySet<string> = new Set(),
 ): TableroJornada {
   const proyectadas = new Map(proyeccion.viajes.flatMap((v) => v.paradas.map((p) => [p.paradaId, p.llegada])));
   // Al minuto, hacia abajo (revisión de Codex): una marca a las 08:00:30 se ve 08:00, nunca 08:01 ni 24:00.
@@ -280,8 +284,22 @@ export function tableroDeJornada(
   return {
     frase: fraseDeJornada(estado, viajes), recolecciones, viajes,
     siguiente: datos.puedeRegistrar ? siguientePaso(estado, viajes, datos.cliente) : null,
-    omitidas: omitidas.map((o) => ({ paradaId: o.paradaId, folio: datos.folio(o.solicitudId), cliente: datos.cliente(o.solicitudId) })),
+    omitidas: pospuestasDelDia(omitidas, activasHoy).map((o) => ({ paradaId: o.paradaId, folio: datos.folio(o.solicitudId), cliente: datos.cliente(o.solicitudId) })),
   };
+}
+
+/**
+ * Las omitidas de viajes que salieron de la secuencia, una vez por solicitud y solo si no volvió a quedar activa hoy en
+ * algún camión (revisión de Codex del cabd8e8): una solicitud pospuesta en dos re-ruteos, o reprogramada para hoy y
+ * asignada otra vez, no aparece dos veces ni a la vez como pospuesta y como recolección.
+ */
+export function pospuestasDelDia<T extends { solicitudId: string }>(omitidas: T[], activasHoy: ReadonlySet<string>): T[] {
+  const vistas = new Set<string>();
+  return omitidas.filter((o) => {
+    if (activasHoy.has(o.solicitudId) || vistas.has(o.solicitudId)) return false;
+    vistas.add(o.solicitudId);
+    return true;
+  });
 }
 
 function fraseDeJornada(estado: EstadoJornada, viajes: ViajeTablero[]): string {

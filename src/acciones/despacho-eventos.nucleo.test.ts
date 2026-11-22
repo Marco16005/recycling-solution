@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import { seguimiento, type SeguimientoJornada } from "@/consultas/operacion.nucleo";
+import { pospuestasDelDia, seguimiento, type SeguimientoJornada } from "@/consultas/operacion.nucleo";
 import type { BD } from "@/datos/bd";
 import { bitacora, eventosOperador, planes, rutas } from "@/datos/esquema";
 import { crearBdPrueba } from "@/datos/pruebas/bd-prueba";
@@ -186,5 +186,18 @@ describe("tablero del día: el despacho marca el avance (2026-11-21)", () => {
     expect(salida.tipo satisfies TipoEvento).toBe("salida_patio");
     expect(await registrarEventoOperador(ctx(operador, a(60)), salida)).toEqual({ ok: false, error: "invalido", campos: { odometroKm: ["Captura el odómetro"] } });
     expect(valor(await registrarEventoOperador(ctx(operador, a(60)), { ...salida, odometroKm: 1200 })).resultado).toBe("aplicado");
+  });
+});
+
+describe("pospuestas por re-ruteo en el tablero (revisión de Codex del cabd8e8)", () => {
+  it("una vez por solicitud y nunca si volvió a quedar activa hoy en algún camión", () => {
+    const omitidas = [
+      { paradaId: "p-viejo-1", solicitudId: "S1" }, // reprogramada para hoy y asignada otra vez
+      { paradaId: "p-viejo-2", solicitudId: "S2" }, // pospuesta en un re-ruteo…
+      { paradaId: "p-viejo-3", solicitudId: "S2" }, // …y otra vez en el siguiente
+      { paradaId: "p-viejo-4", solicitudId: "S3" },
+    ];
+    expect(pospuestasDelDia(omitidas, new Set(["S1"])).map((o) => o.paradaId)).toEqual(["p-viejo-2", "p-viejo-4"]);
+    expect(pospuestasDelDia(omitidas, new Set())).toHaveLength(3);
   });
 });
