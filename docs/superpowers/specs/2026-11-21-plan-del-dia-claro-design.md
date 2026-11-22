@@ -65,6 +65,8 @@ Orden de la página:
    - las tarjetas por camión;
    - incidentes abiertos y eventos por conciliar, **solo si hay alguno**.
 3. **"¿Un camión ya no puede seguir? Re-rutear"**: un `<details>` plegado que adentro trae lo mismo que hoy. Solo aparece donde hoy aparece "Re-rutear".
+
+   **Excepción (ajuste tras las capturas):** si hay un re-ruteo propuesto pendiente de revisar, el bloque se abre solo, para que el enlace "Revisar re-ruteo propuesto" se vea sin buscarlo. Es algo que requiere atención, igual que un error.
 4. **"Ver el plan validado: rutas, mapa y resumen"**: un `<details>` plegado con todo lo demás, en este orden:
    1. el mapa y el detalle por camión;
    2. pospuestas y bloqueadas, si hay;
@@ -145,7 +147,7 @@ Se conservan los mismos cuatro pasos, con los nombres alineados a la franja: el 
 ## 5. Criterios de aceptación
 
 1. En cualquier estado, la franja de pasos dice dónde se está y qué sigue.
-2. **Validado:** «Cómo va el día» es lo primero después de los pasos, y en 1280 × 900 la primera tarjeta empieza sin desplazarse. Re-rutear y el plan validado están plegados.
+2. **Validado:** «Cómo va el día» es lo primero después de los pasos, y en 1280 × 900 la primera tarjeta empieza sin desplazarse. El plan validado está plegado, y re-rutear también, salvo cuando hay un re-ruteo propuesto pendiente (§2.3).
 3. **Propuesto:** cada parada se lee en una línea. Mover y posponer están a un clic. Se entiende por qué "Validar" está desactivado.
 4. Ningún dato ni función desaparece: todo lo de hoy sigue en la página, abierto o plegado.
 5. **Permisos iguales:** gerencia no ve "Marcar", ni "Re-rutear", ni los controles de ajuste.

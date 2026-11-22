@@ -86,7 +86,8 @@ test("despachador genera, ajusta y valida el plan; gerencia lo consulta en solo 
   await expect(vacia.getByRole("status")).toHaveText(/^Antes de generar, resuelve/);
   await expect(vacia.locator('li[data-estado="falta"]').filter({ hasText: "No hay camiones asignados a este día." })).toBeVisible();
   // La base es compartida: según lo que dejen otras pruebas puede no haber solicitudes, haber listas o quedar solo
-  // solicitudes bloqueadas. En todos los casos, la lista debe explicar su estado.
+  // solicitudes bloqueadas. En todos los casos, la lista debe explicar su estado. El caso sin solicitudes, con su texto
+  // exacto, lo comprueba src/consultas/preparacion.nucleo.test.ts («sin jornadas ni solicitudes»).
   await expect(vacia.locator("li").filter({ hasText: /No hay solicitudes pendientes para este día\.|Ninguna solicitud está lista para planear|\d+ solicitud(es)? lista(s)? para planear\.|Hay \d+ solicitudes listas y el plan acepta/ }).first()).toBeVisible();
   await expect(vacia.locator('li[data-estado="bien"]').filter({ hasText: "Está marcada en el mapa." })).toBeVisible();
   await expect(vacia.getByRole("link", { name: "Ir a Jornada" })).toHaveAttribute("href", `/despacho/jornada?fecha=${lejana.toISOString().slice(0, 10)}`);
