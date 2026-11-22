@@ -116,6 +116,8 @@ El mensaje lleva un enlace a `/despacho/plan`.
 
 `src/app/operador/page.tsx` ya lee la sesión: le pasa `esOperador` a `MiRuta`, y la consulta no cambia. Un operador sin ruta hoy sigue viendo "No tienes una ruta asignada para hoy".
 
+**Alcance (aclarado tras la revisión de Codex):** solo cubre las cuentas que hoy llegan a la página, es decir, la de admin, que tiene todos los permisos, incluido `ruta.operar`. El layout de `/operador` seguirá mandando a `/sin-acceso` al despacho y a la gerencia, y no cambia ni el layout ni la consulta.
+
 ### 2.8 "¿Cómo funciona el plan del día?" (Claude)
 
 Se conservan los mismos cuatro pasos, con los nombres alineados a la franja: el paso 4 dice "En «Cómo va el día» ves cada camión".
