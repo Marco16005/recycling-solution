@@ -22,7 +22,8 @@ test("despachador ve el riesgo y la llegada proyectada de un viaje atrasado sin 
     has: page.getByRole("heading", { name: new RegExp(`^${placa} ·`) }),
   });
   const parada = jornada.getByRole("listitem").filter({ hasText: folio });
-  await expect(parada).toContainText("viaje en curso");
+  // Tablero del día (2026-11-21): la parada del viaje que ya salió dice «En camino» y conserva estimada y proyectada.
+  await expect(parada).toContainText("En camino");
   await expect(parada).toContainText("Llegada estimada 08:10");
   // El contrato expone HH:MM; la hora proyectada cambia con el reloj del servidor.
   await expect(parada).toContainText(/Llegada proyectada (?:[01]\d|2[0-3]):[0-5]\d\b/);

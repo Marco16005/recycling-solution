@@ -3,10 +3,21 @@
 import { revalidatePath } from "next/cache";
 import { contextoDeLaPeticion } from "@/seguridad/sesion";
 import { conciliarEvento, resolverIncidente } from "./operacion.nucleo";
+import { registrarEventoPorDespacho, type RespuestaEvento } from "./operador.nucleo";
 import { generarReruteo } from "./reruteo.nucleo";
 import type { Resultado } from "./tipos";
 
 const refrescar = () => ["/despacho/plan", "/despacho/solicitudes", "/operador"].forEach((ruta) => revalidatePath(ruta));
+
+/**
+ * Tablero del día (diseño del 2026-11-21): el despacho marca el avance por el operador. evento: EventoEntrada, con un
+ * eventoId nuevo por cada marca (idempotente si se reintenta). Rechazo: invalido con el motivo, sin guardar nada.
+ */
+export async function registrarEventoPorDespachoAccion(evento: unknown): Promise<Resultado<RespuestaEvento>> {
+  const resultado = await registrarEventoPorDespacho(await contextoDeLaPeticion(), evento);
+  if (resultado.ok) refrescar();
+  return resultado;
+}
 
 export async function conciliarEventoAccion(eventoId: string, entrada: { nota: string }): Promise<Resultado<null>> {
   const resultado = await conciliarEvento(await contextoDeLaPeticion(), eventoId, entrada);

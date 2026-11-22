@@ -12,6 +12,7 @@ import { operadorDeUsuario } from "@/datos/usuarios";
 import { aplicarEvento, huellaEvento } from "@/dominio/operacion";
 import type { Efecto, EstadoJornada, EventoEntrada } from "@/dominio/operacion/tipos";
 import { siguienteDiaOperacion } from "@/dominio/solicitudes/cola";
+import { fechaEnMexico } from "@/dominio/tiempo";
 import { createHash } from "node:crypto";
 import { permitir } from "./autorizacion";
 import type { CodigoConflicto, Contexto, Resultado } from "./tipos";
@@ -55,6 +56,9 @@ async function respuestaDeRepetido(tx: Tx, previo: FilaEvento, huella: string, j
   };
 }
 
+/** Salir y regresar al patio piden odómetro desde el teléfono; el despacho puede dejarlo vacío (diseño del 2026-11-21). */
+const pideOdometro = (tipo: EventoEntrada["tipo"]) => tipo === "salida_patio" || tipo === "regreso_patio";
+
 /** Registra un evento del operador. Rechazado o aplicado, queda guardado (decisión 9). */
 export async function registrarEventoOperador(ctx: Contexto, evento: unknown): Promise<Resultado<RespuestaEvento>> {
   const permiso = permitir(ctx, "ruta.operar");
@@ -62,10 +66,39 @@ export async function registrarEventoOperador(ctx: Contexto, evento: unknown): P
   const validado = eventoSchema.safeParse(evento);
   if (!validado.success) return invalido({ _: ["El evento no es válido"] });
   const e: EventoEntrada = validado.data;
+  if (pideOdometro(e.tipo) && e.odometroKm === null) return invalido({ odometroKm: ["Captura el odómetro"] });
   const usuarioId = permiso.usuario.id;
   const leida = await jornadaPropia(ctx, usuarioId, e.jornadaId);
   if (leida === null) return { ok: false, error: "no_encontrado" };
+  return guardarEvento(ctx, usuarioId, e, leida, "telefono");
+}
+
+/** Tolerancia para la hora del navegador del despacho frente a la del servidor. */
+export const TOLERANCIA_HORA_DESPACHO_MS = 2 * 60_000;
+
+/**
+ * Tablero del día (diseño del 2026-11-21, §2.2 y §3): el despacho marca el avance por el operador, en cualquier jornada.
+ * Permiso operacion.registrar. Mismas reglas, candados e idempotencia que el teléfono; la hora es del día de la jornada,
+ * no futura ni anterior a la última marca; el odómetro puede quedar vacío. Un rechazo no se guarda: el despacho está en
+ * línea y ve el motivo. El evento guarda al despachador y la bitácora dice "por_despacho".
+ */
+export async function registrarEventoPorDespacho(ctx: Contexto, evento: unknown): Promise<Resultado<RespuestaEvento>> {
+  const permiso = permitir(ctx, "operacion.registrar");
+  if (!permiso.ok) return permiso;
+  const validado = eventoSchema.safeParse(evento);
+  if (!validado.success) return invalido({ _: ["El evento no es válido"] });
+  const e: EventoEntrada = validado.data;
+  const leida = await leerJornadaOperacion(ctx.bd, e.jornadaId);
+  if (leida === null) return { ok: false, error: "no_encontrado" };
+  return guardarEvento(ctx, permiso.usuario.id, e, leida, "despacho");
+}
+
+/** Un solo camino para guardar eventos del teléfono y del despacho. */
+async function guardarEvento(
+  ctx: Contexto, usuarioId: string, e: EventoEntrada, leida: JornadaOperacion, origen: "telefono" | "despacho",
+): Promise<Resultado<RespuestaEvento>> {
   const huella = huellaEvento(e);
+  const sufijo = origen === "despacho" ? "_por_despacho" : "";
 
   try {
     return await ctx.bd.transaction(async (tx): Promise<Resultado<RespuestaEvento>> => {
@@ -79,8 +112,14 @@ export async function registrarEventoOperador(ctx: Contexto, evento: unknown): P
       const estado = await estadoDeJornada(tx, j, true);
       await bloquearSolicitudesDeParadas(tx, estado.viajes.flatMap((v) => v.paradas.map((p) => p.paradaId)));
       const recibidoEn = ctx.ahora;
-      const r = aplicarEvento(estado, e, recibidoEn.toISOString());
       const ocurrido = new Date(e.ocurridoEn);
+      if (origen === "despacho") {
+        const motivo = horaNoValida(ocurrido, recibidoEn, j.fecha, estado.ultimoOcurridoEn);
+        if (motivo) return invalido({ ocurridoEn: [motivo] });
+      }
+      const r = aplicarEvento(estado, e, recibidoEn.toISOString());
+      // El despacho ve el motivo en línea; no hay nada que conciliar después (diseño del 2026-11-21, §2.2).
+      if (!r.ok && origen === "despacho") return invalido({ _: [r.motivo] });
       const fila = {
         eventoId: e.eventoId, jornadaId: j.id, rutaId: e.rutaId, paradaId: e.paradaId, tipo: e.tipo, ocurridoEn: ocurrido, recibidoEn,
         versionRuta: e.versionRuta, odometroKm: e.odometroKm, motivo: e.motivo, huella, usuarioId,
@@ -89,14 +128,14 @@ export async function registrarEventoOperador(ctx: Contexto, evento: unknown): P
         // El rechazo se guarda siempre (decisión 9): una ruta o parada que no existe se guarda vacía; la huella conserva lo recibido.
         const referencias = await referenciasExistentes(tx, e.rutaId, e.paradaId);
         await insertarEvento(tx, { ...fila, ...referencias, resultado: "rechazado", motivoRechazo: r.motivo.slice(0, 300) });
-        await registrarEvento(tx, { usuarioId, entidad: "jornada", entidadId: j.id, accion: `evento_rechazado_${e.tipo}`, campos: [] });
+        await registrarEvento(tx, { usuarioId, entidad: "jornada", entidadId: j.id, accion: `evento_rechazado_${e.tipo}${sufijo}`, campos: [] });
         return { ok: true, valor: { resultado: "rechazado", motivo: r.motivo, repetido: false, estado } };
       }
 
       const campos = await aplicarEfectos(tx, r.efectos, j, ocurrido);
       await insertarEvento(tx, { ...fila, resultado: "aplicado", motivoRechazo: null });
       await subirVersionOperacion(tx, j.id);
-      await registrarEvento(tx, { usuarioId, entidad: "jornada", entidadId: j.id, accion: `evento_${e.tipo}`, campos });
+      await registrarEvento(tx, { usuarioId, entidad: "jornada", entidadId: j.id, accion: `evento_${e.tipo}${sufijo}`, campos });
       // Con los efectos ya aplicados (check-in y check-out cambian la jornada).
       const actualizada = (await leerJornadaOperacion(tx, j.id)) ?? j;
       return { ok: true, valor: { resultado: "aplicado", motivo: null, repetido: false, estado: await estadoDeJornada(tx, actualizada) } };
@@ -110,6 +149,14 @@ export async function registrarEventoOperador(ctx: Contexto, evento: unknown): P
       return respuestaDeRepetido(tx, previo, huella, leida);
     });
   }
+}
+
+/** Hora que marca el despacho: del día de la jornada, no futura (con tolerancia) ni anterior a la última marca. */
+function horaNoValida(ocurrido: Date, ahora: Date, fecha: string, ultimo: string | null): string | null {
+  if (!Number.isFinite(ocurrido.getTime()) || fechaEnMexico(ocurrido) !== fecha) return "La hora debe ser del día de la jornada";
+  if (ocurrido.getTime() > ahora.getTime() + TOLERANCIA_HORA_DESPACHO_MS) return "La hora no puede ser futura";
+  if (ultimo !== null && ocurrido.getTime() < Date.parse(ultimo)) return "La hora no puede ser anterior a la última marca de este camión";
+  return null;
 }
 
 /** Aplica los efectos del dominio. Devuelve los nombres de campos para la bitácora. */

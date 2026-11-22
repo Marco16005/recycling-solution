@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import type { EstadoJornada, EstadoParada, TiemposRuta, ViajeOperacion } from "@/dominio/operacion/tipos";
 import type { BD, Tx } from "./bd";
-import { eventosOperador, incidentes, jornadas, paradas, rutas, solicitudes } from "./esquema";
+import { eventosOperador, incidentes, jornadas, paradas, planes, rutas, solicitudes } from "./esquema";
 
 type Conexion = BD | Tx;
 
@@ -363,3 +363,31 @@ export async function incidentesAbiertos(bd: Conexion, fecha: string) {
     .orderBy(asc(incidentes.reportadoEn));
 }
 
+
+/** Tablero del día (2026-11-21): el motivo de cada parada no atendida, por id de parada. */
+export async function motivosNoAtendidas(bd: Conexion, paradaIds: string[]): Promise<Map<string, string>> {
+  if (paradaIds.length === 0) return new Map();
+  const filas = await bd.select({ id: paradas.id, motivo: paradas.motivoNoAtendida }).from(paradas)
+    .where(and(inArray(paradas.id, paradaIds), eq(paradas.estado, "no_atendida")));
+  return new Map(filas.filter((f) => f.motivo !== null).map((f) => [f.id, f.motivo!]));
+}
+
+/**
+ * Tablero del día (2026-11-21, revisión de Codex): paradas que un re-ruteo pospuso (omitidas) en viajes que ya no están
+ * en la secuencia operativa porque se quedaron sin paradas antes de salir. Sin esto, el despacho no vería en el tablero
+ * las recolecciones que ya no se harán ese día.
+ */
+export async function omitidasFueraDeSecuencia(bd: Conexion, j: { id: string; fecha: string }): Promise<{ paradaId: string; solicitudId: string; orden: string }[]> {
+  const todas = await rutasOperativas(bd, j.id, await planOperativo(bd, j.fecha));
+  const dentro = new Set(secuenciaOperativa(todas).map((r) => r.ruta.id));
+  const fuera = todas.filter((r) => !dentro.has(r.ruta.id));
+  if (fuera.length === 0) return [];
+  const validados = new Map((await bd.select({ id: planes.id, validadoEn: planes.validadoEn }).from(planes)
+    .where(inArray(planes.id, [...new Set(fuera.map((r) => r.ruta.planId))]))).map((p) => [p.id, p.validadoEn]));
+  // orden: cuándo se pospuso (el re-ruteo la retira con su hora) y, si empata, cuándo se validó el plan de esa ruta: una
+  // posposición posterior siempre retira una parada de un plan posterior. Ambos en ISO, comparables como texto.
+  return fuera.flatMap((r) => r.paradas.filter((p) => p.estado === "omitida").map((p) => ({
+    paradaId: p.id, solicitudId: p.solicitudId,
+    orden: `${p.actualizadoEn.toISOString()}|${validados.get(r.ruta.planId)?.toISOString() ?? ""}`,
+  })));
+}

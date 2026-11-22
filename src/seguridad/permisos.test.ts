@@ -24,6 +24,7 @@ const ESPERADO: Record<Permiso, Rol[]> = {
   "ruta.operar": ["admin", "operador"],
   "operacion.ver": ["admin", "despachador", "gerencia"],
   "operacion.conciliar": ["admin", "despachador"],
+  "operacion.registrar": ["admin", "despachador"],
   "incidentes.resolver": ["admin", "despachador"],
   "indicadores.ver": ["admin", "despachador", "gerencia"],
 };

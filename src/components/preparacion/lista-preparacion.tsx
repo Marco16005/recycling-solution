@@ -22,6 +22,16 @@ function resumen(p: Preparacion): string {
 export function ListaPreparacion({ preparacion }: { preparacion: Preparacion }) {
   const color = preparacion.faltan > 0 ? "border-red-300 bg-red-50" : preparacion.avisos > 0 ? "border-amber-300 bg-amber-50" : "border-emerald-300 bg-emerald-50";
   return <section aria-label="Antes de generar" className="space-y-3 rounded-xl border p-4">
+    <details className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+      <summary className="cursor-pointer font-medium">¿Cómo funciona el plan del día?</summary>
+      {/* Tablero del día (2026-11-21): quién hace cada paso y dónde se ve el avance. */}
+      <ol className="mt-2 list-decimal space-y-1 pl-5">
+        <li>En <strong>Jornada</strong> asignas qué camión sale con qué operador, y en <strong>Solicitudes</strong> registras las recolecciones.</li>
+        <li>Aquí pulsas <strong>Generar plan</strong>: el sistema arma los viajes de cada camión. Los revisas, los ajustas si hace falta y pulsas <strong>Validar</strong>.</li>
+        <li>Cada operador marca su avance en su teléfono (salió, llegó, terminó). Si no puede, tú lo marcas aquí mismo, en el tablero de cada camión.</li>
+        <li>Debajo del plan validado, en <strong>Seguimiento</strong>, ves cada camión con sus viajes y qué recolecciones van hechas, en camino o pendientes.</li>
+      </ol>
+    </details>
     <div className="space-y-1">
       <h2 className="text-lg font-semibold">Antes de generar</h2>
       <p className={`rounded-lg border px-3 py-2 text-sm font-medium ${color}`} role="status">{resumen(preparacion)}</p>

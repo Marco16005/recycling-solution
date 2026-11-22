@@ -33,6 +33,8 @@ export const PERMISOS = {
   "ruta.operar": ["operador"],
   "operacion.ver": ["despachador", "gerencia"],
   "operacion.conciliar": ["despachador"],
+  /** Tablero del día (2026-11-21): el despacho marca el avance por el operador; cada evento guarda quién lo marcó. */
+  "operacion.registrar": ["despachador"],
   "incidentes.resolver": ["despachador"],
   "indicadores.ver": ["despachador", "gerencia"],
 } as const satisfies Record<string, readonly Rol[]>;
