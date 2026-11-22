@@ -20,8 +20,9 @@ async function Contenido({ searchParams }: Props) {
   const preparacion = vista.estado === "sin_plan" || (vista.estado === "propuesto" && vista.tipo !== "re_ruteo" && (vista.resumen?.ruteadas ?? 0) === 0)
     ? await obtenerPreparacionConsulta(vista.fecha) : null;
   const antesDeGenerar = preparacion && (preparacion.ok ? <ListaPreparacion preparacion={preparacion.valor} /> : <ResultadoFallido resultado={preparacion} />);
-  return <><PlanDelDia vista={resultado.valor} antesDeGenerar={antesDeGenerar} />{seguimiento && (seguimiento.ok
-    ? <Seguimiento vista={seguimiento.valor} plan={resultado.valor} /> : <ResultadoFallido resultado={seguimiento} />)}</>;
+  return <PlanDelDia vista={vista} antesDeGenerar={antesDeGenerar}
+    seguimiento={seguimiento && (seguimiento.ok
+      ? <Seguimiento vista={seguimiento.valor} plan={vista} /> : <ResultadoFallido resultado={seguimiento} />)} />;
 }
 
 export default function PaginaPlan(props: Props) {

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { VistaMiRuta } from "@/consultas/operador.nucleo";
 import type { EventoEntrada } from "@/dominio/operacion/tipos";
 import { proyectarEvento, siguienteAccion, type AccionOperador } from "@/dominio/operacion/siguiente-accion";
@@ -21,7 +22,7 @@ function nuevoId(): string {
 }
 const campo = "block w-full rounded-lg border bg-background p-3 text-base";
 
-export function MiRuta({ usuarioId, inicial }: { usuarioId: string; inicial: VistaMiRuta }) {
+export function MiRuta({ usuarioId, inicial, esOperador }: { usuarioId: string; inicial: VistaMiRuta; esOperador: boolean }) {
   const router = useRouter();
   const [datos, setDatos] = useState<Guardado>({ vista: inicial, cola: [], rechazados: [] });
   const actual = useRef(datos);
@@ -177,7 +178,8 @@ export function MiRuta({ usuarioId, inicial }: { usuarioId: string; inicial: Vis
       <h1 className="text-3xl font-semibold">Mi ruta</h1></div>
     <p role="status" className="rounded-lg border p-3">{conectado ? "Con conexión" : "Sin conexión"} · {datos.cola.length + otras.pendientes} eventos por enviar</p>
     {mensaje && <p role="alert">{mensaje}</p>}
-    {!estado && <p>No tienes una ruta asignada para hoy.</p>}
+    {!estado && (esOperador ? <p>No tienes una ruta asignada para hoy.</p>
+      : <p>Esta pantalla es la del teléfono de cada operador y tu cuenta no es de operador. Para ver y marcar el avance de los camiones, entra a <Link href="/despacho/plan" className="underline">«Plan del día»</Link>.</p>)}
     {estado?.checkOutEn && <p className="rounded-lg bg-muted p-5 font-semibold">Jornada terminada</p>}
     {accion && <section className="space-y-3" aria-label="Siguiente acción">
       <Button className="min-h-16 w-full touch-manipulation select-none text-lg" disabled={!listo || !!confirmar} onClick={() => pulsar(accion)}>{accion.texto}</Button>
@@ -196,9 +198,9 @@ export function MiRuta({ usuarioId, inicial }: { usuarioId: string; inicial: Vis
     {datos.vista.viajes.map(v => <section key={v.rutaId} aria-label={`Viaje ${v.numero}`} className="space-y-3">
       <h2 className="text-xl font-semibold">Viaje {v.numero}</h2><p className="text-sm">Salida {v.salidaEstimada} · Regreso {v.regresoEstimado}</p>
       {v.paradas.map(p => <article key={p.paradaId} aria-label={`Parada ${p.folio}`} className="space-y-2 rounded-xl border p-4">
-        <h3 className="font-semibold">{p.secuencia}. {p.cliente.nombre}</h3><p className="text-sm">{p.folio} · {estado?.viajes.flatMap(v => v.paradas).find(e => e.paradaId === p.paradaId)?.estado.replaceAll("_", " ") ?? p.estado}</p>
+        <h3 className="min-w-0 font-semibold [overflow-wrap:anywhere]">{p.secuencia}. {p.cliente.nombre}</h3><p className="text-sm">{p.folio} · {estado?.viajes.flatMap(v => v.paradas).find(e => e.paradaId === p.paradaId)?.estado.replaceAll("_", " ") ?? p.estado}</p>
         <p>{p.cliente.direccion ?? "Sin dirección"}</p><p>{p.cliente.notasAcceso ?? "Sin notas de acceso"}</p>
-        <p className="text-sm">Ventana {p.ventana.inicio}–{p.ventana.fin} · Llegada {p.llegadaEstimada} · {p.cargaKg} kg</p>
+        <p className="text-sm">Horario del cliente {p.ventana.inicio}–{p.ventana.fin} · Llegada {p.llegadaEstimada} · {p.cargaKg} kg</p>
         {p.cliente.lat !== null && p.cliente.lng !== null && <div className="flex flex-wrap gap-x-4 gap-y-2">
           <a className="inline-flex min-h-12 items-center py-3 font-medium underline" href={`geo:${p.cliente.lat},${p.cliente.lng}`}>Abrir mapa</a>
           <a className="inline-flex min-h-12 items-center py-3 font-medium underline" href={`https://waze.com/ul?ll=${p.cliente.lat},${p.cliente.lng}&navigate=yes`}>Navegar con Waze</a>

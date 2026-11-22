@@ -8,7 +8,7 @@ async function Contenido() {
   if (!usuario) return null;
   const resultado = await miRutaConsulta();
   if (!resultado.ok) return <ResultadoFallido resultado={resultado} />;
-  return <MiRuta usuarioId={usuario.id} inicial={resultado.valor} />;
+  return <MiRuta usuarioId={usuario.id} inicial={resultado.valor} esOperador={usuario.rol === "operador"} />;
 }
 export default function Pagina() {
   return <Suspense fallback={<p role="status">Cargando mi ruta…</p>}><Contenido /></Suspense>;

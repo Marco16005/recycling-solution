@@ -21,11 +21,16 @@ test("despacho marca un viaje completo sin odómetro y gerencia solo lo consulta
   const dia = { ...(await prepararDiaOperador()) };
   dia.placa = dia.tableroPlaca;
   await entrarComo(page, "despachador");
-  await page.setViewportSize({ width: 412, height: 915 });
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(`/despacho/plan?fecha=${dia.fecha}`);
-  const seguimiento = page.getByRole("region", { name: "Seguimiento de operación", exact: true });
+  const seguimiento = page.getByRole("region", { name: "Cómo va el día", exact: true });
   const camion = seguimiento.getByRole("article", { name: `Camión ${dia.placa}`, exact: true });
   await expect(camion.getByText("Sin llegar al patio", { exact: true })).toBeVisible();
+  const primeraTarjeta = seguimiento.getByRole("article", { name: /^Camión / }).first();
+  await expect.poll(async () => (await primeraTarjeta.boundingBox())?.y ?? 900).toBeLessThan(900);
+  await page.setViewportSize({ width: 412, height: 915 });
+  await sinDesborde(camion);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   const viaje = camion.getByRole("list", { name: "Recolecciones del viaje 1", exact: true });
   const paradas = await viaje.getByRole("listitem").count();
   expect(paradas).toBeGreaterThan(0);
