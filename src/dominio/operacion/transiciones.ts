@@ -34,22 +34,26 @@ export function aplicarEvento(estado: EstadoJornada, evento: EventoEntrada, reci
   if (!viaje || viaje.version !== evento.versionRuta) return rutaCambiada();
   const deParada = ["llegada", "inicio_servicio", "fin_servicio", "no_atendida"].includes(evento.tipo);
   if (!deParada && evento.paradaId !== null) return rechazar("Referencia de parada inválida");
-  const odometroValido = (minimo: number) => evento.odometroKm !== null
-    && Number.isFinite(evento.odometroKm) && evento.odometroKm >= minimo;
+  const odometroValido = (minimo: number) => evento.odometroKm === null
+    || (Number.isFinite(evento.odometroKm) && evento.odometroKm >= minimo);
+  const efectoRuta = (campo: "salida_patio_en" | "regreso_patio_en") => ({
+    tipo: "ruta" as const, rutaId: viaje.rutaId, campo,
+    ...(evento.odometroKm === null ? {} : { odometroKm: evento.odometroKm }),
+  });
   switch (evento.tipo) {
     case "salida_patio":
       if (viaje.salidaPatioEn) return rechazar("El viaje ya salió");
       if (estado.viajes.slice(0, indice).some(v => !v.descargaFinEn)) return rechazar("Falta descargar el viaje anterior");
       if (!viaje.paradas.some(p => p.vigente)) return rutaCambiada();
       if (!odometroValido(Math.max(0, estado.ultimoOdometroKm ?? 0))) return rechazar("Odómetro inválido o decreciente");
-      return aplicar({ tipo: "ruta", rutaId: viaje.rutaId, campo: "salida_patio_en", odometroKm: evento.odometroKm! },
+      return aplicar(efectoRuta("salida_patio_en"),
         { tipo: "solicitudes", rutaId: viaje.rutaId, estado: "en_ruta" });
     case "regreso_patio":
       if (!viaje.salidaPatioEn || viaje.regresoPatioEn) return rechazar("El viaje no está en recorrido");
       if (viaje.paradas.some(p => !cerrada(p.estado))) return rechazar("Hay paradas sin cerrar");
       if (!odometroValido(Math.max(0, viaje.odometroInicioKm ?? 0, estado.ultimoOdometroKm ?? 0)))
         return rechazar("Odómetro inválido o decreciente");
-      return aplicar({ tipo: "ruta", rutaId: viaje.rutaId, campo: "regreso_patio_en", odometroKm: evento.odometroKm! });
+      return aplicar(efectoRuta("regreso_patio_en"));
     case "fin_descarga": {
       if (!viaje.regresoPatioEn || viaje.descargaFinEn) return rechazar("El viaje no está pendiente de descarga");
       const efectos: Efecto[] = [{ tipo: "ruta", rutaId: viaje.rutaId, campo: "descarga_fin_en" }];
@@ -86,4 +90,3 @@ export function aplicarEvento(estado: EstadoJornada, evento: EventoEntrada, reci
     default: return rechazar("Tipo de evento desconocido");
   }
 }
-
