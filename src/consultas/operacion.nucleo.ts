@@ -96,7 +96,7 @@ export async function seguimiento(ctx: Contexto, fecha?: unknown): Promise<Resul
     const catalogoUnidad = await leerCatalogo(tx, "unidad");
     const catalogoOperador = await leerCatalogo(tx, "operador");
     const opciones = { ahora: ctx.ahora.toISOString(), umbralAtrasoMin: config.umbralAtrasoMin, turnoFinMin: minutosDeHora(config.turnoFin), descargaMin: config.descargaMin };
-    const leidos: { j: (typeof jornadas)[number]; estado: EstadoJornada; proyeccion: ProyeccionJornada; omitidas: { paradaId: string; solicitudId: string; en: string }[] }[] = [];
+    const leidos: { j: (typeof jornadas)[number]; estado: EstadoJornada; proyeccion: ProyeccionJornada; omitidas: { paradaId: string; solicitudId: string; orden: string }[] }[] = [];
     for (const j of jornadas) {
       const operacion = await leerJornadaOperacion(tx, j.id);
       if (!operacion) continue;
@@ -292,10 +292,11 @@ export function tableroDeJornada(
 /**
  * Las omitidas de viajes que salieron de la secuencia, por camión: cada solicitud una sola vez en todo el día, en el
  * camión donde se pospuso por última vez, y nunca si volvió a quedar activa hoy en algún camión (revisiones de Codex del
- * cabd8e8 y del ceab474). Así una solicitud pospuesta en dos re-ruteos, o reprogramada y asignada a otro camión, no
- * aparece dos veces ni a la vez como pospuesta y como recolección.
+ * cabd8e8, del ceab474 y del f160ed1). Así una solicitud pospuesta en dos re-ruteos, o reprogramada y asignada a otro
+ * camión, no aparece dos veces ni a la vez como pospuesta y como recolección. orden: hora de la posposición y, si empata,
+ * la validación del plan de su ruta (omitidasFueraDeSecuencia); si todo empata, el id de la parada, para ser determinista.
  */
-export function pospuestasDelDia<T extends { paradaId: string; solicitudId: string; en: string }>(
+export function pospuestasDelDia<T extends { paradaId: string; solicitudId: string; orden: string }>(
   porJornada: { jornadaId: string; omitidas: T[] }[], activasHoy: ReadonlySet<string>,
 ): Map<string, T[]> {
   const ultima = new Map<string, { jornadaId: string; omitida: T }>();
@@ -303,7 +304,9 @@ export function pospuestasDelDia<T extends { paradaId: string; solicitudId: stri
     for (const omitida of omitidas) {
       if (activasHoy.has(omitida.solicitudId)) continue;
       const previa = ultima.get(omitida.solicitudId);
-      if (!previa || omitida.en > previa.omitida.en) ultima.set(omitida.solicitudId, { jornadaId, omitida });
+      const posterior = !previa || omitida.orden > previa.omitida.orden
+        || (omitida.orden === previa.omitida.orden && omitida.paradaId > previa.omitida.paradaId);
+      if (posterior) ultima.set(omitida.solicitudId, { jornadaId, omitida });
     }
   }
   const salida = new Map<string, T[]>();

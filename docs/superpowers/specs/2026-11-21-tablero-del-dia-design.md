@@ -49,7 +49,7 @@ En "Seguimiento", cada camión (jornada) muestra:
 - **Hora proyectada y del plan.** Una parada pendiente o en camino muestra las dos llegadas, la proyectada y la estimada por el plan, para ver el retraso, como el seguimiento del Plan 7.
 - **Horas al minuto hacia abajo:** una marca a las 08:00:30 se ve 08:00.
 - **Viajes que se quedan sin paradas.** Si un re-ruteo pasa a otro camión todas las paradas de un viaje que todavía no sale, ese viaje deja de aparecer, como en el teléfono del operador, y sus paradas aparecen en el camión que las recibió. Dentro de un viaje que sigue, las reasignadas y las omitidas se muestran con su estado (revisión de Codex del 60e4cdf).
-- **Pospuestas por re-ruteo.** Las paradas que un re-ruteo pospuso en un viaje que salió de la secuencia aparecen en el camión como "Pospuestas por re-ruteo: ya no se harán hoy" (revisión del 2b721d1). Cada solicitud aparece una sola vez en todo el día, en el camión donde se pospuso por última vez, y nunca si volvió a quedar activa hoy en algún camión (revisiones del cabd8e8 y del ceab474).
+- **Pospuestas por re-ruteo.** Las paradas que un re-ruteo pospuso en un viaje que salió de la secuencia aparecen en el camión como "Pospuestas por re-ruteo: ya no se harán hoy" (revisión del 2b721d1). Cada solicitud aparece una sola vez en todo el día, en el camión donde se pospuso por última vez, y nunca si volvió a quedar activa hoy en algún camión (revisiones del cabd8e8 y del ceab474). Si dos posposiciones empatan en la hora, gana la del plan validado después (revisión del f160ed1).
 - **Botones que parten la línea:** con nombres largos de cliente, un botón sin saltos desbordaba la pantalla del teléfono.
 
 Las alertas, los incidentes, los eventos por conciliar y el re-ruteo siguen igual.

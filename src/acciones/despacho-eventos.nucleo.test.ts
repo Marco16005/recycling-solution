@@ -190,7 +190,8 @@ describe("tablero del día: el despacho marca el avance (2026-11-21)", () => {
 });
 
 describe("pospuestas por re-ruteo en el tablero (revisiones de Codex del cabd8e8 y del ceab474)", () => {
-  const o = (paradaId: string, solicitudId: string, minuto: number) => ({ paradaId, solicitudId, en: a(minuto).toISOString() });
+  const o = (paradaId: string, solicitudId: string, minuto: number, plan = 0) =>
+    ({ paradaId, solicitudId, orden: `${a(minuto).toISOString()}|${a(plan).toISOString()}` });
 
   it("una vez en todo el día, en el camión donde se pospuso por última vez, y nunca si volvió a quedar activa", () => {
     const porJornada = [
@@ -204,5 +205,19 @@ describe("pospuestas por re-ruteo en el tablero (revisiones de Codex del cabd8e8
     expect(r.get("B")!.map((x) => x.paradaId)).toEqual(["b1"]);
     const todas = [...r.values()].flat().map((x) => x.solicitudId);
     expect(new Set(todas).size).toBe(todas.length);
+  });
+
+  it("si la hora de la posposición empata, gana la del plan validado después, sin importar el orden de los camiones", () => {
+    const enB = pospuestasDelDia([
+      { jornadaId: "B", omitidas: [o("b1", "S2", 30, 25)] },
+      { jornadaId: "A", omitidas: [o("a1", "S2", 30, 5)] },
+    ], new Set());
+    expect(enB.get("B")!.map((x) => x.paradaId)).toEqual(["b1"]);
+    expect(enB.get("A")).toEqual([]);
+    const alReves = pospuestasDelDia([
+      { jornadaId: "A", omitidas: [o("a1", "S2", 30, 5)] },
+      { jornadaId: "B", omitidas: [o("b1", "S2", 30, 25)] },
+    ], new Set());
+    expect(alReves.get("B")!.map((x) => x.paradaId)).toEqual(["b1"]);
   });
 });
