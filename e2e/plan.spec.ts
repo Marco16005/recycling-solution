@@ -13,11 +13,14 @@ test("despachador genera, ajusta y valida el plan; gerencia lo consulta en solo 
   const antes = plan.getByRole("region", { name: "Antes de generar", exact: true });
   // Una propuesta previa de otra prueba también debe incorporar estas solicitudes nuevas.
   await plan.getByRole("button", { name: /^(Generar plan|Regenerar)$/ }).click();
+  await expect(plan.getByRole("list", { name: "Pasos del plan del día", exact: true }).locator('[aria-current="step"]')).toContainText("Revisar y validar");
   const unidad = plan.getByRole("region", { name: `Unidad ${placa}`, exact: true });
   for (const folio of folios) {
     await expect(unidad.getByRole("article", { name: `Parada ${folio}`, exact: true })).toBeVisible();
   }
 
+  await plan.getByText("Comparativo y reacomodo (para análisis)", { exact: true }).click();
+  await plan.getByText("Detalles técnicos", { exact: true }).click();
   await expect(plan.getByText(/^Tiempos por calle/)).toBeVisible();
 
   // Plan 8, P8-5 (reasignado a Claude): la franja del reacomodo, con mejoras o "Sin mejoras", y su detalle.
@@ -29,6 +32,7 @@ test("despachador genera, ajusta y valida el plan; gerencia lo consulta en solo 
 
   const segundoFolio = folios[1];
   const parada = unidad.getByRole("article", { name: `Parada ${segundoFolio}`, exact: true });
+  await parada.getByText("Mover o posponer", { exact: true }).click();
   await parada.getByRole("button", { name: "Posponer", exact: true }).click();
   const pospuestas = plan.getByRole("region", { name: "Solicitudes pospuestas", exact: true });
   const pospuesta = pospuestas.getByRole("article", { name: `Pospuesta ${segundoFolio}`, exact: true });
@@ -46,12 +50,14 @@ test("despachador genera, ajusta y valida el plan; gerencia lo consulta en solo 
     await expect(unidad.getByRole("article", { name: `Parada ${folio}`, exact: true })).toBeVisible();
   }
   // Dos ajustes a mano (posponer y mover): el reacomodo se rotula como el del motor, antes de esos ajustes.
+  await plan.getByText("Comparativo y reacomodo (para análisis)", { exact: true }).click();
   await expect(reacomodo.getByRole("heading", { name: "Reacomodo automático (antes de 2 ajustes manuales)", exact: true })).toBeVisible();
 
   const requisitos = plan.getByRole("region", { name: "Requisitos de acceso", exact: true });
   await expect(requisitos).toContainText(clienteConInduccion);
   const validar = plan.getByRole("button", { name: "Validar", exact: true });
   await expect(validar).toBeDisabled();
+  await expect(plan.getByText("Para validar, confirma los requisitos de cada operador", { exact: true })).toBeVisible();
   await requisitos.getByRole("checkbox", { name: `Confirmo los requisitos de ${operador}`, exact: true }).check();
   // El plan puede incluir otros operadores con requisitos procedentes de escenarios anteriores.
   for (const casilla of await requisitos.getByRole("checkbox").all()) {
@@ -59,8 +65,9 @@ test("despachador genera, ajusta y valida el plan; gerencia lo consulta en solo 
   }
   await validar.click();
   await expect(plan.getByText("Validado", { exact: true })).toBeVisible();
+  await expect(plan.getByRole("list", { name: "Pasos del plan del día", exact: true }).locator('[aria-current="step"]')).toContainText("Seguir el día");
   await expect(antes).toHaveCount(0);
-  const seguimiento = page.getByRole("region", { name: "Seguimiento de operación", exact: true });
+  const seguimiento = page.getByRole("region", { name: "Cómo va el día", exact: true });
   const camion = seguimiento.getByRole("article", { name: `Camión ${placa}`, exact: true });
   await expect(camion.getByText("Sin llegar al patio", { exact: true })).toBeVisible();
   await expect(camion.getByText(/^0 de \d+ recolecciones$/)).toBeVisible();
@@ -74,10 +81,13 @@ test("despachador genera, ajusta y valida el plan; gerencia lo consulta en solo 
   const lejana = new Date(`${fecha}T12:00:00Z`);
   lejana.setUTCDate(lejana.getUTCDate() + 400);
   await page.goto(`/despacho/plan?fecha=${lejana.toISOString().slice(0, 10)}`);
+  await expect(page.getByRole("list", { name: "Pasos del plan del día", exact: true }).locator('[aria-current="step"]')).toContainText("Generar");
   const vacia = page.getByRole("region", { name: "Antes de generar", exact: true });
   await expect(vacia.getByRole("status")).toHaveText(/^Antes de generar, resuelve/);
   await expect(vacia.locator('li[data-estado="falta"]').filter({ hasText: "No hay camiones asignados a este día." })).toBeVisible();
-  await expect(vacia.locator('li[data-estado="falta"]').filter({ hasText: "No hay solicitudes pendientes para este día." })).toBeVisible();
+  // Las solicitudes pueden faltar o no: según la hora de la corrida, el re-ruteo de operador.spec pospone alguna y queda
+  // elegible para cualquier fecha posterior (la base es compartida). Solo se exige que la lista hable de ellas.
+  await expect(vacia.locator("li").filter({ hasText: /No hay solicitudes pendientes para este día\.|\d+ solicitud(es)? lista(s)? para planear\./ }).first()).toBeVisible();
   await expect(vacia.locator('li[data-estado="bien"]').filter({ hasText: "Está marcada en el mapa." })).toBeVisible();
   await expect(vacia.getByRole("link", { name: "Ir a Jornada" })).toHaveAttribute("href", `/despacho/jornada?fecha=${lejana.toISOString().slice(0, 10)}`);
 
@@ -94,8 +104,9 @@ test("despachador genera, ajusta y valida el plan; gerencia lo consulta en solo 
     await entrarComo(gerencia, "gerencia");
     await gerencia.goto(ruta);
     const lectura = gerencia.getByRole("region", { name: "Plan del día", exact: true });
-    await expect(lectura.getByText("Solo lectura", { exact: true })).toBeVisible();
+    await expect(lectura.getByText("Ahora: sigue cada camión en «Cómo va el día».", { exact: true })).toBeVisible();
     await expect(lectura.getByText("Validado", { exact: true })).toBeVisible();
+    await lectura.getByText("Ver el plan validado: rutas, mapa y resumen", { exact: true }).click();
     const unidadLeida = lectura.getByRole("region", { name: `Unidad ${placa}`, exact: true });
     for (const folio of folios) {
       await expect(unidadLeida.getByRole("article", { name: `Parada ${folio}`, exact: true })).toBeVisible();
@@ -106,6 +117,7 @@ test("despachador genera, ajusta y valida el plan; gerencia lo consulta en solo 
     const camionLeido = gerencia.getByRole("article", { name: `Camión ${placa}`, exact: true });
     await expect(camionLeido.getByText("Sin llegar al patio", { exact: true })).toBeVisible();
     await expect(camionLeido.getByRole("button", { name: /^Marcar:/ })).toHaveCount(0);
+    await expect(gerencia.getByText("¿Un camión ya no puede seguir? Re-rutear", { exact: true })).toHaveCount(0);
   } finally {
     await contexto.close();
   }
