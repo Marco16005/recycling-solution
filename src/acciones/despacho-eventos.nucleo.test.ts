@@ -162,6 +162,7 @@ describe("tablero del día: el despacho marca el avance (2026-11-21)", () => {
     const t = await tablero(despachador, a(33));
     expect(t.viajes).toHaveLength(0);
     expect(t.recolecciones).toEqual({ hechas: 0, total: 0 });
+    expect(t.frase).toBe("Sin recolecciones asignadas hoy");
     expect(t.omitidas.map((o) => o.cliente).sort()).toEqual(["Cartonera Norte", "Cartonera Sur"]);
     expect(t.omitidas.every((o) => /^S-/.test(o.folio))).toBe(true);
   });

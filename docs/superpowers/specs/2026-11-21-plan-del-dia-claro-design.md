@@ -106,6 +106,10 @@ Orden de la página:
 - **"Seguimiento"** cambia a **"Cómo va el día"**. El `aria-label` de la región también se llama "Cómo va el día".
 - **"Ruteadas"** cambia a **"En ruta"** en el resumen. La tabla del reacomodo, ya plegada, puede conservar sus nombres.
 
+### 2.6 bis Camión sin viajes (Claude, tras las capturas)
+
+Un camión al que el plan no le dio viajes, o al que un re-ruteo se los quitó, mostraba "Sin llegar al patio" y "0 de 0 recolecciones", que parece un retraso. Ahora la frase dice "Sin recolecciones asignadas hoy", o "En el patio, sin recolecciones asignadas" si ya llegó. El botón "Marcar" sigue igual que en el teléfono.
+
 ### 2.7 `/operador` con una cuenta que no es de operador
 
 Si el usuario de la sesión no tiene rol `operador`, en lugar de "No tienes una ruta asignada para hoy" se muestra:
